@@ -6,7 +6,7 @@ tactics = Tactics()
 
 class MyProto(ScenarioBrick):
 
-    def build(self, user_context: UI = None, **kwargs):
+    def build(self, user_context: UI, shape_id, **kwargs):
 
         def cbk_check_crc_error(env, current_step, next_step, fbk):
             for source, status, timestamp, data in fbk:

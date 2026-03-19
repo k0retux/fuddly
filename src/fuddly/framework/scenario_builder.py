@@ -41,23 +41,8 @@ class ScenarioBuilder(object):
         self.name = name
         self.kwargs = kwargs
 
-    def _load(self, dm: DataModel):
+    def setup(self, dm: DataModel):
         self._sbrick: ScenarioBrick = self.load(dm)
-
-        if self._starting_sbrick is not None:
-            self._sbrick.connect_in_to(self._starting_sbrick,
-                                       in_idx=self._sbrick_in_id,
-                                       out_idx=self._starting_sbrick_out_id,
-                                       **self._starting_sbrick_connect_params)
-        if self._ending_sbrick is not None:
-            self._sbrick.connect_out_to(self._ending_sbrick,
-                                        out_idx=self._sbrick_out_id,
-                                        in_idx=self._ending_sbrick_in_id,
-                                        **self._ending_sbrick_connect_params)
-
-        self._sbrick.build_connection(auto_update_starting_step=True,
-                                      auto_update_ending_step=True)
-        self._sbrick.find_and_finalize_ending_sbrick(self._sbrick)
 
     @property
     def dm(self):
@@ -69,14 +54,31 @@ class ScenarioBuilder(object):
 
     def __iter__(self):
         for sid in self._sbrick.shape_ids:
-            yield self._sbrick.get_scenario(shape_id=sid)
+            new_brick = self._sbrick.clone()
+            new_brick.setup(shape_id=sid)
+
+            if self._starting_sbrick is not None:
+                new_brick.connect_in_to(self._starting_sbrick,
+                                           in_idx=self._sbrick_in_id,
+                                           out_idx=self._starting_sbrick_out_id,
+                                           **self._starting_sbrick_connect_params)
+            if self._ending_sbrick is not None:
+                new_brick.connect_out_to(self._ending_sbrick,
+                                            out_idx=self._sbrick_out_id,
+                                            in_idx=self._ending_sbrick_in_id,
+                                            **self._ending_sbrick_connect_params)
+
+            new_brick.build_connection(auto_update_starting_step=True,
+                                       auto_update_ending_step=True)
+            new_brick.find_and_finalize_ending_sbrick(new_brick)
+
+            yield new_brick.get_scenario()
 
 
 class FragmentationScenarioBuilder(ScenarioBuilder):
 
     def load(self, dm: DataModel):
         frag_brick = FragmentationBrick(self.name, **self.kwargs)
-        frag_brick.dm = dm
-        frag_brick.setup()
+        frag_brick.prepare_shapes(dm)
 
         return frag_brick

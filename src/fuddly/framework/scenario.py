@@ -1000,7 +1000,7 @@ class Scenario(object):
         new_sc.name = new_name
         return new_sc
 
-    def set_scenario_parameters(self, params: dict):
+    def set_scenario_parameters(self, params: dict | None):
         self._user_args = params
 
     def set_in_connectors(self, in_connectors: list):

@@ -24,6 +24,7 @@
 import queue as queue
 import collections
 
+from fuddly.framework.scenario_bricks import ScenarioBrick
 from fuddly.framework.knowledge.feedback_collector import FeedbackSource
 from fuddly.framework.monitor import *
 from fuddly.framework.knowledge.feedback_handler import *
@@ -205,11 +206,19 @@ class Project(object):
     def map_targets_to_scenario(self, scenario, target_mapping):
         if isinstance(scenario, (list, tuple)):
             for sc in scenario:
-                name = sc.name if isinstance(sc, Scenario) else sc
-                self.scenario_target_mapping[name] = target_mapping
+                if isinstance(sc, ScenarioBrick) and len(sc.shape_ids) > 1:
+                    for shid in sc.shape_ids:
+                        self.scenario_target_mapping[sc.name_with_shape_id(shid)] = target_mapping
+                else:
+                    name = sc.name if isinstance(sc, (Scenario, ScenarioBrick)) else sc
+                    self.scenario_target_mapping[name] = target_mapping
         else:
-            name = scenario.name if isinstance(scenario, Scenario) else scenario
-            self.scenario_target_mapping[name] = target_mapping
+            if isinstance(scenario, ScenarioBrick) and len(scenario.shape_ids) > 1:
+                for shid in scenario.shape_ids:
+                    self.scenario_target_mapping[scenario.name_with_shape_id(shid)] = target_mapping
+            else:
+                name = scenario.name if isinstance(scenario, (Scenario, ScenarioBrick)) else scenario
+                self.scenario_target_mapping[name] = target_mapping
 
     def reset_target_mappings(self):
         self.scenario_target_mapping = {}

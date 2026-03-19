@@ -1292,14 +1292,21 @@ class FmkPlumbing(object):
 
                 sc_list = []
                 for sb in self._tactics.scenario_builders:
-                    sb._load(self.dm)
+                    sb.setup(self.dm)
                     sc_list += list(sb)
 
                 for sb in self._tactics.scenario_bricks:
-                    sb.setup()
-                    sb.dm = self.dm
-                    sb.find_and_finalize_ending_sbrick(sb)
-                    sc_list.append(sb.get_scenario())
+                    sb.prepare_shapes(self.dm)
+                    if sb.shape_ids is not None and len(sb.shape_ids) > 1:
+                        for shid in sb.shape_ids:
+                            sb_new = sb.clone()
+                            sb_new.setup(shape_id=shid)
+                            sb_new.find_and_finalize_ending_sbrick(sb_new)
+                            sc_list.append(sb_new.get_scenario())
+                    else:
+                        sb.setup()
+                        sb.find_and_finalize_ending_sbrick(sb)
+                        sc_list.append(sb.get_scenario())
 
                 for sc in sc_list:
                     self._tactics.register_scenarios(sc)
@@ -1381,17 +1388,24 @@ class FmkPlumbing(object):
                 if self.prj.project_scenario_bricks:
                     sc_list = []
                     for scb in self.prj.project_scenario_bricks:
-                        scb.setup()
-                        scb.dm = self.dm
-                        scb.find_and_finalize_ending_sbrick(scb)
-                        sc_list.append(scb.get_scenario())
+                        scb.prepare_shapes(self.dm)
+                        if scb.shape_ids is not None and len(scb.shape_ids) > 1:
+                            for shid in scb.shape_ids:
+                                scb_new = scb.clone()
+                                scb_new.setup(shape_id=shid)
+                                scb_new.find_and_finalize_ending_sbrick(scb_new)
+                                sc_list.append(scb_new.get_scenario())
+                        else:
+                            scb.setup()
+                            scb.find_and_finalize_ending_sbrick(scb)
+                            sc_list.append(scb.get_scenario())
                     self.prj.project_scenarios_from_bricks = sc_list
                     self._generic_tactics.register_scenarios(*sc_list)
 
                 if self.prj.project_scenario_builders:
                     sc_list = []
                     for sb in self.prj.project_scenario_builders:
-                        sb._load(self.dm)
+                        sb.setup(self.dm)
                         sc_list += list(sb)
                     self.prj.project_scenarios_from_builders = sc_list
                     self._generic_tactics.register_scenarios(*sc_list)

@@ -12,19 +12,21 @@ import fuddly.framework.value_types as vt
 
 class ScenarioBrick(object):
 
-    BASIC_SHAPE = 'basic'
+    INIT_SHAPE = 'init_shape'
     shape_ids = None
     description = 'No description'
     _scenario = None
 
     def __init__(self, name=None, start: bool = True, final: bool = False,
                  auto_update_starting_step=True, auto_update_ending_step=True,
+                 default_shape_id=None,
                  **kwargs):
 
         self._name = self.__class__.__name__ if name is None else name
         self._scenario = None
         self._dm = None
-        self.shape_ids = [ScenarioBrick.BASIC_SHAPE]
+        self.shape_ids = self.shape_ids if self.shape_ids is not None else [ScenarioBrick.INIT_SHAPE]
+        self.default_shape_id = default_shape_id
         self.out_connection = {}
         self.in_connection = {}
         self._final = final
@@ -32,6 +34,10 @@ class ScenarioBrick(object):
         self._auto_update_starting_step = auto_update_starting_step
         self._auto_update_ending_step = auto_update_ending_step
         self._kwargs = kwargs
+
+    @property
+    def name(self):
+        return self._name
 
     @property
     def dm(self):
@@ -60,11 +66,25 @@ class ScenarioBrick(object):
         """
         return None
 
+    def prepare_shapes(self, dm: DataModel):
+        self.dm = dm
+        self.pre_build(dm, **self._kwargs)
 
-    def build(self, user_context: UI, **kwargs):
+    def pre_build(self, dm: DataModel = None, **kwargs):
+        """
+        To be overloaded
+        e.g., to prepare self.shape_ids
+
+        :param kwargs:
+        :return:
+        """
+        return
+
+    def build(self, user_context: UI, shape_id: str, **kwargs):
         """
         To be overloaded
 
+        :param shape_id:
         :param user_context:
         :param kwargs:
         :return:
@@ -72,11 +92,13 @@ class ScenarioBrick(object):
         """
         raise NotImplementedError
 
-    def setup(self):
+    def setup(self, shape_id=None):
+        self.default_shape_id = shape_id
 
         if self._scenario is None:
             ok = self._build(auto_update_starting_step=self._auto_update_starting_step,
                              auto_update_ending_step=self._auto_update_ending_step,
+                             shape_id=self.default_shape_id,
                              **self._kwargs)
             if not ok:
                 raise ScenarioDefinitionError
@@ -105,12 +127,13 @@ class ScenarioBrick(object):
         return self._scenario.out_connectors(idx)
 
 
-    def _build(self, auto_update_starting_step=True, auto_update_ending_step=True, **kwargs):
+    def _build(self, auto_update_starting_step=True, auto_update_ending_step=True, shape_id=None, **kwargs):
 
-        uc = UI(shape_id=None)
+        uc = UI(shape_id=shape_id)
 
         try:
-            starting_step, in_connectors, out_connectors = self.build(user_context=uc, **kwargs)
+            starting_step, in_connectors, out_connectors = self.build(user_context=uc, shape_id=shape_id,
+                                                                      **kwargs)
         except Exception as e:
             self._scenario = None
             sys.stderr.write(colorize(f"\n*** ERROR: {self.__class__.__name__}._build() "
@@ -277,19 +300,22 @@ class ScenarioBrick(object):
     def starting_step(self, step):
         self._scenario.set_anchor(step)
 
-    def clone(self):
-        return copy.copy(self)
+    def clone(self, name=None):
+        new_brick = copy.copy(self)
+        if name is not None:
+            new_brick._name = name
+        return new_brick
 
-    def get_scenario(self, shape_id: str = None, full_name=None):
-        if full_name is None:
-            name = f'{self._name}_{shape_id}' if shape_id is not None else self._name
-        else:
-            name = full_name
+    def name_with_shape_id(self, shape_id):
+        return f'{self._name}_{shape_id}'
+
+    def get_scenario(self):
+        name = self.name_with_shape_id(self.default_shape_id) if self.default_shape_id is not None else self._name
         sc_clone: Scenario = self._scenario.clone(name)
-        params = self.scenario_parameters_per_shape_id(shape_id)
+        params = self.scenario_parameters_per_shape_id(self.default_shape_id)
         sc_clone.set_scenario_parameters(params=params)
-        sc_clone.merge_user_context_with(UI(shape_id=shape_id))
-        sc_clone.description = self.description_from_shape_id(shape_id)
+        # sc_clone.merge_user_context_with(UI(shape_id=self.default_shape_id))
+        sc_clone.description = self.description_from_shape_id(self.default_shape_id)
         return sc_clone
 
     def __copy__(self):
@@ -327,6 +353,7 @@ class FragmentationBrick(ScenarioBrick):
     ALT09_SHAPE = 'alt09'
     ALT10_SHAPE = 'alt10'
     ALT11_SHAPE = 'alt11'
+
 
     @classmethod
     def scenario_parameters_per_shape_id(cls, shape_id):
@@ -550,8 +577,130 @@ class FragmentationBrick(ScenarioBrick):
 
         return fragments
 
+    def pre_build(self, dm: DataModel = None,
+                  host_name: Node = None,
+                  fragment_list: list = None,
+                  payload: bytes | str = None,
+                  fragidx_ref: str = None, fragcount_ref: str = None, pld_ref: str = None,
+                  pldsz_ref: str = None,
+                  fbk_timeout = 2):
 
-    def build(self, user_context: UI,
+        self.shape_ids = [
+            self.VALID_ORDERED_SHAPE,
+            self.VALID_UNORDERED_SHAPE,
+        ]
+
+        self.payload = payload
+        if self.payload is None:
+            assert fragment_list is not None
+            self.fragment_list = list(fragment_list)
+            self.fragment_count = len(fragment_list)
+
+        self.host_name = host_name
+        self.fragidx_ref = fragidx_ref
+        self.fragcount_ref = fragcount_ref
+        self.pld_ref = pld_ref
+        self.pldsz_ref = pldsz_ref
+
+        self.fragidx_sem = nd.NodeSemanticsCriteria(mandatory_criteria=[self.fragidx_ref])
+        self.fragcount_sem = nd.NodeSemanticsCriteria(mandatory_criteria=[self.fragcount_ref])
+        self.pld_sem = nd.NodeSemanticsCriteria(mandatory_criteria=[self.pld_ref])
+        if self.pldsz_ref is not None:
+            self.pldsz_sem = nd.NodeSemanticsCriteria(mandatory_criteria=[self.pldsz_ref])
+            self.shape_ids.append(self.SZ01_SHAPE)
+
+        atom = self.dm.get_atom(self.host_name)
+        pld_a = atom[self.pld_sem][0]
+        self.new_pld_node = pld_a.is_nonterm()
+
+        fidx_a = atom[self.fragidx_sem][0]
+        if fidx_a.is_term():
+            vtype = fidx_a.value_type
+            assert isinstance(vtype, vt.INT)
+            self.idx_min = vtype.mini
+            self.idx_max = vtype.maxi
+            self.idx_vtype = vtype.__class__.__name__
+            self.idx_vtype_min = vtype.__class__.mini
+            self.idx_vtype_max = self.idx_max + 10 if vtype.__class__.maxi is None else vtype.__class__.maxi
+
+            # print(
+            #     f'|= fragment index type: {self.idx_vtype}\n'
+            #     f'|            vtype min: {self.idx_vtype_min}\n'
+            #     f'|            vtype max: {self.idx_vtype_max}\n'
+            #     f'|        specified min: {self.idx_min}\n'
+            #     f'|        specified max: {self.idx_max}\n'
+            # )
+
+        else:
+            raise NotImplementedError(f'Unrecognized fragment index type [{fidx_a.cc}]')
+
+        fcount_a = atom[self.fragcount_sem][0]
+        if fcount_a.is_term():
+            vtype = fcount_a.value_type
+            assert isinstance(vtype, vt.INT)
+            self.count_min = vtype.mini
+            self.count_max = vtype.maxi
+            self.count_vtype = vtype.__class__.__name__
+            self.count_vtype_min = vtype.__class__.mini
+            self.count_vtype_max = self.count_max + 10 if vtype.__class__.maxi is None else vtype.__class__.maxi
+
+            # print(
+            #     f'|= fragment count type: {self.count_vtype}\n'
+            #     f'|            vtype min: {self.count_vtype_min}\n'
+            #     f'|            vtype max: {self.count_vtype_max}\n'
+            #     f'|        specified min: {self.count_min}\n'
+            #     f'|        specified max: {self.count_max}\n'
+            # )
+
+        else:
+            raise NotImplementedError(f'Unrecognized fragment count type [{fcount_a.cc}]')
+
+        if self.pldsz_ref is not None:
+            fsize_a = atom[self.pldsz_sem][0]
+            if fsize_a.is_term():
+                vtype = fsize_a.value_type
+                assert isinstance(vtype, vt.INT)
+                self.fsz_min = vtype.mini
+                self.fsz_max = vtype.maxi
+                self.fsz_vtype = vtype.__class__.__name__
+                self.fsz_vtype_min = vtype.__class__.mini
+                self.fsz_vtype_max = self.fsz_max + 10 if vtype.__class__.maxi is None else vtype.__class__.maxi
+
+                # print(
+                #     f'|= fragment size type: {self.fsz_vtype}\n'
+                #     f'|            vtype min: {self.fsz_vtype_min}\n'
+                #     f'|            vtype max: {self.fsz_vtype_max}\n'
+                #     f'|        specified min: {self.fsz_min}\n'
+                #     f'|        specified max: {self.fsz_max}\n'
+                # )
+
+            else:
+                raise NotImplementedError(f'Unrecognized fragment size type [{fsize_a.cc}]')
+
+
+        self.frag_idx_init = self.idx_min
+
+        if self.idx_vtype_max is None or self.idx_vtype_max > self.count_max - 1:
+            self.shape_ids += [
+                self.ALT01A_SHAPE, self.ALT01B_SHAPE,
+                self.ALT02A_SHAPE, self.ALT02B_SHAPE,
+            ]
+
+        self.shape_ids += [
+            self.ALT03_SHAPE,
+            self.ALT04_SHAPE,
+            self.ALT05A_SHAPE, self.ALT05B_SHAPE,
+            self.ALT06A_SHAPE, self.ALT06B_SHAPE,
+            self.ALT07A_SHAPE, self.ALT07B_SHAPE,
+            self.ALT08_SHAPE, self.ALT09_SHAPE,
+            self.ALT10_SHAPE
+        ]
+
+        if self.count_vtype_max is None or self.count_vtype_max > self.count_max:
+            self.shape_ids.append(self.ALT11_SHAPE)
+
+
+    def build(self, user_context: UI, shape_id: str,
               host_name: Node = None,
               fragment_list: list = None,
               payload: bytes | str = None,
@@ -586,6 +735,9 @@ class FragmentationBrick(ScenarioBrick):
             self.shape_ids.append(self.SZ01_SHAPE)
 
         atom = self.dm.get_atom(self.host_name)
+        pld_a = atom[self.pld_sem][0]
+        self.new_pld_node = pld_a.is_nonterm()
+
         fidx_a = atom[self.fragidx_sem][0]
         if fidx_a.is_term():
             vtype = fidx_a.value_type
@@ -749,30 +901,39 @@ class FragmentationBrick(ScenarioBrick):
                      | FragmentationBrick.ALT09_SHAPE:
                     atom[self.fragidx_sem] = env.frag_idx
                     atom[self.fragcount_sem] = env.fragment_count
-                    atom[self.pld_sem] = env.fragment_list[env.frag_idx - self.frag_idx_init]
+                    obj = env.fragment_list[env.frag_idx - self.frag_idx_init]
+                    if self.new_pld_node:
+                        obj = Node('new_pld', value_type=vt.String(values=[obj]))
+                    atom[self.pld_sem] = obj
 
                 case FragmentationBrick.VALID_UNORDERED_SHAPE:
                     fidx = random.choice(env.fidx_list)
                     env.fidx_list.remove(fidx)
                     atom[self.fragidx_sem] = fidx
                     atom[self.fragcount_sem] = env.fragment_count
-                    atom[self.pld_sem] = env.fragment_list[env.frag_idx - self.frag_idx_init]
+                    obj = env.fragment_list[env.frag_idx - self.frag_idx_init]
+                    if self.new_pld_node:
+                        obj = Node('new_pld', value_type=vt.String(values=[obj]))
+                    atom[self.pld_sem] = obj
 
                 case FragmentationBrick.SZ01_SHAPE:
                     atom[self.fragidx_sem] = env.frag_idx
                     atom[self.fragcount_sem] = env.fragment_count
-                    if env.frag_idx % 2:
-                        atom[self.pld_sem] = env.max_frag_pld
-                    else:
-                        atom[self.pld_sem] = ''
+                    obj = env.max_frag_pld if env.frag_idx % 2 else ''
+                    if self.new_pld_node:
+                        obj = Node('new_pld', value_type=vt.String(values=[obj]))
+                    atom[self.pld_sem] = obj
 
                 case FragmentationBrick.ALT01A_SHAPE | FragmentationBrick.ALT01B_SHAPE:
                     atom[self.fragidx_sem] = env.frag_idx
                     atom[self.fragcount_sem] = env.fragment_count
                     if shape_id == FragmentationBrick.ALT01A_SHAPE:
-                        atom[self.pld_sem] = next(self.cycling_payload)
+                        obj = next(self.cycling_payload)
                     else:
-                        atom[self.pld_sem] = env.fragment_list[0]
+                        obj = env.fragment_list[0]
+                    if self.new_pld_node:
+                        obj = Node('new_pld', value_type=vt.String(values=[obj]))
+                    atom[self.pld_sem] = obj
 
                 case FragmentationBrick.ALT02A_SHAPE | FragmentationBrick.ALT02B_SHAPE:
                     if env.frag_idx + (1 - self.frag_idx_init) == env.fragment_count:
@@ -780,19 +941,28 @@ class FragmentationBrick(ScenarioBrick):
                     atom[self.fragidx_sem] = env.frag_idx
                     atom[self.fragcount_sem] = env.fragment_count
                     if shape_id == FragmentationBrick.ALT02A_SHAPE:
-                        atom[self.pld_sem] = next(self.cycling_payload)
+                        obj = next(self.cycling_payload)
                     else:
-                        atom[self.pld_sem] = env.fragment_list[0]
+                        obj = env.fragment_list[0]
+                    if self.new_pld_node:
+                        obj = Node('new_pld', value_type=vt.String(values=[obj]))
+                    atom[self.pld_sem] = obj
 
                 case FragmentationBrick.ALT03_SHAPE:
                     atom[self.fragidx_sem] = self.frag_idx_init
                     atom[self.fragcount_sem] = env.fragment_count
-                    atom[self.pld_sem] = next(self.cycling_payload)
+                    obj = next(self.cycling_payload)
+                    if self.new_pld_node:
+                        obj = Node('new_pld', value_type=vt.String(values=[obj]))
+                    atom[self.pld_sem] = obj
 
                 case FragmentationBrick.ALT04_SHAPE:
                     atom[self.fragidx_sem] = self.frag_idx_init
                     atom[self.fragcount_sem] = env.fragment_count
-                    atom[self.pld_sem] = env.fragment_list[0]
+                    obj = env.fragment_list[0]
+                    if self.new_pld_node:
+                        obj = Node('new_pld', value_type=vt.String(values=[obj]))
+                    atom[self.pld_sem] = obj
 
                 case FragmentationBrick.ALT05A_SHAPE | FragmentationBrick.ALT05B_SHAPE:
                     fidx = ((env.frag_idx + env._loop_count) - self.frag_idx_init) % env.fragment_count
@@ -802,9 +972,12 @@ class FragmentationBrick(ScenarioBrick):
                     atom[self.fragidx_sem] = fidx + self.frag_idx_init
                     atom[self.fragcount_sem] = env.fragment_count
                     if shape_id == FragmentationBrick.ALT05A_SHAPE:
-                        atom[self.pld_sem] = env.fragment_list[fidx]
+                        obj = env.fragment_list[fidx]
                     else:
-                        atom[self.pld_sem] = env.fragment_list[0]
+                        obj = env.fragment_list[0]
+                    if self.new_pld_node:
+                        obj = Node('new_pld', value_type=vt.String(values=[obj]))
+                    atom[self.pld_sem] = obj
 
                 case FragmentationBrick.ALT06A_SHAPE | FragmentationBrick.ALT06B_SHAPE:
                     fidx_modulo = ((env.frag_idx + env._loop_count) - self.frag_idx_init) % env.fragment_count
@@ -815,27 +988,36 @@ class FragmentationBrick(ScenarioBrick):
                     atom[self.fragidx_sem] = fidx + self.frag_idx_init
                     atom[self.fragcount_sem] = env.fragment_count
                     if shape_id == FragmentationBrick.ALT06A_SHAPE:
-                        atom[self.pld_sem] = env.fragment_list[fidx]
+                        obj = env.fragment_list[fidx]
                     else:
-                        atom[self.pld_sem] = env.fragment_list[0]
+                        obj = env.fragment_list[0]
+                    if self.new_pld_node:
+                        obj = Node('new_pld', value_type=vt.String(values=[obj]))
+                    atom[self.pld_sem] = obj
 
                 case FragmentationBrick.ALT07A_SHAPE | FragmentationBrick.ALT07B_SHAPE:
                     rand_idx = random.choice(self.fragidx_incomplete_list)
                     atom[self.fragidx_sem] = rand_idx
                     atom[self.fragcount_sem] = env.fragment_count
                     if shape_id == FragmentationBrick.ALT07A_SHAPE:
-                        atom[self.pld_sem] = env.fragment_list[rand_idx - self.frag_idx_init]
+                        obj = env.fragment_list[rand_idx - self.frag_idx_init]
                     else:
-                        atom[self.pld_sem] = env.fragment_list[0]
+                        obj = env.fragment_list[0]
+                    if self.new_pld_node:
+                        obj = Node('new_pld', value_type=vt.String(values=[obj]))
+                    atom[self.pld_sem] = obj
 
                 case FragmentationBrick.ALT10_SHAPE | FragmentationBrick.ALT11_SHAPE:
                     rand_idx = random.choice(self.fragidx_list)
                     atom[self.fragidx_sem] = rand_idx
                     atom[self.pld_sem] = env.fragment_list[rand_idx - self.frag_idx_init]
                     if shape_id == FragmentationBrick.ALT10_SHAPE:
-                        atom[self.fragcount_sem] = self.count_max
+                        obj = self.count_max
                     else:
-                        atom[self.fragcount_sem] = self.count_vtype_max
+                        obj = self.count_vtype_max
+                    if self.new_pld_node:
+                        obj = Node('new_pld', value_type=vt.String(values=[obj]))
+                    atom[self.pld_sem] = obj
 
                 case _:
                     pass

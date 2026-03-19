@@ -5,7 +5,7 @@ from fuddly.framework.scenario_bricks import ScenarioBrick, FRAG_POL
 
 class BurstSBrick(ScenarioBrick):
 
-    def build(self, user_context: UI = None, **kwargs):
+    def build(self, user_context: UI, shape_id, **kwargs):
 
         def check_fbk(env, current_step, next_step, fbk):
             print(f'\n*** Callback After Feedback Retrieval [from: {str(current_step)}] ***')
@@ -35,7 +35,7 @@ sbrick_burst = BurstSBrick(name='burst', final=True)
 
 class InitSBrick(ScenarioBrick):
 
-    def build(self, user_context: UI = None, **kwargs):
+    def build(self, user_context: UI, shape_id, **kwargs):
         dp_init = DataProcess(['C'], seed='init')
         step_init = Step(dp_init, fbk_timeout=0.5, vtg_ids=1)
         # step_out = NoDataStep()
@@ -52,7 +52,7 @@ sbrick_init = InitSBrick()
 
 class FinalSBrick_1(ScenarioBrick):
 
-    def build(self, user_context: UI = None, **kwargs):
+    def build(self, user_context: UI, shape_id, **kwargs):
         dp_final = DataProcess(['C'], seed='register')
         step_final = Step(dp_final, fbk_timeout=0.5, vtg_ids=1)
 
@@ -64,7 +64,7 @@ class FinalSBrick_1(ScenarioBrick):
 
 class FinalSBrick_2(ScenarioBrick):
 
-    def build(self, user_context: UI = None, **kwargs):
+    def build(self, user_context: UI, shape_id, **kwargs):
         step_final = Step('zregister', fbk_timeout=0.5, vtg_ids=1)
 
         starting_step = step_final
