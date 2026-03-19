@@ -1454,7 +1454,7 @@ class String(VT_Alt):
                 len(dec), self.codec, desc
             )
         else:
-            return f"{self.drawn_val.decode(self.codec, "replace")} [codec={self.codec}{desc}]"
+            return f"{self.drawn_val.decode(self.codec, 'replace')} [codec={self.codec}{desc}]"
 
 
 class INT(VT):
