@@ -323,10 +323,12 @@ class Logger(object):
 
     def _log_handler(self):
 
+        sys.stdout.write(colorize('\n*** The display server thread has started ***\n', rgb=Color.FMKINFO))
+
         try:
             self._thread_initialized.set()
-
             accu = Accumulator()
+
             while True:
                 with self._log_entry_submitted_cond:
                     if self._log_handler_stop_event.is_set() and not self._log_entry_list:

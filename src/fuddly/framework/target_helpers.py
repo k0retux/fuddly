@@ -98,7 +98,11 @@ class Target(object):
         self._cls_user_count = 0
         self.log_level = log_level
         self.enable_specific_logger = enable_specific_logger
-        self._configurable_attributes = ['custo'] if config_attributes is None else ['custo'] + config_attributes
+        default_config_attrs = ['display_feedback', 'custo']
+        if config_attributes is None:
+            self._configurable_attributes = default_config_attrs
+        else:
+            self._configurable_attributes = default_config_attrs + config_attributes
         self._custo = None
 
     def setup_child_logger(self, filename=None, level=logging.INFO):
@@ -219,10 +223,12 @@ class Target(object):
 
         try:
             object.__setattr__(self, attribute, value)
-        except AttributeError:
+        except AttributeError as e:
             self._logger.print_console(
-                f"*** BUG: attribute {attribute!r} is not implemented in Target {self!s} ***\n",
+                f"*** BUG: attribute {attribute!r} is wrongly implemented in Target {self!s} ***\n"
+                f" --> Error: {e}\n",
                 nl_before=True, rgb=Color.ERROR)
+            self._logger.print_console(f'{self._configurable_attributes}')
             return False
         else:
             return True
@@ -233,9 +239,10 @@ class Target(object):
 
         try:
             attr_val = getattr(self, attribute)
-        except AttributeError:
+        except AttributeError as e:
             self._logger.print_console(
-                f"*** BUG: attribute {attribute!r} is not implemented in Target {self!s} ***\n",
+                f"*** BUG: attribute {attribute!r} is wrongly implemented in Target {self!s} ***\n"
+                f" --> Error: {e}\n",
                 nl_before=True, rgb=Color.ERROR)
             raise
         else:
