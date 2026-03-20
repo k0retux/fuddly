@@ -41,8 +41,8 @@ class TargetState(object):
 
     def __init__(self):
         self.data_sent = None
+        self.data_sent_from_fmkplumbing = None
         self.feedback_retrieved_once = None
-
 
 
 class Target(object):
@@ -114,10 +114,7 @@ class Target(object):
             self._configurable_attributes = default_config_attrs + config_attributes
         self._custo = None
 
-        # state variables
         self._state = TargetState()
-        # self._data_sent = None
-        # self._feedback_retrieved_once = None
         self._state_lock = threading.Lock()
 
     def setup_child_logger(self, filename=None, level=logging.INFO):
@@ -184,6 +181,7 @@ class Target(object):
                                    nl_before=False, rgb=Color.COMPONENT_START)
         with self._state_lock:
             self._state.data_sent = False
+            self._state.data_sent_from_fmkplumbing = False
             self._state.feedback_retrieved_once = False
 
         self._pending_data = []
@@ -201,6 +199,7 @@ class Target(object):
                                    nl_before=False, rgb=Color.COMPONENT_STOP)
         with self._state_lock:
             self._state.data_sent = None
+            self._state.data_sent_from_fmkplumbing = None
             self._state.feedback_retrieved_once = None
 
         self._pending_data = None
@@ -368,9 +367,6 @@ class Target(object):
 
     def _get_feedback(self):
         fbk = self.get_feedback()
-        with self._state_lock:
-            self._state.feedback_retrieved_once = True
-
         return fbk
 
 

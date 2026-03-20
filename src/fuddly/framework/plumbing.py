@@ -2862,6 +2862,11 @@ class FmkPlumbing(object):
                 else:
                     self.mon.notify_data_sending_event()
 
+            for tg in self._currently_used_targets:
+                tg_state: TargetState = tg.internal_state # property that provide a copy of the internal state
+                tg_state.data_sent_from_fmkplumbing = True
+                tg.internal_state = tg_state
+
             self._do_after_sending_data(data_list)
 
         return data_list
@@ -3023,6 +3028,13 @@ class FmkPlumbing(object):
                 go_on = self._recover_target(tg) if err_detected1 or err_detected2 else True
                 if not go_on:
                     ok = False
+
+            for tg in self.targets.values():
+                tg_state: TargetState = tg.internal_state # property that provide a copy of the internal state
+                tg_state.feedback_retrieved_once = True
+                tg_state.data_sent_from_fmkplumbing = False
+                tg_state.data_sent = False
+                tg.internal_state = tg_state
 
         return ok
 
