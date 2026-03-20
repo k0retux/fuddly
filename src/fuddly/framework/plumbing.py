@@ -3042,7 +3042,7 @@ class FmkPlumbing(object):
         if not tg.is_feedback_received():
             return err_detected
 
-        tg_fbk = tg.get_feedback()
+        tg_fbk = tg._get_feedback()
         if tg_fbk is not None:
             err_code = tg_fbk.get_error_code()
             if err_code is not None and err_code < tg.STATUS_THRESHOLD_FOR_RECOVERY:

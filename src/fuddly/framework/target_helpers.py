@@ -26,6 +26,7 @@ import threading
 import copy
 import logging
 import os
+from threading import Thread
 
 from fuddly.framework.data import Data
 from fuddly.framework.knowledge.feedback_collector import FeedbackSource
@@ -35,6 +36,14 @@ import fuddly.framework.global_resources as gr
 class TargetStuck(Exception): pass
 class TargetError(Exception): pass
 class TargetNotReady(Exception): pass
+
+class TargetState(object):
+
+    def __init__(self):
+        self.data_sent = None
+        self.feedback_retrieved_once = None
+
+
 
 class Target(object):
     """
@@ -105,6 +114,12 @@ class Target(object):
             self._configurable_attributes = default_config_attrs + config_attributes
         self._custo = None
 
+        # state variables
+        self._state = TargetState()
+        # self._data_sent = None
+        # self._feedback_retrieved_once = None
+        self._state_lock = threading.Lock()
+
     def setup_child_logger(self, filename=None, level=logging.INFO):
 
         def get_obj():
@@ -153,9 +168,24 @@ class Target(object):
     def set_project(self, prj):
         self._project = prj
 
+    @property
+    def internal_state(self):
+        with self._state_lock:
+            return copy.copy(self._state)
+
+    @internal_state.setter
+    def internal_state(self, value: TargetState):
+        with self._state_lock:
+            self._state = copy.copy(value)
+
+
     def _start(self, target_desc, tg_id):
         self._logger.print_console('*** Target initialization: ({:d}) {!s} ***\n'.format(tg_id, target_desc),
                                    nl_before=False, rgb=Color.COMPONENT_START)
+        with self._state_lock:
+            self._state.data_sent = False
+            self._state.feedback_retrieved_once = False
+
         self._pending_data = []
         self._pending_data_id = None
         self._cls_user_count += 1
@@ -169,6 +199,10 @@ class Target(object):
     def _stop(self, target_desc, tg_id):
         self._logger.print_console('*** Target cleanup procedure for ({:d}) {!s} ***\n'.format(tg_id, target_desc),
                                    nl_before=False, rgb=Color.COMPONENT_STOP)
+        with self._state_lock:
+            self._state.data_sent = None
+            self._state.feedback_retrieved_once = None
+
         self._pending_data = None
         self._pending_data_id = None
         ret = self.stop()
@@ -332,6 +366,14 @@ class Target(object):
         """
         raise NotImplementedError
 
+    def _get_feedback(self):
+        fbk = self.get_feedback()
+        with self._state_lock:
+            self._state.feedback_retrieved_once = True
+
+        return fbk
+
+
     def get_feedback(self):
         """
         If overloaded, should return a FeedbackCollector object.
@@ -449,6 +491,10 @@ class Target(object):
             if self.is_target_ready_for_new_data():
                 self._last_sending_date = datetime.datetime.now()
                 self.send_data(data, from_fmk=from_fmk)
+                with self._state_lock:
+                    self._state.data_sent = True
+                    self._state.feedback_retrieved_once = False
+
                 meta_info = self._project.notify_data_sending([data], self._last_sending_date, self)
 
                 if from_fmk:
@@ -477,6 +523,10 @@ class Target(object):
             if self.is_target_ready_for_new_data():
                 self._last_sending_date = datetime.datetime.now()
                 self.send_multiple_data(data_list, from_fmk=from_fmk)
+                with self._state_lock:
+                    self._state.data_sent = True
+                    self._state.feedback_retrieved_once = False
+
                 meta_info = self._project.notify_data_sending(data_list, self._last_sending_date, self)
                 if from_fmk and data_list is not None:
                     self._pending_data_id = data_list[-1].estimated_data_id
