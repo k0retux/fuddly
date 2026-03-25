@@ -3031,8 +3031,10 @@ class FmkPlumbing(object):
 
             for tg in self.targets.values():
                 tg_state: TargetState = tg.internal_state # property that provide a copy of the internal state
-                tg_state.feedback_retrieved_once = True
-                tg_state.data_sent_from_fmkplumbing = False
+                if tg_state.data_sent_from_fmkplumbing:
+                    tg_state.feedback_retrieved_once = True
+                    tg_state.data_sent_from_fmkplumbing = False
+
                 tg_state.data_sent = False
                 tg.internal_state = tg_state
 
