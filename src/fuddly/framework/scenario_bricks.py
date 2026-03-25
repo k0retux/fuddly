@@ -583,7 +583,7 @@ class FragmentationBrick(ScenarioBrick):
                   payload: bytes | str = None,
                   fragidx_ref: str = None, fragcount_ref: str = None, pld_ref: str = None,
                   pldsz_ref: str = None,
-                  fbk_timeout = 2):
+                  fbk_timeout = None):
 
         self.shape_ids = [
             self.VALID_ORDERED_SHAPE,
@@ -706,7 +706,7 @@ class FragmentationBrick(ScenarioBrick):
               payload: bytes | str = None,
               fragidx_ref: str = None, fragcount_ref: str = None, pld_ref: str = None,
               pldsz_ref: str = None,
-              fbk_timeout = 2):
+              fbk_timeout = None):
 
         user_context.merge_with(UI(fbk_timeout=fbk_timeout))
 
@@ -894,6 +894,7 @@ class FragmentationBrick(ScenarioBrick):
         def build_frag(env, step):
             data = Data()
             atom = env.dm.get_atom(self.host_name)
+            atom.freeze(resolve_csp=True)
             shape_id = env.user_context.shape_id
 
             match shape_id:
@@ -1010,11 +1011,13 @@ class FragmentationBrick(ScenarioBrick):
                 case FragmentationBrick.ALT10_SHAPE | FragmentationBrick.ALT11_SHAPE:
                     rand_idx = random.choice(self.fragidx_list)
                     atom[self.fragidx_sem] = rand_idx
-                    atom[self.pld_sem] = env.fragment_list[rand_idx - self.frag_idx_init]
                     if shape_id == FragmentationBrick.ALT10_SHAPE:
-                        obj = self.count_max
+                        cnt = self.count_max
                     else:
-                        obj = self.count_vtype_max
+                        cnt = self.count_vtype_max
+                    atom[self.fragcount_sem] = cnt
+
+                    obj = env.fragment_list[rand_idx - self.frag_idx_init]
                     if self.new_pld_node:
                         obj = Node('new_pld', value_type=vt.String(values=[obj]))
                     atom[self.pld_sem] = obj
@@ -1073,7 +1076,7 @@ class FragmentationBrick(ScenarioBrick):
 
             return ret
 
-        step_init = NoDataStep(fbk_timeout=0, do_before_data_processing=init_frag,
+        step_init = NoDataStep(do_before_data_processing=init_frag,
                                step_desc='Init Fragment SBrick')
         step_send_frag = StepStub(do_before_data_processing=build_frag, fbk_timeout=fbk_timeout,
                                   step_desc='Send Fragment')
