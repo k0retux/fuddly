@@ -710,121 +710,6 @@ class FragmentationBrick(ScenarioBrick):
 
         user_context.merge_with(UI(fbk_timeout=fbk_timeout))
 
-        self.shape_ids = [
-            self.VALID_ORDERED_SHAPE,
-            self.VALID_UNORDERED_SHAPE,
-        ]
-
-        self.payload = payload
-        if self.payload is None:
-            assert fragment_list is not None
-            self.fragment_list = list(fragment_list)
-            self.fragment_count = len(fragment_list)
-
-        self.host_name = host_name
-        self.fragidx_ref = fragidx_ref
-        self.fragcount_ref = fragcount_ref
-        self.pld_ref = pld_ref
-        self.pldsz_ref = pldsz_ref
-
-        self.fragidx_sem = nd.NodeSemanticsCriteria(mandatory_criteria=[self.fragidx_ref])
-        self.fragcount_sem = nd.NodeSemanticsCriteria(mandatory_criteria=[self.fragcount_ref])
-        self.pld_sem = nd.NodeSemanticsCriteria(mandatory_criteria=[self.pld_ref])
-        if self.pldsz_ref is not None:
-            self.pldsz_sem = nd.NodeSemanticsCriteria(mandatory_criteria=[self.pldsz_ref])
-            self.shape_ids.append(self.SZ01_SHAPE)
-
-        atom = self.dm.get_atom(self.host_name)
-        pld_a = atom[self.pld_sem][0]
-        self.new_pld_node = pld_a.is_nonterm()
-
-        fidx_a = atom[self.fragidx_sem][0]
-        if fidx_a.is_term():
-            vtype = fidx_a.value_type
-            assert isinstance(vtype, vt.INT)
-            self.idx_min = vtype.mini
-            self.idx_max = vtype.maxi
-            self.idx_vtype = vtype.__class__.__name__
-            self.idx_vtype_min = vtype.__class__.mini
-            self.idx_vtype_max = self.idx_max + 10 if vtype.__class__.maxi is None else vtype.__class__.maxi
-
-            # print(
-            #     f'|= fragment index type: {self.idx_vtype}\n'
-            #     f'|            vtype min: {self.idx_vtype_min}\n'
-            #     f'|            vtype max: {self.idx_vtype_max}\n'
-            #     f'|        specified min: {self.idx_min}\n'
-            #     f'|        specified max: {self.idx_max}\n'
-            # )
-
-        else:
-            raise NotImplementedError(f'Unrecognized fragment index type [{fidx_a.cc}]')
-
-        fcount_a = atom[self.fragcount_sem][0]
-        if fcount_a.is_term():
-            vtype = fcount_a.value_type
-            assert isinstance(vtype, vt.INT)
-            self.count_min = vtype.mini
-            self.count_max = vtype.maxi
-            self.count_vtype = vtype.__class__.__name__
-            self.count_vtype_min = vtype.__class__.mini
-            self.count_vtype_max = self.count_max + 10 if vtype.__class__.maxi is None else vtype.__class__.maxi
-
-            # print(
-            #     f'|= fragment count type: {self.count_vtype}\n'
-            #     f'|            vtype min: {self.count_vtype_min}\n'
-            #     f'|            vtype max: {self.count_vtype_max}\n'
-            #     f'|        specified min: {self.count_min}\n'
-            #     f'|        specified max: {self.count_max}\n'
-            # )
-
-        else:
-            raise NotImplementedError(f'Unrecognized fragment count type [{fcount_a.cc}]')
-
-        if self.pldsz_ref is not None:
-            fsize_a = atom[self.pldsz_sem][0]
-            if fsize_a.is_term():
-                vtype = fsize_a.value_type
-                assert isinstance(vtype, vt.INT)
-                self.fsz_min = vtype.mini
-                self.fsz_max = vtype.maxi
-                self.fsz_vtype = vtype.__class__.__name__
-                self.fsz_vtype_min = vtype.__class__.mini
-                self.fsz_vtype_max = self.fsz_max + 10 if vtype.__class__.maxi is None else vtype.__class__.maxi
-
-                # print(
-                #     f'|= fragment size type: {self.fsz_vtype}\n'
-                #     f'|            vtype min: {self.fsz_vtype_min}\n'
-                #     f'|            vtype max: {self.fsz_vtype_max}\n'
-                #     f'|        specified min: {self.fsz_min}\n'
-                #     f'|        specified max: {self.fsz_max}\n'
-                # )
-
-            else:
-                raise NotImplementedError(f'Unrecognized fragment size type [{fsize_a.cc}]')
-
-
-        self.frag_idx_init = self.idx_min
-
-        if self.idx_vtype_max is None or self.idx_vtype_max > self.count_max - 1:
-            self.shape_ids += [
-                self.ALT01A_SHAPE, self.ALT01B_SHAPE,
-                self.ALT02A_SHAPE, self.ALT02B_SHAPE,
-            ]
-
-        self.shape_ids += [
-            self.ALT03_SHAPE,
-            self.ALT04_SHAPE,
-            self.ALT05A_SHAPE, self.ALT05B_SHAPE,
-            self.ALT06A_SHAPE, self.ALT06B_SHAPE,
-            self.ALT07A_SHAPE, self.ALT07B_SHAPE,
-            self.ALT08_SHAPE, self.ALT09_SHAPE,
-            self.ALT10_SHAPE
-        ]
-
-        if self.count_vtype_max is None or self.count_vtype_max > self.count_max:
-            self.shape_ids.append(self.ALT11_SHAPE)
-
-
         def init_frag(env, step):
 
             shape_id = env.user_context.shape_id
@@ -866,9 +751,16 @@ class FragmentationBrick(ScenarioBrick):
                 env.fragment_list = ['' for i in range(env.fragment_count)]
 
             elif shape_id == FragmentationBrick.ALT09_SHAPE:
-                env.fragment_count += 1
-                env.fragment_list.insert(1, '')
-                env._test = env.fragment_count
+                if env.fragment_count < self.count_max:
+                    env.fragment_count += 1
+                    env.fragment_list.insert(1, '')
+                    env._test = env.fragment_count
+                elif env.fragment_count == self.count_max:
+                    env.fragment_list.pop(-1)
+                    env.fragment_list.insert(1, '')
+                    env._test = env.fragment_count
+                else:
+                    raise ScenarioParameterError
 
             self.cycling_payload = itertools.cycle(env.fragment_list)
             env.frag_idx = self.frag_idx_init
