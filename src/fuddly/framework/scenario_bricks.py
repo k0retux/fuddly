@@ -19,11 +19,12 @@ class ScenarioBrick(object):
 
     def __init__(self, name=None, start: bool = True, final: bool = False,
                  auto_update_starting_step=True, auto_update_ending_step=True,
-                 default_shape_id=None,
+                 default_shape_id=None, backend=Scenario.Generator,
                  **kwargs):
 
         self._name = self.__class__.__name__ if name is None else name
         self._scenario = None
+        self._backend = backend
         self._dm = None
         self.shape_ids = self.shape_ids if self.shape_ids is not None else [ScenarioBrick.INIT_SHAPE]
         self.default_shape_id = default_shape_id
@@ -129,7 +130,7 @@ class ScenarioBrick(object):
 
     def _build(self, auto_update_starting_step=True, auto_update_ending_step=True, shape_id=None, **kwargs):
 
-        uc = UI(shape_id=shape_id)
+        uc = UI()
 
         try:
             starting_step, in_connectors, out_connectors = self.build(user_context=uc, shape_id=shape_id,
@@ -144,7 +145,7 @@ class ScenarioBrick(object):
         else:
             assert starting_step is not None
 
-        self._scenario = Scenario(self._name, anchor=starting_step, user_context=uc)
+        self._scenario = Scenario(self._name, anchor=starting_step, user_context=uc, backend=self._backend)
         self._scenario.set_in_connectors(in_connectors)
         self._scenario.set_out_connectors(out_connectors)
 
@@ -542,8 +543,19 @@ class FragmentationBrick(ScenarioBrick):
         return desc
 
 
-    def _generate_fragments(self, payload: str | bytes, fragment_count: int, fragment_policy: FRAG_POL):
+    def _generate_fragments(self, payload: str | bytes | Data, fragment_count: int, fragment_policy: FRAG_POL):
         fragments = []
+
+        if isinstance(payload, Data):
+
+            if self._payload_split_func is not None:
+                fragments = self._payload_split_func(payload)
+
+                return fragments
+
+            else:
+                payload = payload.to_str()
+
         payload_sz = len(payload)
 
         match fragment_policy:
@@ -580,7 +592,7 @@ class FragmentationBrick(ScenarioBrick):
     def pre_build(self, dm: DataModel = None,
                   host_name: Node = None,
                   fragment_list: list = None,
-                  payload: bytes | str = None,
+                  payload: bytes | str = None, payload_split_func = None,
                   fragidx_ref: str = None, fragcount_ref: str = None, pld_ref: str = None,
                   pldsz_ref: str = None,
                   fbk_timeout = None):
@@ -590,6 +602,7 @@ class FragmentationBrick(ScenarioBrick):
             self.VALID_UNORDERED_SHAPE,
         ]
 
+        self._payload_split_func = payload_split_func
         self.payload = payload
         if self.payload is None:
             assert fragment_list is not None
@@ -703,16 +716,20 @@ class FragmentationBrick(ScenarioBrick):
     def build(self, user_context: UI, shape_id: str,
               host_name: Node = None,
               fragment_list: list = None,
-              payload: bytes | str = None,
+              payload: bytes | str = None, payload_split_func = None,
               fragidx_ref: str = None, fragcount_ref: str = None, pld_ref: str = None,
               pldsz_ref: str = None,
               fbk_timeout = None):
 
         user_context.merge_with(UI(fbk_timeout=fbk_timeout))
+        self.shape_id = shape_id
 
         def init_frag(env, step):
 
-            shape_id = env.user_context.shape_id
+            shape_id = self.shape_id
+
+            if env.seed_from_fmkplumbing is not None:
+                self.payload = env.seed_from_fmkplumbing
 
             if self.payload is not None:
                 self.fragment_count = env.fragment_count
@@ -738,7 +755,10 @@ class FragmentationBrick(ScenarioBrick):
                     self.fragidx_incomplete_list.pop(-2)
 
             elif shape_id in [FragmentationBrick.SZ01_SHAPE]:
-                orig_pld = self.fragment_list[0] if self.payload is None else self.payload
+                if self.payload is None:
+                    orig_pld = self.fragment_list[0]
+                else:
+                    orig_pld = self.payload.to_str() if isinstance(self.payload, Data) else self.payload
                 pld_len = len(orig_pld)
                 if pld_len < self.fsz_vtype_max:
                     qty = self.fsz_vtype_max // pld_len
@@ -787,7 +807,7 @@ class FragmentationBrick(ScenarioBrick):
             data = Data()
             atom = env.dm.get_atom(self.host_name)
             atom.freeze(resolve_csp=True)
-            shape_id = env.user_context.shape_id
+            shape_id = self.shape_id
 
             match shape_id:
                 case FragmentationBrick.VALID_ORDERED_SHAPE | FragmentationBrick.ALT08_SHAPE \
@@ -943,7 +963,7 @@ class FragmentationBrick(ScenarioBrick):
             step.data_desc = data
 
         def check_max_loop(env, current_step, next_step, fbkgate):
-            shape_id = env.user_context.shape_id
+            shape_id = self.shape_id
 
             match shape_id:
                 case FragmentationBrick.ALT01A_SHAPE | FragmentationBrick.ALT01B_SHAPE \

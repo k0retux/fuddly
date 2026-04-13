@@ -479,7 +479,9 @@ class CSP(object):
                         self._exhausted_solutions = True
                         raise ConstraintError(
                             f'No solution found for this CSP by keeping any default values within '
-                            f'the DM definition.\n --> variables: {self._vars}')
+                            f'the DM definition.'
+                            f'\n --> variables: {self._vars}'
+                            f'\n --> default values: {self._var_default_value}')
                 else:
                     try:
                         mdl = next(self._solutions)

@@ -76,14 +76,25 @@ class Tactics(object):
         return 'g_' + scenario.name.lower()
 
     def register_scenarios(self, *scenarios):
-        for sc in scenarios:
-            dyn_generator_from_scenario.scenario = sc
-            dmaker_type = self.scenario_ref_from(sc)
-            gen_cls_name = self.scenario_cls_name_from(sc)
-            gen = dyn_generator_from_scenario(gen_cls_name, (DynGeneratorFromScenario,), {})()
-            gen.__doc__ = sc.description
-            self.register_new_generator(gen_cls_name, gen, weight=1, dmaker_type=dmaker_type,
-                                        valid=True)
+        for s in scenarios:
+            if s.backend == sc.Scenario.Generator:
+                dyn_generator_from_scenario.scenario = s
+                dmaker_type = self.scenario_ref_from(s)
+                gen_cls_name = self.scenario_cls_name_from(s)
+                gen = dyn_generator_from_scenario(gen_cls_name, (DynGeneratorFromScenario,), {})()
+                gen.__doc__ = s.description
+                self.register_new_generator(gen_cls_name, gen, weight=1, dmaker_type=dmaker_type,
+                                            valid=True)
+            elif s.backend == sc.Scenario.StatefulOperator:
+                dyn_operator_from_scenario.scenario = s
+                dmaker_type = self.scenario_ref_from(s)
+                op_cls_name = self.scenario_cls_name_from(s)
+                op = dyn_operator_from_scenario(op_cls_name, (DynOperatorFromScenario,), {})()
+                op.__doc__ = s.description
+                self.register_new_operator(op_cls_name, op, weight=1, dmaker_type=dmaker_type,
+                                            valid=True)
+            else:
+                raise NotImplementedError
 
     def register_scenario_builders(self, *scenario_builders):
         if self._scenario_builders is None:
@@ -630,6 +641,174 @@ class Generator(DataMaker):
         raise NotImplementedError
 
 
+class Operator(DataMaker):
+
+    op_type = None
+    valid = None
+    args = None
+
+    def __init__(self):
+        DataMaker.__init__(self)
+        self.__attrs = {
+            DataMakerAttr.Active: True,
+            DataMakerAttr.Controller: False,
+            DataMakerAttr.HandOver: False,
+            DataMakerAttr.SetupRequired: True
+            }
+
+    def transform_data(self, dm, target, prev_data):
+        raise NotImplementedError
+
+    def setup(self, dm, user_input):
+        '''
+        --> Specific code
+        return True if setup has succeeded, otherwise return False
+        '''
+        return True
+
+    def cleanup(self, fmkops):
+        '''
+        --> Specific code
+        '''
+        pass
+
+    def set_attr(self, name):
+        if name not in self.__attrs:
+            raise ValueError
+        self.__attrs[name] = True
+
+    def clear_attr(self, name):
+        if name not in self.__attrs:
+            raise ValueError
+        self.__attrs[name] = False
+
+    def is_attr_set(self, name):
+        if name not in self.__attrs:
+            raise ValueError
+        return self.__attrs[name]
+
+
+    def _setup(self, dm, user_input):
+        # sys.stdout.write("\n__ setup operator '%s' __" % self.__class__.__name__)
+        self.clear_attr(DataMakerAttr.SetupRequired)
+        if not _user_input_conformity(self, user_input, self._args_desc):
+            return False
+
+        _handle_user_inputs(self, user_input)
+        try:
+            ok = self.setup(dm, user_input)
+        except:
+            ok = False
+            raise
+        finally:
+            if not ok:
+                _restore_dmaker_internals(self)
+
+        return ok
+
+
+    def _cleanup(self):
+        # sys.stdout.write("\n__ cleanup operator '%s' __" % self.__class__.__name__)
+        self.set_attr(DataMakerAttr.SetupRequired)
+        self.set_attr(DataMakerAttr.Active)
+        self.cleanup(self._fmkops)
+
+
+class StatefulOperator(DataMaker):
+
+    op_type = None
+    valid = None
+    args = None
+
+    def __init__(self):
+        DataMaker.__init__(self)
+        self.__attrs = {
+            DataMakerAttr.Active: True,
+            DataMakerAttr.Controller: False,
+            DataMakerAttr.HandOver: False,
+            DataMakerAttr.SetupRequired: True,
+            DataMakerAttr.NeedSeed: True
+            }
+
+    def set_seed(self, prev_data):
+        raise NotImplementedError
+
+    def transform_data(self, dm, target, data):
+        '''
+        @data: it is either equal to prev_data the first time transform_data()
+        is called by the FMK, or it is an empty data (that is Data()).
+        '''
+        raise NotImplementedError
+
+    def handover(self):
+        # sys.stdout.write("\n__ operator handover '%s' __" % self.__class__.__name__)
+        self.set_attr(DataMakerAttr.HandOver)
+        self.set_attr(DataMakerAttr.SetupRequired)
+        self.set_attr(DataMakerAttr.NeedSeed)
+        self.cleanup(self._fmkops)
+
+    def setup(self, dm, user_input):
+        '''
+        --> Specific code
+        return True if setup has succeeded, otherwise return False
+        '''
+        return True
+
+    def cleanup(self, fmkops):
+        '''
+        --> Specific code
+        '''
+        pass
+
+    def set_attr(self, name):
+        if name not in self.__attrs:
+            raise ValueError
+        self.__attrs[name] = True
+
+    def clear_attr(self, name):
+        if name not in self.__attrs:
+            raise ValueError
+        self.__attrs[name] = False
+
+    def is_attr_set(self, name):
+        if name not in self.__attrs:
+            raise ValueError
+        return self.__attrs[name]
+
+    def _setup(self, dm, user_input):
+        # sys.stdout.write("\n__ setup operator '%s' __" % self.__class__.__name__)
+        self.clear_attr(DataMakerAttr.SetupRequired)
+        if not _user_input_conformity(self, user_input, self._args_desc):
+            return False
+
+        _handle_user_inputs(self, user_input)
+        try:
+            ok = self.setup(dm, user_input)
+        except:
+            ok = False
+            raise
+        finally:
+            if not ok:
+                _restore_dmaker_internals(self)
+
+        return ok
+
+    def _cleanup(self):
+        # sys.stdout.write("\n__ cleanup operator '%s' __" % self.__class__.__name__)
+        self.set_attr(DataMakerAttr.SetupRequired)
+        self.set_attr(DataMakerAttr.NeedSeed)
+        self.set_attr(DataMakerAttr.Active)
+        self.cleanup(self._fmkops)
+
+    def _set_seed(self, prev_data):
+        if self.is_attr_set(DataMakerAttr.NeedSeed):
+            ret = self.set_seed(prev_data)
+            self.clear_attr(DataMakerAttr.NeedSeed)
+            return ret
+
+
+
+
 class dyn_generator(type):
     data_id = ''
     def __init__(cls, name, bases, attrs):
@@ -701,45 +880,18 @@ class DynGenerator(Generator):
 
         return Data(atom)
 
-
-class dyn_generator_from_scenario(type):
+class dyn_operator_from_scenario(type):
     scenario = None
     def __new__(cls, name, bases, attrs):
-        attrs['_args_desc'] = copy.copy(DynGeneratorFromScenario._args_desc)
-        if dyn_generator_from_scenario.scenario._user_args:
-            attrs['_args_desc'].update(dyn_generator_from_scenario.scenario._user_args)
+        attrs['_args_desc'] = copy.copy(DynOperatorFromScenario._args_desc)
+        if dyn_operator_from_scenario.scenario._user_args:
+            attrs['_args_desc'].update(dyn_operator_from_scenario.scenario._user_args)
         cls_obj = type(name, bases, attrs)
-        cls_obj.scenario = dyn_generator_from_scenario.scenario
+        cls_obj.scenario = dyn_operator_from_scenario.scenario
         return cls_obj
 
-class DynGeneratorFromScenario(Generator):
-    scenario = None
-    _args_desc = collections.OrderedDict([
-        ('graph', ('Display the scenario and highlight the current step each time the generator '
-                  'is called.', False, bool)),
-        ('graph_format', ('Format to be used for displaying the scenario (e.g., xdot, pdf, png).',
-                         'xdot', str)),
-        ('data_fuzz', ('For each scenario step that generates data, a new scenario is created '
-                       'where the data generated by the step is fuzzed.', False, bool)),
-        ('cond_fuzz', ('For each scenario step having guarded transitions, a new scenario is '
-                       'created where transition conditions are inverted. [compatible with ignore_timing]',
-                       False, bool)),
-        ('ignore_timing', ('For each scenario step enforcing a timing constraint, a new scenario is '
-                           'created where any timeout conditions are removed (i.e., set to 0 second). '
-                           '[compatible with cond_fuzz]',
-                          False, bool)),
-        ('stutter', ("For each scenario step that generates data, a new scenario is created where "
-                     "the step is altered to stutter 'stutter_max' times, meaning that data-sending "
-                     "steps would be triggered 'stutter_max' times.",
-                     False, bool)),
-        ('stutter_max', ("The number of times a step will stutter [to be used with 'stutter']", 2, int)),
-        ('reset', ("If set, scenarios created by 'data_fuzz', 'cond_fuzz', or 'ignore_timing' "
-                   "will reinitialize the scenario after each corruption case, without waiting for "
-                   "the normal continuation of the scenario.", True, bool)),
-        ('init', ("Used in combination with 'data_fuzz', 'cond_fuzz', or 'ignore_timing'. Make "
-                  "the generator begin with the Nth corrupted scenario (where N is provided "
-                  "through this parameter).", 0, int))
-        ])
+
+class CommonMethodsForScenarioDM(object):
 
     @property
     def produced_seed(self):
@@ -754,57 +906,10 @@ class DynGeneratorFromScenario(Generator):
     def graph_scenario(self, fmt, select_current=False):
         self.scenario.graph(fmt=fmt, select_current=select_current)
 
-    def cleanup(self, fmkops):
-        self._cleanup_walking_attrs()
-        for periodic_id in self.scenario.periodic_to_clear:
-            fmkops.unregister_task(periodic_id, ign_error=True)
-        for task_id in self.scenario.tasks_to_stop:
-            fmkops.unregister_task(task_id, ign_error=True)
-        self.scenario.cleanup_steps()
-
     def _cleanup_walking_attrs(self):
         self.tr_selected = None
         self.pending_tr_eval = []
         self.tr_selected_idx = -1
-
-    def setup(self, dm, user_input):
-        self.__class__.scenario.set_data_model(dm)
-        self.scenario = copy.copy(self.__class__.scenario)
-
-        assert (self.data_fuzz and not (self.cond_fuzz or self.ignore_timing)) or not self.data_fuzz
-        assert not self.stutter or (self.stutter and not (self.cond_fuzz or self.ignore_timing or self.data_fuzz))
-
-        # internal attributes used for scenario alteration
-        self._current_fuzzed_step = None
-        self._ign_final = False
-        self._alteration_just_performed = False
-
-        if self.stutter:
-            self._step_stutter_complete = False
-            self._stutter_cpt = 0
-            self._step_num = self.init
-            self._ign_final = self._make_step_stutter()
-            if not self._ign_final:
-                self.scenario.current_step.final = True
-
-        elif self.data_fuzz:
-            self._data_fuzz_change_step = False
-            self._step_num = self.init
-            self._ign_final = self._alter_data_step()
-            if not self._ign_final:
-                self.scenario.current_step.final = True
-
-        elif self.cond_fuzz or self.ignore_timing:
-            self._step_num = self.init
-            self._ign_final = self._alter_transition_conditions()
-            if not self._ign_final:
-                self.scenario.current_step.final = True
-
-        if self.scenario._user_args:
-            for ua in self.scenario._user_args.keys():
-                setattr(self.scenario.env, str(ua), getattr(self, str(ua)))
-
-        return True
 
     def _stutter_cbk(self, env, current_step, next_step):
         self._stutter_cpt += 1
@@ -913,90 +1018,6 @@ class DynGeneratorFromScenario(Generator):
 
         return True
 
-    def generate_data(self, dm, monitor, target):
-        self._cleanup_walking_attrs()
-
-        if self.data_fuzz:
-            if not self._alteration_just_performed:
-                if self.scenario.current_step is self.scenario.anchor \
-                        and self._data_fuzz_change_step:
-                    self._data_fuzz_change_step = False
-                    self.scenario = copy.copy(self.__class__.scenario)
-                    self._step_num += 1
-                    self._ign_final = self._alter_data_step()
-                    if not self._ign_final:
-                        self.scenario.current_step.final = True
-                elif self._data_fuzz_change_step:
-                    self.scenario.walk_to_reinit() # because _callback_dispatcher_after_fbk() won't be called
-            else:
-                self._alteration_just_performed = False
-
-        elif self.cond_fuzz or self.ignore_timing:
-            if not self._alteration_just_performed:
-                if self.scenario.current_step is self.scenario.anchor:
-                    self.scenario = copy.copy(self.__class__.scenario)
-                    self._step_num += 1
-                    self._ign_final = self._alter_transition_conditions()
-                    if not self._ign_final:
-                        self.scenario.current_step.final = True
-            else:
-                self._alteration_just_performed = False
-
-        elif self.stutter:
-            if not self._alteration_just_performed:
-                if self._step_stutter_complete \
-                        and self.scenario.current_step is self.scenario.anchor:
-                    self._step_stutter_complete = False
-                    self.scenario = copy.copy(self.__class__.scenario)
-                    self._step_num += 1
-                    self._ign_final = self._make_step_stutter()
-                    if not self._ign_final:
-                        self.scenario.current_step.final = True
-            else:
-                self._alteration_just_performed = False
-
-        self.scenario.set_target(target)
-
-        self.step = self.scenario.current_step
-
-        self.step.do_before_data_processing()
-
-        if self.graph:
-            self.graph_scenario(self.graph_format, select_current=True)
-
-        if self.step.final:
-            if self._ign_final:
-                self.scenario.walk_to_reinit()
-                self.step = self.scenario.current_step
-            else:
-                self.need_reset()
-                data = Data()
-                # data.register_callback(self._callback_cleanup_periodic, hook=HOOK.after_dmaker_production)
-                data.make_unusable()
-                data.origin = self.scenario
-                data.scenario_dependence = self.scenario.name
-                return data
-
-        data = self.step.get_data()
-        data.origin = self.scenario
-        data.cleanup_all_callbacks()
-        data.altered = not self.step.valid
-
-        if self.cond_fuzz or self.ignore_timing or self.data_fuzz:
-            data.add_info("Current fuzzed step: '{:s}'"
-                          .format(str(self._current_fuzzed_step).replace('\n', ' ')))
-
-        data.register_callback(self._callback_dispatcher_before_sending_step1, hook=HOOK.before_sending_step1)
-        data.register_callback(self._callback_dispatcher_before_sending_step2, hook=HOOK.before_sending_step2)
-        data.register_callback(self._callback_dispatcher_after_sending, hook=HOOK.after_sending)
-        data.register_callback(self._callback_dispatcher_after_fbk, hook=HOOK.after_fbk)
-        data.register_callback(self._callback_dispatcher_final, hook=HOOK.final)
-
-        data.scenario_dependence = self.scenario.name
-
-        return data
-
-
     def __handle_transition_callbacks(self, hook, feedback=None):
         for idx, tr in self.pending_tr_eval:
             if tr.run_callback(self.step, feedback=feedback, hook=hook):
@@ -1095,171 +1116,347 @@ class DynGeneratorFromScenario(Generator):
         self._cleanup_walking_attrs()
 
 
-class Operator(DataMaker):
 
-    op_type = None
-    valid = None
-    args = None
+class DynOperatorFromScenario(StatefulOperator, CommonMethodsForScenarioDM):
+    scenario = None
+    _args_desc = collections.OrderedDict([
+        ('graph', ('Display the scenario and highlight the current step each time the generator '
+                  'is called.', False, bool)),
+        ('graph_format', ('Format to be used for displaying the scenario (e.g., xdot, pdf, png).',
+                         'xdot', str)),
+        ('data_fuzz', ('For each scenario step that generates data, a new scenario is created '
+                       'where the data generated by the step is fuzzed.', False, bool)),
+        ('cond_fuzz', ('For each scenario step having guarded transitions, a new scenario is '
+                       'created where transition conditions are inverted. [compatible with ignore_timing]',
+                       False, bool)),
+        ('ignore_timing', ('For each scenario step enforcing a timing constraint, a new scenario is '
+                           'created where any timeout conditions are removed (i.e., set to 0 second). '
+                           '[compatible with cond_fuzz]',
+                          False, bool)),
+        ('stutter', ("For each scenario step that generates data, a new scenario is created where "
+                     "the step is altered to stutter 'stutter_max' times, meaning that data-sending "
+                     "steps would be triggered 'stutter_max' times.",
+                     False, bool)),
+        ('stutter_max', ("The number of times a step will stutter [to be used with 'stutter']", 2, int)),
+        ('reset', ("If set, scenarios created by 'data_fuzz', 'cond_fuzz', or 'ignore_timing' "
+                   "will reinitialize the scenario after each corruption case, without waiting for "
+                   "the normal continuation of the scenario.", True, bool)),
+        ('init', ("Used in combination with 'data_fuzz', 'cond_fuzz', or 'ignore_timing'. Make "
+                  "the generator begin with the Nth corrupted scenario (where N is provided "
+                  "through this parameter).", 0, int))
+        ])
 
-    def __init__(self):
-        DataMaker.__init__(self)
-        self.__attrs = {
-            DataMakerAttr.Active: True,
-            DataMakerAttr.Controller: False,
-            DataMakerAttr.HandOver: False,
-            DataMakerAttr.SetupRequired: True
-            }
-
-    def transform_data(self, dm, target, prev_data):
-        raise NotImplementedError
-
-    def setup(self, dm, user_input):
-        '''
-        --> Specific code
-        return True if setup has succeeded, otherwise return False
-        '''
-        return True
 
     def cleanup(self, fmkops):
-        '''
-        --> Specific code
-        '''
-        pass
-
-    def set_attr(self, name):
-        if name not in self.__attrs:
-            raise ValueError
-        self.__attrs[name] = True
-
-    def clear_attr(self, name):
-        if name not in self.__attrs:
-            raise ValueError
-        self.__attrs[name] = False
-
-    def is_attr_set(self, name):
-        if name not in self.__attrs:
-            raise ValueError
-        return self.__attrs[name]
+        self._cleanup_walking_attrs()
+        for periodic_id in self.scenario.periodic_to_clear:
+            fmkops.unregister_task(periodic_id, ign_error=True)
+        for task_id in self.scenario.tasks_to_stop:
+            fmkops.unregister_task(task_id, ign_error=True)
+        self.scenario.env.seed_from_fmkplumbing = None
+        self.scenario.cleanup_steps()
 
 
-    def _setup(self, dm, user_input):
-        # sys.stdout.write("\n__ setup operator '%s' __" % self.__class__.__name__)
-        self.clear_attr(DataMakerAttr.SetupRequired)
-        if not _user_input_conformity(self, user_input, self._args_desc):
-            return False
+    def setup(self, dm, user_input):
+        self.__class__.scenario.set_data_model(dm)
+        self.scenario = copy.copy(self.__class__.scenario)
 
-        _handle_user_inputs(self, user_input)
-        try:
-            ok = self.setup(dm, user_input)
-        except:
-            ok = False
-            raise
-        finally:
-            if not ok:
-                _restore_dmaker_internals(self)
+        assert (self.data_fuzz and not (self.cond_fuzz or self.ignore_timing)) or not self.data_fuzz
+        assert not self.stutter or (self.stutter and not (self.cond_fuzz or self.ignore_timing or self.data_fuzz))
 
-        return ok
+        # internal attributes used for scenario alteration
+        self._current_fuzzed_step = None
+        self._ign_final = False
+        self._alteration_just_performed = False
 
+        if self.stutter:
+            self._step_stutter_complete = False
+            self._stutter_cpt = 0
+            self._step_num = self.init
+            self._ign_final = self._make_step_stutter()
+            if not self._ign_final:
+                self.scenario.current_step.final = True
 
-    def _cleanup(self):
-        # sys.stdout.write("\n__ cleanup operator '%s' __" % self.__class__.__name__)
-        self.set_attr(DataMakerAttr.SetupRequired)
-        self.set_attr(DataMakerAttr.Active)
-        self.cleanup(self._fmkops)
+        elif self.data_fuzz:
+            self._data_fuzz_change_step = False
+            self._step_num = self.init
+            self._ign_final = self._alter_data_step()
+            if not self._ign_final:
+                self.scenario.current_step.final = True
 
+        elif self.cond_fuzz or self.ignore_timing:
+            self._step_num = self.init
+            self._ign_final = self._alter_transition_conditions()
+            if not self._ign_final:
+                self.scenario.current_step.final = True
 
+        if self.scenario._user_args:
+            for ua in self.scenario._user_args.keys():
+                setattr(self.scenario.env, str(ua), getattr(self, str(ua)))
 
-class StatefulOperator(DataMaker):
+        return True
 
-    op_type = None
-    valid = None
-    args = None
-
-    def __init__(self):
-        DataMaker.__init__(self)
-        self.__attrs = {
-            DataMakerAttr.Active: True,
-            DataMakerAttr.Controller: False,
-            DataMakerAttr.HandOver: False,
-            DataMakerAttr.SetupRequired: True,
-            DataMakerAttr.NeedSeed: True
-            }
 
     def set_seed(self, prev_data):
-        raise NotImplementedError
+        self.scenario.env.seed_from_fmkplumbing = copy.copy(prev_data)
 
     def transform_data(self, dm, target, data):
-        '''
-        @data: it is either equal to prev_data the first time transform_data()
-        is called by the FMK, or it is an empty data (that is Data()).
-        '''
-        raise NotImplementedError
+        self._cleanup_walking_attrs()
 
-    def handover(self):
-        # sys.stdout.write("\n__ operator handover '%s' __" % self.__class__.__name__)
-        self.set_attr(DataMakerAttr.HandOver)
-        self.set_attr(DataMakerAttr.SetupRequired)
-        self.set_attr(DataMakerAttr.NeedSeed)
-        self.cleanup(self._fmkops)
+        if self.data_fuzz:
+            if not self._alteration_just_performed:
+                if self.scenario.current_step is self.scenario.anchor \
+                        and self._data_fuzz_change_step:
+                    self._data_fuzz_change_step = False
+                    self.scenario = copy.copy(self.__class__.scenario)
+                    self._step_num += 1
+                    self._ign_final = self._alter_data_step()
+                    if not self._ign_final:
+                        self.scenario.current_step.final = True
+                elif self._data_fuzz_change_step:
+                    self.scenario.walk_to_reinit() # because _callback_dispatcher_after_fbk() won't be called
+            else:
+                self._alteration_just_performed = False
 
-    def setup(self, dm, user_input):
-        '''
-        --> Specific code
-        return True if setup has succeeded, otherwise return False
-        '''
-        return True
+        elif self.cond_fuzz or self.ignore_timing:
+            if not self._alteration_just_performed:
+                if self.scenario.current_step is self.scenario.anchor:
+                    self.scenario = copy.copy(self.__class__.scenario)
+                    self._step_num += 1
+                    self._ign_final = self._alter_transition_conditions()
+                    if not self._ign_final:
+                        self.scenario.current_step.final = True
+            else:
+                self._alteration_just_performed = False
+
+        elif self.stutter:
+            if not self._alteration_just_performed:
+                if self._step_stutter_complete \
+                        and self.scenario.current_step is self.scenario.anchor:
+                    self._step_stutter_complete = False
+                    self.scenario = copy.copy(self.__class__.scenario)
+                    self._step_num += 1
+                    self._ign_final = self._make_step_stutter()
+                    if not self._ign_final:
+                        self.scenario.current_step.final = True
+            else:
+                self._alteration_just_performed = False
+
+        self.scenario.set_target(target)
+
+        self.step = self.scenario.current_step
+
+        self.step.do_before_data_processing()
+
+        if self.graph:
+            self.graph_scenario(self.graph_format, select_current=True)
+
+        if self.step.final:
+            if self._ign_final:
+                self.scenario.walk_to_reinit()
+                self.step = self.scenario.current_step
+            else:
+                data.make_unusable()
+                data.origin = self.scenario
+                data.scenario_dependence = self.scenario.name
+                self.handover()
+                return data
+
+        data_from_sc = self.step.get_data()
+        data.update_from(data_from_sc.content)
+
+        data.origin = self.scenario
+        data.cleanup_all_callbacks()
+        data.altered = not self.step.valid
+
+        if self.cond_fuzz or self.ignore_timing or self.data_fuzz:
+            data.add_info("Current fuzzed step: '{:s}'"
+                          .format(str(self._current_fuzzed_step).replace('\n', ' ')))
+
+        data.register_callback(self._callback_dispatcher_before_sending_step1, hook=HOOK.before_sending_step1)
+        data.register_callback(self._callback_dispatcher_before_sending_step2, hook=HOOK.before_sending_step2)
+        data.register_callback(self._callback_dispatcher_after_sending, hook=HOOK.after_sending)
+        data.register_callback(self._callback_dispatcher_after_fbk, hook=HOOK.after_fbk)
+        data.register_callback(self._callback_dispatcher_final, hook=HOOK.final)
+
+        data.scenario_dependence = self.scenario.name
+
+        return data
+
+
+
+class dyn_generator_from_scenario(type):
+    scenario = None
+    def __new__(cls, name, bases, attrs):
+        attrs['_args_desc'] = copy.copy(DynGeneratorFromScenario._args_desc)
+        if dyn_generator_from_scenario.scenario._user_args:
+            attrs['_args_desc'].update(dyn_generator_from_scenario.scenario._user_args)
+        cls_obj = type(name, bases, attrs)
+        cls_obj.scenario = dyn_generator_from_scenario.scenario
+        return cls_obj
+
+class DynGeneratorFromScenario(Generator, CommonMethodsForScenarioDM):
+    scenario = None
+    _args_desc = collections.OrderedDict([
+        ('graph', ('Display the scenario and highlight the current step each time the generator '
+                  'is called.', False, bool)),
+        ('graph_format', ('Format to be used for displaying the scenario (e.g., xdot, pdf, png).',
+                         'xdot', str)),
+        ('data_fuzz', ('For each scenario step that generates data, a new scenario is created '
+                       'where the data generated by the step is fuzzed.', False, bool)),
+        ('cond_fuzz', ('For each scenario step having guarded transitions, a new scenario is '
+                       'created where transition conditions are inverted. [compatible with ignore_timing]',
+                       False, bool)),
+        ('ignore_timing', ('For each scenario step enforcing a timing constraint, a new scenario is '
+                           'created where any timeout conditions are removed (i.e., set to 0 second). '
+                           '[compatible with cond_fuzz]',
+                          False, bool)),
+        ('stutter', ("For each scenario step that generates data, a new scenario is created where "
+                     "the step is altered to stutter 'stutter_max' times, meaning that data-sending "
+                     "steps would be triggered 'stutter_max' times.",
+                     False, bool)),
+        ('stutter_max', ("The number of times a step will stutter [to be used with 'stutter']", 2, int)),
+        ('reset', ("If set, scenarios created by 'data_fuzz', 'cond_fuzz', or 'ignore_timing' "
+                   "will reinitialize the scenario after each corruption case, without waiting for "
+                   "the normal continuation of the scenario.", True, bool)),
+        ('init', ("Used in combination with 'data_fuzz', 'cond_fuzz', or 'ignore_timing'. Make "
+                  "the generator begin with the Nth corrupted scenario (where N is provided "
+                  "through this parameter).", 0, int))
+        ])
+
 
     def cleanup(self, fmkops):
-        '''
-        --> Specific code
-        '''
-        pass
+        self._cleanup_walking_attrs()
+        for periodic_id in self.scenario.periodic_to_clear:
+            fmkops.unregister_task(periodic_id, ign_error=True)
+        for task_id in self.scenario.tasks_to_stop:
+            fmkops.unregister_task(task_id, ign_error=True)
+        self.scenario.env.seed_from_fmkplumbing = None
+        self.scenario.cleanup_steps()
 
-    def set_attr(self, name):
-        if name not in self.__attrs:
-            raise ValueError
-        self.__attrs[name] = True
 
-    def clear_attr(self, name):
-        if name not in self.__attrs:
-            raise ValueError
-        self.__attrs[name] = False
+    def setup(self, dm, user_input):
+        self.__class__.scenario.set_data_model(dm)
+        self.scenario = copy.copy(self.__class__.scenario)
 
-    def is_attr_set(self, name):
-        if name not in self.__attrs:
-            raise ValueError
-        return self.__attrs[name]
+        assert (self.data_fuzz and not (self.cond_fuzz or self.ignore_timing)) or not self.data_fuzz
+        assert not self.stutter or (self.stutter and not (self.cond_fuzz or self.ignore_timing or self.data_fuzz))
 
-    def _setup(self, dm, user_input):
-        # sys.stdout.write("\n__ setup operator '%s' __" % self.__class__.__name__)
-        self.clear_attr(DataMakerAttr.SetupRequired)
-        if not _user_input_conformity(self, user_input, self._args_desc):
-            return False
+        # internal attributes used for scenario alteration
+        self._current_fuzzed_step = None
+        self._ign_final = False
+        self._alteration_just_performed = False
 
-        _handle_user_inputs(self, user_input)
-        try:
-            ok = self.setup(dm, user_input)
-        except:
-            ok = False
-            raise
-        finally:
-            if not ok:
-                _restore_dmaker_internals(self)
+        if self.stutter:
+            self._step_stutter_complete = False
+            self._stutter_cpt = 0
+            self._step_num = self.init
+            self._ign_final = self._make_step_stutter()
+            if not self._ign_final:
+                self.scenario.current_step.final = True
 
-        return ok
+        elif self.data_fuzz:
+            self._data_fuzz_change_step = False
+            self._step_num = self.init
+            self._ign_final = self._alter_data_step()
+            if not self._ign_final:
+                self.scenario.current_step.final = True
 
-    def _cleanup(self):
-        # sys.stdout.write("\n__ cleanup operator '%s' __" % self.__class__.__name__)
-        self.set_attr(DataMakerAttr.SetupRequired)
-        self.set_attr(DataMakerAttr.NeedSeed)
-        self.set_attr(DataMakerAttr.Active)
-        self.cleanup(self._fmkops)
+        elif self.cond_fuzz or self.ignore_timing:
+            self._step_num = self.init
+            self._ign_final = self._alter_transition_conditions()
+            if not self._ign_final:
+                self.scenario.current_step.final = True
 
-    def _set_seed(self, prev_data):
-        if self.is_attr_set(DataMakerAttr.NeedSeed):
-            ret = self.set_seed(prev_data)
-            self.clear_attr(DataMakerAttr.NeedSeed)
-            return ret
+        if self.scenario._user_args:
+            for ua in self.scenario._user_args.keys():
+                setattr(self.scenario.env, str(ua), getattr(self, str(ua)))
+
+        return True
+
+
+    def generate_data(self, dm, monitor, target):
+        self._cleanup_walking_attrs()
+
+        if self.data_fuzz:
+            if not self._alteration_just_performed:
+                if self.scenario.current_step is self.scenario.anchor \
+                        and self._data_fuzz_change_step:
+                    self._data_fuzz_change_step = False
+                    self.scenario = copy.copy(self.__class__.scenario)
+                    self._step_num += 1
+                    self._ign_final = self._alter_data_step()
+                    if not self._ign_final:
+                        self.scenario.current_step.final = True
+                elif self._data_fuzz_change_step:
+                    self.scenario.walk_to_reinit() # because _callback_dispatcher_after_fbk() won't be called
+            else:
+                self._alteration_just_performed = False
+
+        elif self.cond_fuzz or self.ignore_timing:
+            if not self._alteration_just_performed:
+                if self.scenario.current_step is self.scenario.anchor:
+                    self.scenario = copy.copy(self.__class__.scenario)
+                    self._step_num += 1
+                    self._ign_final = self._alter_transition_conditions()
+                    if not self._ign_final:
+                        self.scenario.current_step.final = True
+            else:
+                self._alteration_just_performed = False
+
+        elif self.stutter:
+            if not self._alteration_just_performed:
+                if self._step_stutter_complete \
+                        and self.scenario.current_step is self.scenario.anchor:
+                    self._step_stutter_complete = False
+                    self.scenario = copy.copy(self.__class__.scenario)
+                    self._step_num += 1
+                    self._ign_final = self._make_step_stutter()
+                    if not self._ign_final:
+                        self.scenario.current_step.final = True
+            else:
+                self._alteration_just_performed = False
+
+        self.scenario.set_target(target)
+
+        self.step = self.scenario.current_step
+
+        self.step.do_before_data_processing()
+
+        if self.graph:
+            self.graph_scenario(self.graph_format, select_current=True)
+
+        if self.step.final:
+            if self._ign_final:
+                self.scenario.walk_to_reinit()
+                self.step = self.scenario.current_step
+            else:
+                self.need_reset()
+                data = Data()
+                # data.register_callback(self._callback_cleanup_periodic, hook=HOOK.after_dmaker_production)
+                data.make_unusable()
+                data.origin = self.scenario
+                data.scenario_dependence = self.scenario.name
+                return data
+
+        data = self.step.get_data()
+        data.origin = self.scenario
+        data.cleanup_all_callbacks()
+        data.altered = not self.step.valid
+
+        if self.cond_fuzz or self.ignore_timing or self.data_fuzz:
+            data.add_info("Current fuzzed step: '{:s}'"
+                          .format(str(self._current_fuzzed_step).replace('\n', ' ')))
+
+        data.register_callback(self._callback_dispatcher_before_sending_step1, hook=HOOK.before_sending_step1)
+        data.register_callback(self._callback_dispatcher_before_sending_step2, hook=HOOK.before_sending_step2)
+        data.register_callback(self._callback_dispatcher_after_sending, hook=HOOK.after_sending)
+        data.register_callback(self._callback_dispatcher_after_fbk, hook=HOOK.after_fbk)
+        data.register_callback(self._callback_dispatcher_final, hook=HOOK.final)
+
+        data.scenario_dependence = self.scenario.name
+
+        return data
 
 
 def operator(st, dtype, weight=1, valid=False, args=None, modelwalker_user=False):

@@ -58,7 +58,7 @@ from fuddly.framework.director_helpers import *
 from fuddly.framework.error_handling import *
 from fuddly.framework.evolutionary_helpers import EvolutionaryScenariosFactory
 from fuddly.framework.global_resources import *
-from fuddly.framework import generic_data_makers
+from fuddly.framework import generic_data_makers, scenario
 from fuddly.framework.knowledge.feedback_collector import FeedbackSource
 from fuddly.framework.logger import *
 from fuddly.framework.monitor import *
@@ -124,6 +124,7 @@ class ExportableFMKOps(object):
         self.cleanup_all_dmakers = fmk.cleanup_all_dmakers
         self.cleanup_dmaker = fmk.cleanup_dmaker
         self.dynamic_generator_ids = fmk.dynamic_generator_ids
+        self.dynamic_operator_ids = fmk.dynamic_operator_ids
         self.set_error = fmk.set_error
         self.load_data_model = fmk.load_data_model
         self.load_multiple_data_model = fmk.load_multiple_data_model
@@ -390,6 +391,8 @@ class FmkPlumbing(object):
 
         self.__dyngenerators_created = {}
         self.__dynamic_generator_ids = {}
+        self.__dynoperators_created = {}
+        self.__dynamic_operator_ids = {}
 
         self._task_list = {}
         self._task_list_lock = threading.Lock()
@@ -676,10 +679,18 @@ class FmkPlumbing(object):
 
             dm_params = self._import_dm(prefix, name, dm_path, reload_dm=True)
             if dm_params is not None:
+                # dynamic generators
                 if self.dm in self.__dynamic_generator_ids:
                     del self.__dynamic_generator_ids[self.dm]
                 if self.dm in self.__dyngenerators_created:
                     del self.__dyngenerators_created[self.dm]
+
+                # dynamic operators
+                if self.dm in self.__dynamic_operator_ids:
+                    del self.__dynamic_operator_ids[self.dm]
+                if self.dm in self.__dynoperators_created:
+                    del self.__dynoperators_created[self.dm]
+
                 self._add_data_model(
                     dm_params["dm"],
                     dm_params["tactics"],
@@ -687,6 +698,7 @@ class FmkPlumbing(object):
                     reload_dm=True,
                 )
                 self.__dyngenerators_created[dm_params["dm"]] = False
+                self.__dynoperators_created[dm_params["dm"]] = False
                 self.dm = dm_params["dm"]
             else:
                 return False
@@ -763,6 +775,7 @@ class FmkPlumbing(object):
                         reload_dm=True,
                     )
                     self.__dyngenerators_created[dm_params["dm"]] = False
+                    self.__dynoperators_created[dm_params["dm"]] = False
                     self._init_fmk_internals_step1(prj_params["project"], dm_params["dm"])
 
         self._start_fmk_plumbing()
@@ -890,6 +903,7 @@ class FmkPlumbing(object):
                 self._add_data_model(dm_params["dm"], dm_params["tactics"], dm_params["dm_rld_args"],
                                      reload_dm=False)
                 self.__dyngenerators_created[dm_params["dm"]] = False
+                self.__dynoperators_created[dm_params["dm"]] = False
                 if fmkDB_update:
                     # populate FMK DB
                     self._fmkDB_insert_dm_and_dmakers(dm_params["dm"].name, dm_params["tactics"])
@@ -923,6 +937,7 @@ class FmkPlumbing(object):
                                  reload_dm=False)
             name = dm_params["dm"].name
             self.__dyngenerators_created[dm_params["dm"]] = False
+            self.__dynoperators_created[dm_params["dm"]] = False
             if fmkDB_update:
                 # populate FMK DB
                 self._fmkDB_insert_dm_and_dmakers(dm_params["dm"].name, dm_params["tactics"])
@@ -1274,21 +1289,33 @@ class FmkPlumbing(object):
             if self.dm in self.__dynamic_generator_ids:
                 del self.__dynamic_generator_ids[self.dm]
 
+            # dynamic operators
+            if self.dm in self.__dynamic_operator_ids:
+                del self.__dynamic_operator_ids[self.dm]
+            if self.dm in self.__dynoperators_created:
+                del self.__dynoperators_created[self.dm]
+
+
             return False
 
         else:
-            if not self.__dyngenerators_created[self.dm]:
-                self.__dyngenerators_created[self.dm] = True
-                self.__dynamic_generator_ids[self.dm] = []
-                for di in self.dm.atom_identifiers():
-                    dmaker_type = di.upper()
-                    gen_cls_name = "g_" + di.lower()
-                    dyn_generator.data_id = di
-                    gen = dyn_generator(gen_cls_name, (DynGenerator,), {})()
-                    self._tactics.register_new_generator(gen_cls_name, gen, weight=1,
-                                                          dmaker_type=dmaker_type, valid=True)
-                    self.__dynamic_generator_ids[self.dm].append(dmaker_type)
-                    self.fmkDB.insert_dmaker(self.dm.name, dmaker_type, gen_cls_name, True, True)
+            if not self.__dyngenerators_created[self.dm] or not self.__dynoperators_created[self.dm]:
+                if not self.__dyngenerators_created[self.dm]:
+                    self.__dyngenerators_created[self.dm] = True
+                    self.__dynamic_generator_ids[self.dm] = []
+                    for di in self.dm.atom_identifiers():
+                        dmaker_type = di.upper()
+                        gen_cls_name = "g_" + di.lower()
+                        dyn_generator.data_id = di
+                        gen = dyn_generator(gen_cls_name, (DynGenerator,), {})()
+                        self._tactics.register_new_generator(gen_cls_name, gen, weight=1,
+                                                              dmaker_type=dmaker_type, valid=True)
+                        self.__dynamic_generator_ids[self.dm].append(dmaker_type)
+                        self.fmkDB.insert_dmaker(self.dm.name, dmaker_type, gen_cls_name, True, True)
+
+                if not self.__dynoperators_created[self.dm]:
+                    self.__dynoperators_created[self.dm] = True
+                    self.__dynamic_operator_ids[self.dm] = []
 
                 sc_list = []
                 for sb in self._tactics.scenario_builders:
@@ -1311,10 +1338,13 @@ class FmkPlumbing(object):
                 for sc in sc_list:
                     self._tactics.register_scenarios(sc)
                     dmaker_type = self._tactics.scenario_ref_from(sc)
-                    gen_cls_name = self._tactics.scenario_cls_name_from(sc)
-                    self.__dynamic_generator_ids[self.dm].append(dmaker_type)
+                    dmaker_cls_name = self._tactics.scenario_cls_name_from(sc)
+                    if sc.backend == Scenario.Generator:
+                        self.__dynamic_generator_ids[self.dm].append(dmaker_type)
+                    elif sc.backend == Scenario.StatefulOperator:
+                        self.__dynamic_operator_ids[self.dm].append(dmaker_type)
                     self.fmkDB.insert_dmaker(self.dm.name, dmaker_type,
-                                             gen_cls_name, True, True)
+                                             dmaker_cls_name, True, True)
 
             self.print(colorize("*** Data Model '%s' loaded ***" % self.dm.name, rgb=Color.DATA_MODEL_LOADED))
             self._dm_to_be_reloaded = False
@@ -1439,16 +1469,22 @@ class FmkPlumbing(object):
                 for sc_ref in [Tactics.scenario_ref_from(sc) for sc in self.prj.project_scenarios]:
                     if sc_ref in self._generic_tactics.generators:
                         del self._generic_tactics.generators[sc_ref]
+                    if sc_ref in self._generic_tactics.operators:
+                        del self._generic_tactics.operators[sc_ref]
 
             if self.prj.project_scenarios_from_bricks:
                 for sc_ref in [Tactics.scenario_ref_from(sc) for sc in self.prj.project_scenarios_from_bricks]:
                     if sc_ref in self._generic_tactics.generators:
                         del self._generic_tactics.generators[sc_ref]
+                    if sc_ref in self._generic_tactics.operators:
+                        del self._generic_tactics.operators[sc_ref]
 
             if self.prj.project_scenarios_from_builders:
                 for sc_ref in [Tactics.scenario_ref_from(sc) for sc in self.prj.project_scenarios_from_builders]:
                     if sc_ref in self._generic_tactics.generators:
                         del self._generic_tactics.generators[sc_ref]
+                    if sc_ref in self._generic_tactics.operators:
+                        del self._generic_tactics.operators[sc_ref]
 
             if self.prj.project_operators:
                 for op_ref in [Tactics.operator_ref_from(op) for op in self.prj.project_operators]:
@@ -1551,6 +1587,11 @@ class FmkPlumbing(object):
     def dynamic_generator_ids(self):
         for genid in self.__dynamic_generator_ids[self.dm]:
             yield genid
+
+    @EnforceOrder(accepted_states=["S2"])
+    def dynamic_operator_ids(self):
+        for opid in self.__dynamic_operator_ids[self.dm]:
+            yield opid
 
     @EnforceOrder(accepted_states=["S2"])
     def show_fmk_internals(self):
@@ -1745,6 +1786,7 @@ class FmkPlumbing(object):
         new_dm = DataModel()
         new_tactics = Tactics()
         dyn_gen_ids = []
+        dyn_op_ids = []
         name = ""
         for dm in dm_list:
             name += dm.name + "+"
@@ -1768,6 +1810,8 @@ class FmkPlumbing(object):
                     new_tactics.generators[k] = v
             for dmk_id in self.__dynamic_generator_ids[dm]:
                 dyn_gen_ids.append(dmk_id)
+            for dmk_id in self.__dynamic_operator_ids[dm]:
+                dyn_op_ids.append(dmk_id)
 
         new_dm.name = name[:-1]
         is_dm_name_exists = new_dm.name in map(lambda x: x.name, self.dm_list)
@@ -1779,10 +1823,12 @@ class FmkPlumbing(object):
                                  dm_rld_args=[None, dm_name_list],
                                  reload_dm=reload_dm)
 
-            # In this case DynGens have already been generated through
+            # In this case DynGens or DynOps have already been generated through
             # the reloading of the included DMs
             self.__dyngenerators_created[new_dm] = True
             self.__dynamic_generator_ids[new_dm] = dyn_gen_ids
+            self.__dynoperators_created[new_dm] = True
+            self.__dynamic_operator_ids[new_dm] = dyn_op_ids
 
         elif is_dm_name_exists:
             new_dm = self.get_data_model_by_name(new_dm.name)
@@ -3202,7 +3248,12 @@ class FmkPlumbing(object):
     def show_scenario(self, sc_name, fmt="pdf"):
         generators_gen = self._generic_tactics.generator_types
         generators_spe = self._tactics.generator_types
+        operators_gen = self._generic_tactics.operator_types
+        operators_spe = self._tactics.operator_types
         err_msg = "The scenario '{!s}' does not exist!".format(sc_name)
+
+        generators_list = None
+        operators_list = None
 
         if generators_gen and sc_name in generators_gen:
             generators_list = self._generic_tactics.get_generators_list(sc_name)
@@ -3210,14 +3261,25 @@ class FmkPlumbing(object):
         elif generators_spe and sc_name in generators_spe:
             generators_list = self._tactics.get_generators_list(sc_name)
             tactics = self._tactics
+        elif operators_gen and sc_name in operators_gen:
+            operators_list = self._generic_tactics.get_operators_list(sc_name)
+            tactics = self._generic_tactics
+        elif operators_spe and sc_name in operators_spe:
+            operators_list = self._tactics.get_operators_list(sc_name)
+            tactics = self._tactics
         else:
             self.set_error(err_msg, code=Error.FmkWarning)
             return False
 
-        if generators_list:
-            cls_name = list(generators_list.keys())[0]
-            sc_obj = tactics.get_generator_obj(sc_name, cls_name)
-            if sc_obj and isinstance(sc_obj, DynGeneratorFromScenario):
+        if generators_list or operators_list:
+            if generators_list:
+                cls_name = list(generators_list.keys())[0]
+                sc_obj = tactics.get_generator_obj(sc_name, cls_name)
+            else:
+                cls_name = list(operators_list.keys())[0]
+                sc_obj = tactics.get_operator_obj(sc_name, cls_name)
+
+            if sc_obj and isinstance(sc_obj, (DynGeneratorFromScenario, DynOperatorFromScenario)):
                 sc_obj.graph_scenario(fmt=fmt)
             else:
                 self.set_error(err_msg, code=Error.FmkWarning)

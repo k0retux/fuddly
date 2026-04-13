@@ -235,8 +235,36 @@ reinit.connect_to(init)
 
 sc_tuto_ex4 = Scenario('ex4', anchor=init, reinit_anchor=reinit)
 
+
+# Operator Scenario
+
+def print_seed(env: ScenarioEnv, step):
+    print(f'\n+++ seed retrieved: {env.seed_from_fmkplumbing.to_bytes()}'
+          f' (@{hex(id(env.seed_from_fmkplumbing))})')
+
+def apply_ttype_operator(env: ScenarioEnv, step):
+    print(f'\n+++ apply tTYPE operator on the provided seed:'
+          f' @{hex(id(env.seed_from_fmkplumbing))}')
+    step.data_desc = DataProcess(['tTYPE'], seed=env.seed_from_fmkplumbing)
+
+def apply_tstruct_operator(env: ScenarioEnv, step):
+    print(f'\n+++ apply tSTRUCT operator on the provided seed:'
+          f' @{hex(id(env.seed_from_fmkplumbing))}')
+    step.data_desc = DataProcess([('tSTRUCT', UI(deep=True))], seed=env.seed_from_fmkplumbing)
+
+
+step_init = NoDataStep(do_before_data_processing=print_seed)
+step_ttype = StepStub(do_before_data_processing=apply_ttype_operator)
+step_tstruct = StepStub(do_before_data_processing=apply_tstruct_operator)
+
+step_init.connect_to(step_ttype)
+step_ttype.connect_to(step_tstruct, dp_completed_guard=True)
+step_tstruct.connect_to(FinalStep(), dp_completed_guard=True)
+
+sc_op_fuzz = Scenario('op_fuzz', anchor=step_init, backend=Scenario.StatefulOperator)
+
 tactics.register_scenarios(sc_tuto_ex1, sc_tuto_ex2, sc_tuto_ex3, sc_tuto_ex4,
-                           sc4, sc5, sc_test, sc_test2, sc_test3, sc_test4)
+                           sc4, sc5, sc_test, sc_test2, sc_test3, sc_test4, sc_op_fuzz)
 
 @generator(tactics, gtype="CBK")
 class g_test_callback_01(Generator):

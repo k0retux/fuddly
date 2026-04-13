@@ -90,7 +90,7 @@ sb_frag_01.set_ending_sbrick(sbrick_final_1)
 
 pld = 'A'*6+'B'*6+'C'*6+'D'*6+'E'*6+'123'
 
-sb_frag_02 = FragmentationScenarioBuilder()
+sb_frag_02 = FragmentationScenarioBuilder(scenario_backend=Scenario.StatefulOperator)
 sb_frag_02.set_scenario_params(name='frag_2', host_name='frag_cmd',
                                payload=pld,
                                fragidx_ref='f_idx', fragcount_ref='f_count', pld_ref='pld',

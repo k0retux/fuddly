@@ -5,14 +5,15 @@ import traceback
 from fuddly.libs.external_modules import colorize, Color
 from fuddly.framework.data_model import DataModel
 from fuddly.framework.error_handling import ScenarioDefinitionError
-# from fuddly.framework.scenario import *
+from fuddly.framework.scenario import Scenario
 from fuddly.framework.scenario_bricks import ScenarioBrick, FragmentationBrick
 
 class ScenarioBuilder(object):
 
-    def __init__(self):
+    def __init__(self, scenario_backend=Scenario.Generator):
         self._dm = None
         self.kwargs = None
+        self.scenario_backend = scenario_backend
         self._sbrick = None
         self._sbrick_in_id = 1
         self._sbrick_out_id = 1
@@ -78,7 +79,7 @@ class ScenarioBuilder(object):
 class FragmentationScenarioBuilder(ScenarioBuilder):
 
     def load(self, dm: DataModel):
-        frag_brick = FragmentationBrick(self.name, **self.kwargs)
+        frag_brick = FragmentationBrick(self.name, backend=self.scenario_backend, **self.kwargs)
         frag_brick.prepare_shapes(dm)
 
         return frag_brick

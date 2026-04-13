@@ -895,7 +895,16 @@ class ScenarioEnv(object):
         self._target = None
         self._scenario = None
         self._context = None
+        self._seed_from_fmkplumbing = None
         # self._knowledge_source = None
+
+    @property
+    def seed_from_fmkplumbing(self):
+        return self._seed_from_fmkplumbing
+
+    @seed_from_fmkplumbing.setter
+    def seed_from_fmkplumbing(self, value):
+        self._seed_from_fmkplumbing = value
 
     @property
     def dm(self):
@@ -935,6 +944,7 @@ class ScenarioEnv(object):
         new_env._target = None
         new_env._scenario = None
         new_env._context = copy.copy(self._context)
+        new_env._seed_from_fmkplumbing = self._seed_from_fmkplumbing
         # new_env._knowledge_source = None
         return new_env
 
@@ -947,8 +957,13 @@ viewer_filename = None
 
 class Scenario(object):
 
+    Generator = 1
+    StatefulOperator = 2
+
+    backend = None
+
     def __init__(self, name, anchor=None, reinit_anchor=None, user_context=None,
-                 user_args=None, description='No description'):
+                 user_args=None, description='No description', backend=Generator):
         """
         Note: only at copy the ScenarioEnv are propagated to the steps and transitions
 
@@ -961,6 +976,7 @@ class Scenario(object):
         """
 
         self.name = name
+        self.backend = backend
         self._description_for_graph = description
         self._user_args = user_args
         self._steps = None
