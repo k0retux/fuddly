@@ -34,6 +34,7 @@ def start(args: argparse.Namespace) -> int:
     else:
         verbose = Verbose.Heavy if args.verbose else Verbose.Normal
         atom_name = args.atom
+        colorized = not args.no_color
         debug = False
 
         if args.data is not None:
@@ -61,7 +62,7 @@ def start(args: argparse.Namespace) -> int:
         scope = args.scope
 
         decoded_result = dm.decode(data, atom_name=atom_name, scope=scope,
-                                   verbose=verbose, debug=debug)
+                                   verbose=verbose, debug=debug, colorized=colorized)
 
 
         _, decoded_str = decoded_result

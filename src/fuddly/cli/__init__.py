@@ -243,6 +243,11 @@ def main(argv: List[str] = None):
             action='store_true',
             help="verbose mode",
         )
+        group.add_argument(
+            "--no-color",
+            action='store_true',
+            help="color mode",
+        )
         group = p.add_argument_group("Decoding constraints")
         group = group.add_mutually_exclusive_group()
         group.add_argument(
