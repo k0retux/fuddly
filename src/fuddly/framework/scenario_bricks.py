@@ -20,11 +20,13 @@ class ScenarioBrick(object):
     def __init__(self, name=None, start: bool = True, final: bool = False,
                  auto_update_starting_step=True, auto_update_ending_step=True,
                  default_shape_id=None, backend=Scenario.Generator,
+                 user_context: UI = None,
                  **kwargs):
 
         self._name = self.__class__.__name__ if name is None else name
         self._scenario = None
         self._backend = backend
+        self._user_context = user_context
         self._dm = None
         self.shape_ids = self.shape_ids if self.shape_ids is not None else [ScenarioBrick.INIT_SHAPE]
         self.default_shape_id = default_shape_id
@@ -130,7 +132,7 @@ class ScenarioBrick(object):
 
     def _build(self, auto_update_starting_step=True, auto_update_ending_step=True, shape_id=None, **kwargs):
 
-        uc = UI()
+        uc = UI() if self._user_context is None else self._user_context
 
         try:
             starting_step, in_connectors, out_connectors = self.build(user_context=uc, shape_id=shape_id,
