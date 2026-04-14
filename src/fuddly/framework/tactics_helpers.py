@@ -1264,6 +1264,8 @@ class DynOperatorFromScenario(StatefulOperator, CommonMethodsForScenarioDM):
 
         data_from_sc = self.step.get_data()
         data.update_from(data_from_sc.content)
+        for info in data_from_sc.info_list:
+            data.info_list.append(info)
 
         data.origin = self.scenario
         data.cleanup_all_callbacks()
