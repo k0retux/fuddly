@@ -268,7 +268,7 @@ def TIMESTAMP(time_format="%H%M%S", utc=False,
     """
     def timestamp(time_format, utc, set_attrs, clear_attrs):
         if utc:
-            now = datetime.datetime.utcnow()
+            now = datetime.datetime.now(datetime.timezone.utc)
         else:
             now = datetime.datetime.now()
         ts = now.strftime(time_format)

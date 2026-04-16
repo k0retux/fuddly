@@ -27,10 +27,10 @@ def start(args: argparse.Namespace) -> int:
     prj_obj = None
     try:
         dm.load_data_model(name2dm, from_prj=prj_obj)
-    except:
+    except Exception:
         msg = (f"Error encountered while loading the data model. "
                f"(checkup the associated '{dm.name}.py' file)")
-        sys.stderr(msg)
+        sys.stderr.write(msg + "\n")
     else:
         verbose = Verbose.Heavy if args.verbose else Verbose.Normal
         atom_name = args.atom
