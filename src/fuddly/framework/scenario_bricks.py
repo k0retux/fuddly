@@ -326,7 +326,13 @@ class ScenarioBrick(object):
         new_scbrick.__dict__.update(self.__dict__)
         new_scbrick._scenario = None
         new_scbrick.in_connection = {}
+        for k, obj in self.in_connection.items():
+            in_idx, scbrick, connect_kwargs = obj
+            new_scbrick.in_connection[k] = (in_idx, copy.copy(scbrick), connect_kwargs)
         new_scbrick.out_connection = {}
+        for k, obj in self.out_connection.items():
+            out_idx, scbrick, connect_kwargs = obj
+            new_scbrick.out_connection[k] = (out_idx, copy.copy(scbrick), connect_kwargs)
 
         return new_scbrick
 
