@@ -7,7 +7,7 @@ Data Model Keywords
 ===================
 
 This section describe the *keywords* that you could use within the
-frame of the :class:`framework.node_builder.NodeBuilder`
+frame of the :class:`fuddly.framework.node_builder.NodeBuilder`
 infrastructure. This infrastructure enables you to describe a data
 format in a JSON-like fashion, and will automatically translate this
 description to ``fuddly``'s internal data representation.
@@ -19,7 +19,7 @@ Generic Description Keywords
 name
   Within ``fuddly``'s data model every node has a name that should be
   unique only within its siblings. But when it comes to use the
-  :class:`framework.node_builder.NodeBuilder` infrastructure to
+  :class:`fuddly.framework.node_builder.NodeBuilder` infrastructure to
   describe your data format, if you want to use the same name in a
   data model description, you have to add an extra key to keep it
   unique within the description, and thus allowing you to refer to
@@ -67,7 +67,7 @@ contents
     terminal node
   - a python ``function`` (or everything with a ``__call__`` method)
     will be considered as a generator.
-  - a :class:`framework.node.Node` will be used as a baseline for
+  - a :class:`fuddly.framework.node.Node` will be used as a baseline for
     the description. If no additional keyword is provided, the provided node
     will be used as is. Otherwise, the additional keywords will be used to complement the
     description. Note that the *keyword* ``name`` should not be provided as it will be
@@ -81,12 +81,12 @@ contents
 
 default
   Default value for the node. Only compatible with typed nodes
-  (:class:`framework.node.NodeInternals_TypedValue`). It is directly linked to the
+  (:class:`fuddly.framework.node.NodeInternals_TypedValue`). It is directly linked to the
   ``default`` parameter of each type constructor. Refer to :ref:`vt:value-types` for more information.
 
 description
   Textual description of the node. Note this information is shown by the method
-  :meth:`framework.node.Node.show()`.
+  :meth:`fuddly.framework.node.Node.show()`.
 
 qty
   Specify the amount of nodes to generate from the description, or a
@@ -96,10 +96,10 @@ qty
   Note ``-1`` means infinity. It makes only sense for absorption
   operation (refer to :ref:`tuto:dm-absorption`), because for data
   generation, a strict limit
-  (:const:`framework.node.NodeInternals_NonTerm.INFINITY_LIMIT`)
+  (:const:`fuddly.framework.node.NodeInternals_NonTerm.INFINITY_LIMIT`)
   is set to avoid getting unintended too big data. If you intend to
   get such kind of data, specify explicitly the maximum, or use a
-  disruptor to do so (:ref:`tuto:disruptors`).
+  operator to do so (:ref:`tuto:operators`).
 
 default_qty
   Specify the default amount of nodes to generate from the description.
@@ -110,7 +110,7 @@ clone
   reference.
 
 type
-  Used only by the :class:`framework.node_builder.NodeBuilder`
+  Used only by the :class:`fuddly.framework.node_builder.NodeBuilder`
   infrastructure if there is an ambiguity to determine the node
   type. This attributes accept the following values:
 
@@ -140,7 +140,7 @@ conf
 evolution_func
   This attribute allows to provide a function that will be used in the case the described node is
   instantiated more than once by a containing non-terminal node further to a
-  :meth:`framework.node.Node.freeze` operation (refer to the ``qty`` keyword).
+  :meth:`fuddly.framework.node.Node.freeze` operation (refer to the ``qty`` keyword).
   The function will be called on every node instance (but the first one) before this node
   incorporate the frozen form of the non-terminal. Besides, the node returned by the function will
   be used as the base node for the next instantiation (which makes node evolution easier).
@@ -161,7 +161,7 @@ custo_set, custo_clear
     (refer to ``qty`` attribute), all instances will be set as *mutable*.
     If it is disabled, when a child node is instantiated more
     than once, only the first instance is set *mutable*, the others
-    have this attribute cleared to prevent generic disruptors from
+    have this attribute cleared to prevent generic operators from
     altering them. This mode aims at limiting the number of test
     cases, by pruning what is assumed to be redundant.
 
@@ -191,7 +191,7 @@ custo_set, custo_clear
     .. note::
 		Note that if the node is not frozen
 		at the time of the copy, this customization won't have any effect. The main interest is
-		in conjunction with the *disruptors* (like ``tTYPE``, ``tWALK``, ...) which are based on the
+		in conjunction with the *operators* (like ``tTYPE``, ``tWALK``, ...) which are based on the
 		``ModelWalker`` infrastructure  (refer to :ref:`tuto:modelwalker`). Indeed, this infrastructure
 		releases constraints on non-terminal nodes before providing a new model instance. Releasing
 		constraints triggers child nodes reconstruction for each non-terminal. And as the terminal
@@ -250,12 +250,15 @@ custo_set, custo_clear
     the `payload` subnode will be resolved too early and will produce a byte-string without
     any collapse operation.
 
+  - ``MH.Custo.NTerm.SepDelOptionalTail``: By default, this mode is *enabled*.
+    When the non-terminal node is defining separator nodes with the attribute `optional_tail`,
+    the generation will omit any separators at the tail. Otherwise, separators will remain.
 
   For *generator* node, the customizable behavior modes are:
 
   - ``MH.Custo.Gen.ForwardConfChange``: By default, this mode is *enabled*.
     If enabled, a
-    call to :meth:`framework.node.Node.set_current_conf()` will be
+    call to :meth:`fuddly.framework.node.Node.set_current_conf()` will be
     called on the generated node (default behavior).
   - ``MH.Custo.Gen.CloneExtNodeArgs``: By default, this mode is *disabled*.
     If enabled, during a cloning operation (e.g., full copy
@@ -268,11 +271,11 @@ custo_set, custo_clear
     still belonging to the full data.
   - ``MH.Custo.Gen.ResetOnUnfreeze``: By default, this mode is *enabled*.
     If enabled, a
-    call to :meth:`framework.node.Node.unfreeze()` on the node will
+    call to :meth:`fuddly.framework.node.Node.unfreeze()` on the node will
     provoke the reset of the *generator* itself, meaning that the next
     time its value will be asked for, it will be recomputed (default
     behaviour). If unset, a call to the method
-    :meth:`framework.node.Node.unfreeze()` will provoke the call of
+    :meth:`fuddly.framework.node.Node.unfreeze()` will provoke the call of
     this method on the already existing generated node (and if it
     didn't exist by this time it would have been computed first).
   - ``MH.Custo.Gen.TriggerLast``: By default, this mode is *disabled*.
@@ -282,6 +285,8 @@ custo_set, custo_clear
     existence condition and that this condition cannot be resolved at
     the time the generator would normally trigger (which is
     when it is reached while walking through the graph).
+  - ``MH.Custo.Gen.PropagateMutableAttr``: By default, this mode is *disabled*.
+    If enabled, The Mutable attribute of the Generator node is propagated to its generated node.
 
   For *function* node, the customizable behaviors mode are:
 
@@ -291,6 +296,16 @@ custo_set, custo_clear
     the *function* node (without being frozen first).
   - ``MH.Custo.Func.CloneExtNodeArgs``: By default, this mode is *disabled*.
     Refer to the description of the corresponding *generator node* mode.
+
+  For *recursive* node, the customizable behaviors mode are:
+
+  - ``MH.Custo.Rec.AlwaysUpdateFrozenNode``: By default, this mode is *enabled*.
+    If enabled, the generated recursive node is always reevaluated. This is relevant when
+    a node within the generated recursive node is changed without the involvement of the recursive
+    node itself. It is what happens, for instance, when using the Model Walking infrastructure
+    with ``tTYPE`` or ``tWALK(walk_within_recursive_node=True)``.
+    If disabled, the generated recursive node is saved until unfreeze/reset_state is called,
+    in order to avoid systematic reevaluation.
 
 
 .. _dm:nt-keywords:
@@ -413,7 +428,8 @@ separator
 		   'prefix': False,
 		   'suffix': False,
 		   'unique': True,
-		   'always': False},
+		   'always': False,
+           'optional_tail': False},
 
   The keys ``prefix``, ``suffix``, ``unique`` and ``always`` are optional. They are
   described below.
@@ -441,22 +457,27 @@ always
   the separator will be always generated even if the
   subnodes it separates are not generated because their evaluated quantity is 0.
 
+optional_tail
+  Used optionally within a *separator descriptor*. Relevant when `always` is True.
+  If set to `True` then when subnodes at the tail are not generated, separators are considered to be optional.
+  Therefore separators could be omitted at the tail when the non-terminal node will be resolved.
+  This is enforced when :attr:`fuddly.framework.node.NonTermCusto.SepDelOptionalTail` is set.
 
 encoder
   If specified, an encoder instance should be provided. The *encoding* will be applied
   transparently when the binary value of the non terminal node will be retrieved
-  (:meth:`framework.node.Node.to_bytes`). Additionally, during an absorption
+  (:meth:`fuddly.framework.node.Node.to_bytes`). Additionally, during an absorption
   (refer to :ref:`tuto:dm-absorption`), the *decoding* will also be performed automatically.
 
   Several generic encoders are defined within ``framework/encoders.py``. But if they
   don't match your need, you can define your own encoder by inheriting from
-  :class:`framework.encoders.Encoder` and implementing its interface.
+  :class:`fuddly.framework.encoders.Encoder` and implementing its interface.
 
 
   .. seealso:: Refer to :ref:`dm:pattern:encoder` for an example on how to use this keyword.
 
-  .. note:: Depending on your needs, you could also choose to implement a disruptor
-     to perform your encoding (refer to :ref:`tuto:disruptors`).
+  .. note:: Depending on your needs, you could also choose to implement a operator
+     to perform your encoding (refer to :ref:`tuto:operators`).
 
 
 Keywords to Describe Generator Node
@@ -468,7 +489,7 @@ node_args
 
 other_args
   List of parameters (which are not a
-  :class:`framework.node.Node`) to be provided to a *generator*
+  :class:`fuddly.framework.node.Node`) to be provided to a *generator*
   node or a *function* node.
 
 provide_helpers
@@ -476,7 +497,7 @@ provide_helpers
   the user-defined function (last parameter) of the *generator* node
   or the *function* node. Otherwise, this object won't be passed
   (default behavior). This object is an instance of the class
-  :class:`framework.node.DynNode_Helpers`, which enable the
+  :class:`fuddly.framework.node.DynNode_Helpers`, which enable the
   user-defined function to have some insight on the current structure
   of the modeled data.
 
@@ -493,6 +514,10 @@ import_from
 data_id
   Name of the data description to import.
 
+samples_from_current_dm
+  In the case the imported data model leverages sample files (like the data model ``json``),
+  instruct whether to use the samples from the imported data model or to use instead samples
+  from the current data model. (Set to ``False`` by default.)
 
 .. _dm:node_prop_keywords:
 
@@ -528,22 +553,22 @@ set_attrs
 
   - ``MH.Attr.Freezable``: If set, the node will be freezable (default
     behavior), which means that once the node has provided a value
-    (through for instance :meth:`framework.node.Node.to_bytes()`),
-    the method :meth:`framework.node.Node.unfreeze()` need to be
+    (through for instance :meth:`fuddly.framework.node.Node.to_bytes()`),
+    the method :meth:`fuddly.framework.node.Node.unfreeze()` need to be
     called on it to get new values, otherwise it won't change. If
     unset, the node will always be recomputed. Can be useful for
     *function* node, if it needs to be recomputed each time a
     modification has been performed on its associated graph (e.g., CRC
     function).
-  - ``MH.Attr.Mutable``: If set, generic disruptors will consider the
+  - ``MH.Attr.Mutable``: If set, generic operators will consider the
     node as being mutable, meaning that it can be altered (default
     behavior). Otherwise, it will be ignored.
-    When a non-terminal node has this attribute, generic disruptors using
+    When a non-terminal node has this attribute, generic operators using
     the ModelWalker algorithm (like ``tWALK`` and ``tTYPE``) will stick to
     its default form (meaning default quantity will be used for each subnodes
     and if the node has multiple shapes, the higher weighted one will be used.
     Likewise for `Pick` sections).
-    Also, the method :meth:`framework.node.Node.unfreeze()` won't perform any
+    Also, the method :meth:`fuddly.framework.node.Node.unfreeze()` won't perform any
     changes on non-terminal nodes which are not mutable.
   - ``MH.Attr.Determinist``: This attribute can be set directly
     through the keywords ``determinist`` or ``random``. Refer to them
@@ -555,14 +580,14 @@ set_attrs
     node. Refer to :ref:`tuto:dm-absorption` for more information on
     that topic.
   - ``MH.Attr.Separator``: Used to distinguish a separator. Some
-    disruptors can leverage this attribute to perform their
+    operators can leverage this attribute to perform their
     alteration.
   - ``MH.Attr.Highlight``: If set, make the framework display the node in color
-    when printed on the console. This attribute is also used by some disruptors to show the
+    when printed on the console. This attribute is also used by some operators to show the
     location of their modification.
 
   .. note::
-     Most of the generic stateful disruptors will recursively
+     Most of the generic stateful operators will recursively
      set the attributes ``MH.Attr.Determinist`` and ``MH.Attr.Finite``
      on the provided data before performing any alteration.
 
@@ -576,7 +601,7 @@ set_attrs
             generated node.
 
   .. seealso:: The attributes are defined within
-               :class:`framework.node.NodeInternals`.
+               :class:`fuddly.framework.node.NodeInternals`.
 
 clear_attrs
   List of attributes to clear on the node. The current attributes are
@@ -597,7 +622,7 @@ semantics
   topic.
 
 fuzz_weight
-  Used by some stateful disruptors to order their test cases. The
+  Used by some stateful operators to order their test cases. The
   heavier the weight, the higher the priority of handling the node.
 
 sync_qty_with
@@ -610,7 +635,7 @@ qty_from
   an optional *base quantity* that will be added to the retrieved value. In this case, you
   shall provide a ``list``/``tuple`` with first the node reference then the *base quantity*.
 
-  This keyword is the counterpart of the *generator template* :class:`framework.dmhelpers.generic.QTY`.
+  This keyword is the counterpart of the *generator template* :class:`fuddly.framework.dmhelpers.generic.QTY`.
   It is preferable to this *generator* when the node from which the quantity is retrieved
   is already resolved at retrieval time. In this case *generation* and *absorption* operations
   will be handled transparently.
@@ -618,9 +643,9 @@ qty_from
 sync_size_with, sync_enc_size_with
   Allow to synchronize the length of the described node (the one where this keyword is used)
   with the *value* of the node specified by reference (which should be an
-  :class:`framework.value_types.INT`-based typed-node). These keywords are useful for size-variable
+  :class:`fuddly.framework.value_types.INT`-based typed-node). These keywords are useful for size-variable
   node types. They are currently supported for typed-nodes which are
-  :class:`framework.value_types.String`-based with or without an encoding.
+  :class:`fuddly.framework.value_types.String`-based with or without an encoding.
   Non-terminal nodes are not supported (for absorption).
   The distinction between ``sync_size_with`` and ``sync_enc_size_with`` is that the synchronization
   will be performed:
@@ -628,8 +653,8 @@ sync_size_with, sync_enc_size_with
   - either with respect to the length of the data retrieved from the node in a
     *decoded* form. *Decoded* means that it is agnostic to the *codec* specified
     (e.g., ``utf-8``, ``latin-1``, ...) in the ``String``, and also, for ``Encoded-String``
-    (e.g., :class:`framework.value_types.GZIP`, ...) , that it is agnostic to any
-    :class:`framework.encoders.Encoder` the ``String`` is wrapped with;
+    (e.g., :class:`fuddly.framework.value_types.GZIP`, ...) , that it is agnostic to any
+    :class:`fuddly.framework.encoders.Encoder` the ``String`` is wrapped with;
 
   - or with respect to the length of the encoded form of the data.
 
@@ -643,7 +668,7 @@ sync_size_with, sync_enc_size_with
   of absorption. In this case, you shall provide a ``list``/``tuple`` with first the node reference
   then the *base size*.
 
-  These keywords are the counterpart of the *generator template* :class:`framework.dmhelpers.generic.LEN`.
+  These keywords are the counterpart of the *generator template* :class:`fuddly.framework.dmhelpers.generic.LEN`.
   They are preferable to this *generator* (when the size-variable node is not a non-terminal),
   because *generation* and *absorption* operations will be handled transparently thanks to them.
 
@@ -682,12 +707,12 @@ exists_if_not
 post_freeze
   To be filled with a function. If specified, the function will be
   called just after the node has been frozen. It takes the node
-  internals as argument (:class:`framework.node.NodeInternals`).
+  internals as argument (:class:`fuddly.framework.node.NodeInternals`).
 
 specific_fuzzy_vals
   Usable for *typed-nodes* only. This keyword allows to specify a list of additional values to
-  be leveraged by the *disruptor* ``tTYPE`` (:ref:`dis:ttype`) while dealing with the related node.
-  These additional values are added to the test cases planned by the *disruptor* (if not already
+  be leveraged by the *operator* ``tTYPE`` (:ref:`dis:ttype`) while dealing with the related node.
+  These additional values are added to the test cases planned by the *operator* (if not already
   planned).
 
 charset
@@ -706,7 +731,7 @@ Keywords to Describe Constraints
 --------------------------------
 
 constraints
-    List of node constraints specified through :class:`framework.constraint_helpers.Constraint` objects. They will be added to a CSP (Constraint
+    List of node constraints specified through :class:`fuddly.framework.constraint_helpers.Constraint` objects. They will be added to a CSP (Constraint
     Satisfiability Problem) associated to the currently described data, and resolved when
     :meth:`Node.freeze` is called with the parameter ``resolve_csp`` set to True (this is performed by default by the operator ``tWALK``).
     It should always be associated to a non-terminal node.
@@ -734,10 +759,10 @@ supports different parameters that allows to more accurately specify a
 data model, which enables ``fuddly`` to perform more enhanced fuzzing.
 
 .. note:: These parameters will be especially leveraged by the generic
-   disruptor ``tTYPE``
-   (:class:`framework.generic_data_makers.d_fuzz_typed_nodes`). Refer to
-   :ref:`dis:generic-disruptors` for more information on it, and to
-   :ref:`tuto:disruptors`, for how to create your own *disruptors*.
+   operator ``tTYPE``
+   (:class:`fuddly.framework.generic_data_makers.d_fuzz_typed_nodes`). Refer to
+   :ref:`dis:generic-operators` for more information on it, and to
+   :ref:`tuto:operators`, for how to create your own *operators*.
 
 
 .. _vt:integer:
@@ -746,7 +771,7 @@ Integer
 -------
 
 All integer types listed below provide the same interface
-(:class:`framework.value_types.INT`). Their constructor take the
+(:class:`fuddly.framework.value_types.INT`). Their constructor take the
 following parameters:
 
 ``values`` [optional, default value: **None**]
@@ -761,7 +786,7 @@ following parameters:
 
 ``default`` [optional, default value: **None**]
   If not None, this value will be provided by default at first
-  when :meth:`framework.value_types.INT.get_value()` is called.
+  when :meth:`fuddly.framework.value_types.INT.get_value()` is called.
 
 ``determinist`` [default value: **True**]
   If set to ``True`` generated values will be in a deterministic
@@ -780,28 +805,28 @@ All these parameters are optional. If you don't specify all of them
 the constructor will let more freedom within the data model. But if
 you have accurate information, don't hesitate to add them in the data
 model, as it does not weaken the test cases that will be generated by
-the generic disruptors, quite the opposite.
+the generic operators, quite the opposite.
 
 Below the different currently defined integer types, and the
 corresponding outputs for a data generated from them:
 
-- :class:`framework.value_types.UINT8`: unsigned integer on 8 bit
-- :class:`framework.value_types.SINT8`: signed integer on 8 bit (2's complement)
-- :class:`framework.value_types.UINT16_be`: unsigned integer on 16 bit, big endian
-- :class:`framework.value_types.UINT16_le`: unsigned integer on 16 bit, little endian
-- :class:`framework.value_types.SINT16_be`: signed integer on 16 bit (2's complement), big endian
-- :class:`framework.value_types.SINT16_le`: signed integer on 16 bit (2's complement), little endian
-- :class:`framework.value_types.UINT32_be`: unsigned integer on 32 bit, big endian
-- :class:`framework.value_types.UINT32_le`: unsigned integer on 32 bit, little endian
-- :class:`framework.value_types.SINT32_be`: signed integer on 32 bit (2's complement), big endian
-- :class:`framework.value_types.SINT32_le`: signed integer on 32 bit (2's complement), little endian
-- :class:`framework.value_types.UINT64_be`: unsigned integer on 64 bit, big endian
-- :class:`framework.value_types.UINT64_le`: unsigned integer on 64 bit, little endian
-- :class:`framework.value_types.SINT64_be`: signed integer on 64 bit (2's complement), big endian
-- :class:`framework.value_types.SINT64_le`: signed integer on 64 bit (2's complement), little endian
-- :class:`framework.value_types.INT_str`: ASCII encoded integer
+- :class:`fuddly.framework.value_types.UINT8`: unsigned integer on 8 bit
+- :class:`fuddly.framework.value_types.SINT8`: signed integer on 8 bit (2's complement)
+- :class:`fuddly.framework.value_types.UINT16_be`: unsigned integer on 16 bit, big endian
+- :class:`fuddly.framework.value_types.UINT16_le`: unsigned integer on 16 bit, little endian
+- :class:`fuddly.framework.value_types.SINT16_be`: signed integer on 16 bit (2's complement), big endian
+- :class:`fuddly.framework.value_types.SINT16_le`: signed integer on 16 bit (2's complement), little endian
+- :class:`fuddly.framework.value_types.UINT32_be`: unsigned integer on 32 bit, big endian
+- :class:`fuddly.framework.value_types.UINT32_le`: unsigned integer on 32 bit, little endian
+- :class:`fuddly.framework.value_types.SINT32_be`: signed integer on 32 bit (2's complement), big endian
+- :class:`fuddly.framework.value_types.SINT32_le`: signed integer on 32 bit (2's complement), little endian
+- :class:`fuddly.framework.value_types.UINT64_be`: unsigned integer on 64 bit, big endian
+- :class:`fuddly.framework.value_types.UINT64_le`: unsigned integer on 64 bit, little endian
+- :class:`fuddly.framework.value_types.SINT64_be`: signed integer on 64 bit (2's complement), big endian
+- :class:`fuddly.framework.value_types.SINT64_le`: signed integer on 64 bit (2's complement), little endian
+- :class:`fuddly.framework.value_types.INT_str`: ASCII encoded integer
 
-For :class:`framework.value_types.INT_str`, additional parameters are available:
+For :class:`fuddly.framework.value_types.INT_str`, additional parameters are available:
 
 ``base`` [optional, default value: **10**]
   Numerical base that have to be used to represent the integer into a string
@@ -822,12 +847,17 @@ String
 ------
 
 All string types listed below provide the same interface
-(:class:`framework.value_types.String`). Their constructor take the
+(:class:`fuddly.framework.value_types.String`). Their constructor take the
 following parameters:
 
 ``values`` [optional, default value: **None**]
-  List of the character strings that are considered valid for the node
-  backed by this *String object*. The default string is the first element of the list.
+  Exhaustive list of character strings that are valid for the node
+  backed by this *String object*. The first item of the list is the default value,
+  except if the parameter `default` is provided.
+
+``samples`` [optional, default value: **None**]
+  Examples of character strings that are valid for the node
+  backed by this *String object*.
 
 ``size`` [optional, default value: **None**]
   Valid character string size for the node backed by this *String
@@ -864,12 +894,12 @@ following parameters:
 
 ``default`` [optional, default value: **None**]
   If not None, this value will be provided by default at first
-  when :meth:`framework.value_types.String.get_value()` is called.
+  when :meth:`fuddly.framework.value_types.String.get_value()` is called.
 
 ``extra_fuzzy_list`` [optional, default value: **None**]
   During data generation, if this parameter is specified with some
   specific values, they will be part of the test cases generated by
-  the generic disruptor tTYPE.
+  the generic operator tTYPE.
 
 ``absorb_regexp`` [optional, default value: **None**]
   You can specify a regular expression in this parameter as a
@@ -892,7 +922,7 @@ following parameters:
 ``encoding_arg`` [optional, default value: **None**]
   Only relevant for subclasses that leverage the encoding infrastructure and that
   allow their encoding scheme to be configured. This parameter is directly provided to
-  :meth:`framework.value_types.String.init_encoding_scheme`.
+  :meth:`fuddly.framework.value_types.String.init_encoding_scheme`.
 
 Some String subclasses leverage the ``String`` encoding infrastructure,
 that enables to handle transparently any encoding scheme:
@@ -903,30 +933,30 @@ that enables to handle transparently any encoding scheme:
 
 .. note::
    To define a ``String`` subclass handling a specific encoding, you first have to define
-   an encoder class that inherits from :class:`framework.encoders.Encoder` (you may also use an
+   an encoder class that inherits from :class:`fuddly.framework.encoders.Encoder` (you may also use an
    existing one, if it fits your needs).
-   Then you have to create a subclass of String decorated by :func:`framework.value_types.from_encoder`
+   Then you have to create a subclass of String decorated by :func:`fuddly.framework.value_types.from_encoder`
    with your encoder class in parameter.
-   Additionally, you can overload :meth:`framework.value_types.String.encoding_test_cases` if you want
+   Additionally, you can overload :meth:`fuddly.framework.value_types.String.encoding_test_cases` if you want
    to implement specific test cases related to your encoding. They will be automatically added to
-   the set of test cases to be triggered by the disruptor ``tTYPE``.
+   the set of test cases to be triggered by the operator ``tTYPE``.
 
    Note that the encoder you defined can also be used by a non-terminal node (refer to :ref:`dm:pattern:encoder`).
 
 
 Below the different currently defined string types:
 
-- :class:`framework.value_types.String`: General purpose character string.
-- :class:`framework.value_types.Filename`: Filename. Similar to the type
-  ``String``, but some disruptors like ``tTYPE`` will generate more specific
+- :class:`fuddly.framework.value_types.String`: General purpose character string.
+- :class:`fuddly.framework.value_types.Filename`: Filename. Similar to the type
+  ``String``, but some operators like ``tTYPE`` will generate more specific
   test cases.
-- :class:`framework.value_types.FolderPath`: FolderPath. Similar to the type
+- :class:`fuddly.framework.value_types.FolderPath`: FolderPath. Similar to the type
   ``Filename``, but generated test cases are slightly different.
-- :class:`framework.value_types.GZIP`: ``String`` compressed with ``zlib``. The parameter
+- :class:`fuddly.framework.value_types.GZIP`: ``String`` compressed with ``zlib``. The parameter
   ``encoding_arg`` is used to specify the level of compression (0-9).
-- :class:`framework.value_types.GSM7bitPacking`: ``String`` encoded in conformity
+- :class:`fuddly.framework.value_types.GSM7bitPacking`: ``String`` encoded in conformity
   with ``GSM 7-bits`` packed format.
-- :class:`framework.value_types.Wrapper`: to be used as a mean to wrap a ``String`` with
+- :class:`fuddly.framework.value_types.Wrapper`: to be used as a mean to wrap a ``String`` with
   a prefix and/or a suffix, without defining specific *nodes* for that (meaning you
   don't need to model that part and want to simplify your data description).
 
@@ -934,7 +964,7 @@ Below the different currently defined string types:
 BitField
 --------
 
-The type :class:`framework.value_types.BitField` takes the following
+The type :class:`fuddly.framework.value_types.BitField` takes the following
 parameters:
 
 
@@ -963,7 +993,7 @@ parameters:
 ``padding`` [default value: **0**]
   Should be either set to ``0`` or ``1`` for completion of the
   ``Bitfield`` to a byte boundary if it is not a byte-multiple. Note
-  that the method :func:`framework.value_types.BitField.extend_right`
+  that the method :func:`fuddly.framework.value_types.BitField.extend_right`
   allows to merge two ``BitField`` which could result in padding
   deletion.
 
@@ -986,9 +1016,9 @@ parameters:
   time". The rationale is that in most cases, computing all
   combinations does not make sense, especially for fuzzing
   purpose. Additionally, note that such nominal generation are not the
-  one used by the generic disruptor ``tTYPE`` which rely on
+  one used by the generic operator ``tTYPE`` which rely on
   ``BitField`` *fuzzy mode* (reachable through
-  :func:`framework.value_types.VT_Alt.enable_fuzz_mode`).
+  :func:`fuddly.framework.value_types.VT_Alt.enable_fuzz_mode`).
 
   This parameter is for internal usage and will always follow the *hosting*
   node instructions. If you want to change the deterministic order you have
@@ -998,7 +1028,7 @@ parameters:
 ``default`` [optional, default value: **None**]
   If not None, it should be the list of default value for each sub-field.
   They will be provided by default at first
-  when :meth:`framework.value_types.BitField.get_value()` is called.
+  when :meth:`fuddly.framework.value_types.BitField.get_value()` is called.
 
 ``subfield_descs`` [optional, default value: **None**]
   List of descriptions (character strings) for each sub-field. To
@@ -1038,7 +1068,7 @@ going through the definition of a data model (for this topic refer to
 
 Note that the output is the first generated value from your
 description. To get another one you will have to call
-:func:`framework.value_types.BitField.get_value()` on it. Obviously,
+:func:`fuddly.framework.value_types.BitField.get_value()` on it. Obviously,
 this kind of stuff is done automatically for you during a fuzzing
 session.
 
@@ -1067,14 +1097,14 @@ the first example. We additionally specify the parameter
 
 
 .. seealso:: Methods are defined to help for modifying a
-             :class:`framework.value_types.BitField`. If you want to
-             deal with ``BitField`` in your specific disruptors, take
+             :class:`fuddly.framework.value_types.BitField`. If you want to
+             deal with ``BitField`` in your specific operators, take
              a look especially at:
 
-             - :func:`framework.value_types.BitField.set_subfield`, :func:`framework.value_types.BitField.get_subfield`
-             - :func:`framework.value_types.BitField.extend_right`
-             - :func:`framework.value_types.BitField.reset_state`, :func:`framework.value_types.BitField.rewind`
-             - :func:`framework.value_types.VT_Alt.enable_fuzz_mode` (used currently by the disruptor ``tTYPE``)
+             - :func:`fuddly.framework.value_types.BitField.set_subfield`, :func:`fuddly.framework.value_types.BitField.get_subfield`
+             - :func:`fuddly.framework.value_types.BitField.extend_right`
+             - :func:`fuddly.framework.value_types.BitField.reset_state`, :func:`fuddly.framework.value_types.BitField.rewind`
+             - :func:`fuddly.framework.value_types.VT_Alt.enable_fuzz_mode` (used currently by the operator ``tTYPE``)
 
 
 Helpers
@@ -1086,42 +1116,42 @@ Generator Node Templates
 ------------------------
 
 Hereunder are presented the currently available *generator-node* templates (which are defined
-in :mod:`framework.dmhelpers.generic`):
+in :mod:`fuddly.framework.dmhelpers.generic`):
 
-:meth:`framework.dmhelpers.generic.LEN()`
+:meth:`fuddly.framework.dmhelpers.generic.LEN()`
       Return a *generator* that returns the length of a node parameter.
 
-:meth:`framework.dmhelpers.generic.QTY()`
+:meth:`fuddly.framework.dmhelpers.generic.QTY()`
       Return a *generator* that returns the quantity of child node
       instances (referenced by name) of the node parameter provided to
       the *generator*.
 
-:meth:`framework.dmhelpers.generic.TIMESTAMP()`
+:meth:`fuddly.framework.dmhelpers.generic.TIMESTAMP()`
       Return a *generator* that returns the current time (in a String node).
 
-:meth:`framework.dmhelpers.generic.CRC()`
+:meth:`fuddly.framework.dmhelpers.generic.CRC()`
       Return a *generator* that returns the CRC (in the chosen type) of
       all the node parameters.
 
-:meth:`framework.dmhelpers.generic.WRAP()`
+:meth:`fuddly.framework.dmhelpers.generic.WRAP()`
       Return a *generator* that returns the result (in the chosen
       type) of the provided function applied on the concatenation of
       all the node parameters.
 
-:meth:`framework.dmhelpers.generic.CYCLE()`
+:meth:`fuddly.framework.dmhelpers.generic.CYCLE()`
       Return a *generator* that iterates other the provided value list
       and returns at each step a node corresponding to the
       current value.
 
-:meth:`framework.dmhelpers.generic.OFFSET()`
+:meth:`fuddly.framework.dmhelpers.generic.OFFSET()`
       Return a *generator* that computes the offset of a child node
       within its parent node.
 
-:meth:`framework.dmhelpers.generic.COPY_VALUE()`
+:meth:`fuddly.framework.dmhelpers.generic.COPY_VALUE()`
       Return a *generator* that retrieves the value of another node,
       and then return a `vt` node with this value.
 
-:meth:`framework.dmhelpers.generic.SELECT()`
+:meth:`fuddly.framework.dmhelpers.generic.SELECT()`
       Return a *generator* that select a subnode from a non-terminal node and return it
 
 .. _dm:builders:
@@ -1133,11 +1163,11 @@ As well as :ref:`dm:generators`, helpers of another kind are defined within the 
 easier the modeling of some data formats. Basically, it is a bank of block builders that you
 can use to simplify the process of modeling if they match your needs.
 
-These helpers are provided within :mod:`framework.dmhelpers`. The currently available helper
+These helpers are provided within :mod:`fuddly.framework.dmhelpers`. The currently available helper
 modules are presented hereunder:
 
-:mod:`framework.dmhelpers.xml`
-  provides helpers for modeling XML tags (:meth:`framework.dmhelpers.xml.tag_builder`). Note the
+:mod:`fuddly.framework.dmhelpers.xml`
+  provides helpers for modeling XML tags (:meth:`fuddly.framework.dmhelpers.xml.tag_builder`). Note the
   helpers provide you with a precise data model which enables you to fuzz at XML level as well as
   at content level or to only focus on the content.
 
@@ -1146,7 +1176,7 @@ modules are presented hereunder:
   .. code-block:: python
     :linenos:
 
-     import framework.dmhelpers.xml as xml
+     import fuddly.framework.dmhelpers.xml as xml
 
      xml_desc = \
      xml.tag_builder('C1', params={'p1':'a', 'p2': ['foo', 'bar'], 'p3': 'c'},
@@ -1248,7 +1278,7 @@ modules are presented hereunder:
 
 
   .. note::``uuid.uuid1()`` is used to avoid node name collisions with the formalism of
-    :class:`framework.node_builder.NodeBuilder`.
+    :class:`fuddly.framework.node_builder.NodeBuilder`.
 
 .. _dm:patterns:
 
@@ -1317,9 +1347,9 @@ node to ``0`` (line 21), and it will be considered as an optional
 part.
 
 If you iterate over this data model with ``tWALK(nt_ony=True)`` (refer
-to :ref:`dis:generic-disruptors`) you will see the various data forms
+to :ref:`dis:generic-operators`) you will see the various data forms
 understood by ``fuddly`` which would be leveraged by most of the
-generic stateful disruptors.
+generic stateful operators.
 
 .. code-block:: none
 
@@ -1339,7 +1369,7 @@ Finally, the third form is from the ``SHAPE 2``.
 
 .. seealso:: Refer to :ref:`tuto:modelwalker` for more information on
              the *Model Walker* infrastructure which makes really easy
-             the implementation of stateful disruptors leveraging the
+             the implementation of stateful operators leveraging the
              different forms of a data.
 
 .. seealso:: Refer to :ref:`dm:pattern:existence-cond` if you need
@@ -1422,9 +1452,9 @@ From this data model you could get a data like that:
           ``absorb_regexp`` parameter in line 13).
 
 .. note:: You can also perform specific *separator mutation* within a
-          disruptor (refer to :ref:`tuto:disruptors`), as separator nodes have
+          operator (refer to :ref:`tuto:operators`), as separator nodes have
           the specific attribute
-          :const:`framework.node.NodeInternals.Separator` set.
+          :const:`fuddly.framework.node.NodeInternals.Separator` set.
 
 
 .. _dm:pattern:existence-cond:
@@ -1435,7 +1465,7 @@ How to Describe a Data Format Whose Parts Change Depending on Some Fields
 The example below shows how to define a data format based on *opcodes*
 and *sub-opcodes* which change the form of the data itself. We use for
 that purpose the keyword ``exists_if`` with some subclasses of
-:class:`framework.node.NodeCondition` and node references.
+:class:`fuddly.framework.node.NodeCondition` and node references.
 
 .. note:: The keyword ``exists_if`` can directly take a node
           reference. In such case, the condition is the existence of
@@ -1562,23 +1592,23 @@ character string in our case.
      ]}
 
 Note the *generator* is just a specific kind of node
-(:class:`framework.node.NodeInternals_GenFunc`) that embeds a
-function that returns a node (:class:`framework.node.Node`). In
+(:class:`fuddly.framework.node.NodeInternals_GenFunc`) that embeds a
+function that returns a node (:class:`fuddly.framework.node.Node`). In
 the previous description, the function is provided through the keyword
 ``contents``, and it's a simple lambda function taking a node as
 parameter, on which is called
-:meth:`framework.node.Node.to_bytes()` to get its bytes
+:meth:`fuddly.framework.node.Node.to_bytes()` to get its bytes
 representation and then the ``len()`` function. The result is used for
 defining a terminal node of type
-:class:`framework.value_types.UINT32_be` (refer to section :ref:`vt:integer`).
+:class:`fuddly.framework.value_types.UINT32_be` (refer to section :ref:`vt:integer`).
 
 This use case can be described by using the specific *generator
-template* :meth:`framework.dmhelpers.generic.LEN()` which will basically
+template* :meth:`fuddly.framework.dmhelpers.generic.LEN()` which will basically
 return the previous lambda function. The following example makes use
 of it.
 
 .. note:: Generator templates are defined as static methods of
-          :class:`framework.dmhelpers.generic.MH`. They make the description
+          :class:`fuddly.framework.dmhelpers.generic.MH`. They make the description
           of some generic use cases simpler.
 
 .. code-block:: python
@@ -1653,14 +1683,14 @@ for more complex situation.
 .. seealso:: Look at the example :ref:`ex:zip-mod` to see how to
    change the node configuration before absorption. And for more
    insights on that topic refer to :ref:`data-model` and
-   :ref:`tuto:disruptors`.
+   :ref:`tuto:operators`.
 
 
 Finally, let's take the following example that illustrates other
 *generator templates*, namely
-:meth:`framework.dmhelpers.generic.QTY()`,
-:meth:`framework.dmhelpers.generic.CRC()` and
-:meth:`framework.dmhelpers.generic.TIMESTAMP()`.
+:meth:`fuddly.framework.dmhelpers.generic.QTY()`,
+:meth:`fuddly.framework.dmhelpers.generic.CRC()` and
+:meth:`fuddly.framework.dmhelpers.generic.TIMESTAMP()`.
 
 .. code-block:: python
    :linenos:
@@ -1777,10 +1807,10 @@ The example below shows how to describe a data format with some parts encoded in
 
 The non-terminal node named ``enc`` (lines 9-19) has the attribute ``encoder``
 (refer to :ref:`dm:keywords`) which means that it will be encoded following the scheme of the
-specified encoder. In this case it is the :class:`framework.encoders.GZIP_Enc` with a level
+specified encoder. In this case it is the :class:`fuddly.framework.encoders.GZIP_Enc` with a level
 of compression of 6. Within this node is also defined a typed node (lines 17-18) named
 ``data1`` which is encoded in *UTF16 little endian* through the parameter ``codec``
-of :class:`framework.value_types.String`.
+of :class:`fuddly.framework.value_types.String`.
 
 Note also the parameter ``after_encoding=False`` (lines 6 and 14), which is supported by every
 relevant generator node templates (refer to :ref:`dm:generators`) and enable them to act either
@@ -1814,11 +1844,11 @@ on the encoded form or the decoded form of their node parameters.
      ]}
 
 This data description will enable you to produce data compliant to the specified encoding schemes
-in a transparent way. Additionally, any fuzzing operations (:ref:`tuto:disruptors`) you want to
+in a transparent way. Additionally, any fuzzing operations (:ref:`tuto:operators`) you want to
 perform on any data parts will be done *before* any encoding takes place.
 
 If you want to perform some fuzzing on the encoding scheme itself you will have first to
-describe its format. Then it boils down to run some generic disruptors on them or some of your own.
+describe its format. Then it boils down to run some generic operators on them or some of your own.
 However, note that some value types that support encoding (refer to :ref:`vt:value-types`) embed
 specific test cases on the encoding scheme (which is the case for ``utf-16-le``-encoded strings
 for instance).
@@ -1835,8 +1865,8 @@ To perform that operation you can write the following python code:
    :linenos:
    :emphasize-lines: 10, 12
 
-   from framework.plumbing import *
-   from framework.node import AbsorbStatus
+   from fuddly.framework.plumbing import *
+   from fuddly.framework.node import AbsorbStatus
 
    raw_data = b'Plop\x8c\xd6/\x06x\x9cc\raHe(f(aPd\x00\x00\x0bv\x01\xc7Blue'
 
@@ -1876,16 +1906,16 @@ Parts of the data that only contain strings can easily be described using python
 Here are some rules to respect:
 
 - Using square brackets ``[ ]`` to indicate a set of characters will result in the creation of a
-  :class:`framework.value_types.String` terminal node that contains an *alphabet*. Likewise, the usage of
+  :class:`fuddly.framework.value_types.String` terminal node that contains an *alphabet*. Likewise, the usage of
   ``.`` or meta-sequences such as ``\s``, ``\S``, ``\w``, ``\W``, ``\d`` or ``\D`` will lead to the
   creation of such type of nodes.
 
-- Anything else will be translated into a :class:`framework.value_types.String` terminal node that
+- Anything else will be translated into a :class:`fuddly.framework.value_types.String` terminal node that
   declares a list of values. ``( )`` can be used to delimit a portion of
   the regular expression that need to be translated into a terminal node on its own.
 
-.. note:: If each item in a list of values are integers an :class:`framework.value_types.INT_str` will
-   be created instead of a :class:`framework.value_types.String`.
+.. note:: If each item in a list of values are integers an :class:`fuddly.framework.value_types.INT_str` will
+   be created instead of a :class:`fuddly.framework.value_types.String`.
 
 - ``(``, ``)``, ``[``, ``]``, ``?``, ``*``, ``+``, ``{``, ``}``, ``|``, ``\``, ``-``, ``.`` are the only
   recognised special characters. They cannot be used in an unsuitable context without being escaped
@@ -1893,10 +1923,10 @@ Here are some rules to respect:
 
 - Are only allowed regular expressions that can be translated into one terminal node or into one non-terminal
   node composed of terminal ones. If this rule is not respected an
-  :class:`framework.error_handling.InconvertibilityError` will be raised.
+  :class:`fuddly.framework.error_handling.InconvertibilityError` will be raised.
 
 - An inconsistency between the charset and the characters that compose the regular expression will result
-  in an :class:`framework.error_handling.CharsetError`.
+  in an :class:`fuddly.framework.error_handling.CharsetError`.
 
 .. note:: The default charset used by Fuddly is ``MH.Charset.ASCII_EXT``. To change this behaviour,
    use the keyword ``charset`` (refer to :ref:`dm:node_prop_keywords`).
@@ -2013,15 +2043,25 @@ different possibilities within ``fuddly``:
 
 - either using some specific keywords that capture basic constraints (e.g., ``qty_from``, ``sync_size_with``, ``exists_if``, ...);
 - or through Generator nodes (refer to :ref:`dm:generators`);
-- or by specifying a CSP through the keyword ``constraint``, which leverage a constraint programming
-  backend (currently limited to the ``python-constraint`` module)
+- or by specifying a CSP through the keyword ``constraint``, which leverage constraint programming
+  backends (either the python ``constraint`` module or the ``z3-solver`` module)
 
-The CSP specification case is described in more details in what follows.
-To describe constraints in the form of a CSP, you should use the ``constraints`` keyword that allows you
-to provide a list of :class:`framework.constraint_helpers.Constraint` objects, which are the
-building blocks for specifying constraints between multiple nodes.
+The CSP specification case is described in more details in what follows. To describe constraints
+in the form of a CSP, you should use the ``constraints`` keyword that allows you to provide
+either a list of :class:`fuddly.framework.constraint_helpers.Constraint` objects (backed by the
+``constraint`` module) or a list of :class:`fuddly.framework.constraint_helpers.Z3Constraint` objects
+(backed by the ``z3-solver`` module), which are the building blocks for specifying constraints
+between multiple nodes.
 
-For instance, let's analyse the following data description (extracted from the ``mydf`` data model in ``tuto.py``).
+.. note::
+
+    The Z3 backend may provide significant performance improvement depending on the context usage.
+    Besides, more flexibility are provided by this backend as it supports character strings natively.
+    More details are provided in what follows.
+
+
+For instance, let's analyse the following data description (extracted from the ``mydf`` data model in ``tuto/dm.py``),
+leveraging :class:`fuddly.framework.constraint_helpers.Constraint` objects.
 
 .. code-block:: python
    :linenos:
@@ -2052,28 +2092,85 @@ For instance, let's analyse the following data description (extracted from the `
         [...]
 
 You can see that two constraints have been specified (l.3-6) through the specific
-:class:`framework.constraint_helpers.Constraint` objects. The constructor take a mandatory ``relation`` parameter
-expecting a boolean function that should express a relation between any nodes reachable
+:class:`fuddly.framework.constraint_helpers.Constraint` objects. The constructor take a mandatory ``relation``
+parameter expecting a boolean function that should express a relation between any nodes reachable
 from the non-terminal node on which the ``constraints`` keyword is attached.
 It takes also a ``vars`` parameter expecting a list of the names of the nodes
 used in the boolean function (in the same order as the parameters of the function).
 
+The following example (also extracted from the ``mydf`` data model in ``tuto/dm.py``) is similar to
+the previous one except that the Z3 backend is leveraged instead of the python ``constraint`` module.
+In order to leverage this backend, you only have to use :class:`fuddly.framework.constraint_helpers.Z3Constraint`
+instead of :class:`fuddly.framework.constraint_helpers.Constraint` and provide a Z3 formula within the
+``relation`` parameter instead of a boolean function.
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 20
+
+        csp_str_desc = \
+            {'name': 'csp_str',
+             'constraints': [
+                 Z3Constraint(relation='x_val == 3*y_val + z_val',
+                              vars=('x_val', 'y_val', 'z_val')),
+                 Z3Constraint(
+                     relation="Or(["
+                              "And([SubSeq(delim_1, 1, 1) == '(', delim_2 == ')']),"
+                              "And([SubSeq(delim_1, 1, 1) == '[', delim_2 == ']'])"
+                              "])",
+                     vars=('delim_1', 'delim_2'),
+                 ),
+             ],
+             'constraints_highlight': True,
+             'contents': [
+                 {'name': 'equation',
+                  'contents': String(values=['x = 3y + z'])},
+                 {'name': 'delim_1',
+                  'contents': String(values=[' [', ' (']),
+                  'default': ' ('},
+                 {'name': 'variables',
+                  'separator':
+                      {'contents': {'name': 'sep', 'contents': String(values=[', '])},
+                       'prefix': False, 'suffix': False},
+                  'contents': [
+                      {'name': 'x',
+                       'contents': [
+                           {'name': 'x_symbol',
+                            'contents': String(values=['x:', 'X:'])},
+                           {'name': 'x_val',
+                            'contents': INT_str(min=120, max=130)} ]},
+
+        [...]
+
+
+One difference with :class:`fuddly.framework.constraint_helpers.Z3Constraint` is that you may provide Z3 formulas
+using variables of different kinds, namely integers and character strings. Note that the Z3 variable
+types relevant for mapping ``INT()``-based or ``String()``-based nodes will be automatically created
+for you (respectively ``z3.Int`` and ``z3.String``).
+
 .. note::
 
     The ``constraints`` keyword can be used several times along the description, but all the specified
-    :class:`framework.constraint_helpers.Constraint` will eventually end up in a single CSP.
+    :class:`fuddly.framework.constraint_helpers.Constraint` or :class:`fuddly.framework.constraint_helpers.Z3Constraint`
+    will eventually end up in a single CSP.
 
-
-These constraints, will then be resolved at :meth:`framework.node.Node.freeze` time (depending if
+These constraints, will then be resolved at :meth:`fuddly.framework.node.Node.freeze` time (depending if
 the parameter ``resolve_csp`` is set to True).
 Note also that before resolving the CSP it is possible to fix the value of some variables by freezing the related nodes
-with the parameter ``restrict_csp``. This is what is performed by the :class:`framework.fuzzing_primitives.ModelWalker`
+with the parameter ``restrict_csp``. This is what is performed by the :class:`fuddly.framework.fuzzing_primitives.ModelWalker`
 infrastructure when walking a specific node which is part of a CSP, so that the walked node won't be modified
 further to the CSP solving process.
 
+Finally, if ever ``INT()``-based or ``String()``-based nodes have default values (like in the example above l.20),
+the first generated data will be compliant with the specified CSP as well as the default values.
+If no solution is found for the CSP with the default values, a :class:`fuddly.framework.constraint_helpers.ConstraintError`
+exception will be raised.
+
+
 .. note::
 
-   The constructor of :class:`framework.constraint_helpers.Constraint` takes also an optional parameter
+   The constructor of :class:`fuddly.framework.constraint_helpers.Constraint` takes also an optional parameter
    ``var_to_varns`` in order to support namespaces (used to discriminate nodes having identical
    name in the data description). Refer to ``namespace`` keyword for more details, and to the ``csp_ns`` node
-   description in the data model ``mydf`` (in ``tuto.py``).
+   description in the data model ``mydf`` (in ``tuto/dm.py``).
+

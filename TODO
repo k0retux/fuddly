@@ -3,9 +3,22 @@
 - Add new IA infrastructure supporting the creation of data models (automatic discovery of data structure from raw data)
 - Enhance current post-analysis tooling and add new features supporting investigation (diagrams, statistics, research by pattern, etc.)
 - Add GDB/PIN/QEMU probes/managers
+- Add bpftrace monitoring subsystem (probes, ...)
 
 [ENHANCEMENT]
 
+- Complete Recursive Node implementation
+  - Absorption implementation
+
+- Enhance ModelWalking exploration when the structure of a child node changed because of
+  a change in an ancestor node value.
+
+  Exploration by tWALK with @walk_within_recursive_node set to True make basically recursive nodes
+  handled as non-terminal nodes. This solves the exploration problem when @consider_sibbling_change
+  is also set to True.
+
+- Add full support of String(alphabet=...) in CSP Z3
+- Complete implementation of NonTermCusto.ResetClone
 - Add support for absorption of nodes whose existence has not been resolved yet.
   (Counter-part of the generation supported feature.)
 - Clean up test/test_integration.py

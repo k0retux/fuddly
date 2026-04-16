@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+
+export PYBUILD_NAME=fuddly
+export PYBUILD_SYSTEM=pyproject
+export PYBUILD_INSTALL_ARGS=--install-lib=/usr/lib/python3/dist-packages
+export DEB_BUILD_OPTIONS=nocheck
+# export PYTHONDONTWRITEBYTECODE=1
+export DH_VERBOSE=1
+
+%:
+	dh $@ --with python3 --with sphinxdoc --buildsystem=pybuild
+
+override_dh_auto_build:
+	cd docs; mkdir -p build; scdoc < fuddly.1.scd | gzip > build/fuddly.1.gz
+	cd docs; make html
+	dh_auto_build

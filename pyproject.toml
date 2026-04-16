@@ -1,0 +1,80 @@
+[project]
+name = "fuddly"
+authors = [
+  { name="Eric Lacombe", email="eric.lacombe@security-labs.org" },
+]
+description = "Fuzzing and Data Manipulation Framework (for GNU/Linux)"
+readme = "README.rst"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dynamic = ["version"]
+
+dependencies = [
+    "crcmod>=1.7",
+    "rpyc<7.0.0,>=6.0.0",
+    "graphviz",
+    "matplotlib",
+    "paramiko<4.0.0,>=3.4.0",
+    "pyserial",
+    "z3-solver>=4.8",
+    "pyxdg",
+    "xtermcolor",
+    "sphinx",
+    "sphinxcontrib-napoleon",
+    "sphinx-rtd-theme",
+    "argcomplete",
+    "pycups",
+    "python-constraint2",
+    "ipython"
+]
+
+[build-system]
+requires = ["setuptools>=64", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+version_file = "src/fuddly/framework/_version.py"
+
+[options]
+include_package_data = true
+
+[project.scripts]
+fuddly = "fuddly.cli:main"
+
+[project.urls]
+"Homepage" = "https://github.com/k0retux/fuddly"
+"Bug Tracker" = "https://github.com/k0retux/fuddly/issues"
+"Documentation" = "http://fuddly.readthedocs.io"
+
+# Data models and Projects
+[project.entry-points."fuddly.data_models"]
+jpg = "fuddly.data_models.file_formats.jpg"
+json = "fuddly.data_models.file_formats.json"
+pdf = "fuddly.data_models.file_formats.pdf"
+png = "fuddly.data_models.file_formats.png"
+zip = "fuddly.data_models.file_formats.zip"
+http = "fuddly.data_models.protocols.http"
+pppoe = "fuddly.data_models.protocols.pppoe"
+sms = "fuddly.data_models.protocols.sms"
+usb = "fuddly.data_models.protocols.usb"
+myproto = "fuddly.data_models.tutorial.myproto"
+tuto = "fuddly.data_models.tutorial.tuto"
+
+[project.entry-points."fuddly.projects"]
+standard = "fuddly.projects.generic.standard"
+usb = "fuddly.projects.specific.usb"
+tuto = "fuddly.projects.tuto"
+
+[project.entry-points."fuddly.targets"]
+debug = "fuddly.targets.debug"
+local = "fuddly.targets.local"
+network = "fuddly.targets.network"
+printer = "fuddly.targets.printer"
+sim = "fuddly.targets.sim"
+ssh = "fuddly.targets.ssh"
+
+[project.entry-points."fuddly.info"]
+generic = "fuddly.info.generic"

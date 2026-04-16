@@ -1,0 +1,7 @@
+compression = "gzip"
+tar-ignore = ".*"
+tar-ignore = "*~"
+tar-ignore = "__pycache__"
+tar-ignore = "_staging"
+tar-ignore = "build"
+tar-ignore = "fuddly.egg-info"

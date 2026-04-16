@@ -36,6 +36,8 @@ Contents:
 
    examples
 
+   packaging
+
    api
 
 

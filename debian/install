@@ -1,0 +1,3 @@
+contrib/shell_completions/zsh/_fuddly usr/share/zsh/site-functions/
+contrib/shell_completions/fish/fuddly.fish usr/share/fish/completions/
+contrib/shell_completions/bash/fuddly usr/share/bash-completion/completions/

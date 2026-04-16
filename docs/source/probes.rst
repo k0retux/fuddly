@@ -4,10 +4,10 @@ Generic Probes and Backend
 **************************
 
 The following section present some generic probes that inherit from
-:class:`framework.monitor.Probe`. They can be used within your project
+:class:`fuddly.framework.monitor.Probe`. They can be used within your project
 files (refer to :ref:`tuto:project`) by inheriting from them
 and providing the expected parameters. Besides, you have to provide them with a means to
-access the monitored system, namely a :class:`framework.monitor.Backend`. Note that you can use
+access the monitored system, namely a :class:`fuddly.framework.monitor.Backend`. Note that you can use
 the same backend for simultaneous probes.
 
 .. seealso::
@@ -51,7 +51,7 @@ SSH_Backend
 -----------
 
 Reference:
-  :class:`framework.comm_backends.SSH_Backend`
+  :class:`fuddly.framework.comm_backends.SSH_Backend`
 
 Description:
   This generic backend enables you to interact with a monitored system through an
@@ -62,7 +62,7 @@ Serial_Backend
 --------------
 
 Reference:
-  :class:`framework.comm_backends.Serial_Backend`
+  :class:`fuddly.framework.comm_backends.Serial_Backend`
 
 Description:
   This generic backend enables you to interact with a monitored system through an
@@ -72,7 +72,7 @@ Shell_Backend
 -------------
 
 Reference:
-  :class:`framework.comm_backends.Shell_Backend`
+  :class:`fuddly.framework.comm_backends.Shell_Backend`
 
 Description:
   This generic backend enables you to interact with a local monitored system
@@ -87,7 +87,7 @@ ProbePID
 --------
 
 Reference:
-  :class:`framework.monitor.ProbePID`
+  :class:`fuddly.framework.monitor.ProbePID`
 
 Description:
   This generic probe enables you to monitor any modification of a process PID,
@@ -97,7 +97,7 @@ ProbeMem
 --------
 
 Reference:
-  :class:`framework.monitor.ProbeMem`
+  :class:`fuddly.framework.monitor.ProbeMem`
 
 Description:
   Generic probe that enables you to monitor the process memory (RSS...) consumption.
@@ -108,7 +108,7 @@ ProbeCmd
 --------
 
 Reference:
-  :class:`framework.monitor.ProbeCmd`
+  :class:`fuddly.framework.monitor.ProbeCmd`
 
 Description:
   Generic probe that enables you to execute shell commands and retrieve the output.
