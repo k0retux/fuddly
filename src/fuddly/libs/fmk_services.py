@@ -127,7 +127,12 @@ def create_data_model_dict() -> dict:
     name2dm = {}
     for m in dm_modules:
         dm_name = m.name.split(".")[-1]
-        mod = importlib.import_module(m.name)
+        try:
+            mod = importlib.import_module(m.name)
+        except ModuleNotFoundError:
+            sys.stderr.write(f'[Warning] the data model "{dm_name}" has not been found. Ignore it.\n')
+            continue
+
         try:
             dm_obj = mod.data_model
         except AttributeError:
