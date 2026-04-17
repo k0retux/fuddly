@@ -4750,7 +4750,7 @@ class FmkShell(cmd.Cmd):
         return list(filter(lambda x: x.startswith(text), self.generators))
 
     def _complete_helper_scenario(self, text):
-        return list(filter(lambda x: x.startswith('SC_'+text[3:]), self.generators))
+        return list(filter(lambda x: x.startswith(text), self.scenarios))
 
     def _complete_helper_generator_param(self, gen_type, text):
         return list(filter(lambda x: x.startswith(text), self.generators_params[gen_type]))
@@ -4894,6 +4894,9 @@ class FmkShell(cmd.Cmd):
         self.generators.extend(list(self.fz._tactics.generator_types))
         self.operators = list(self.fz._generic_tactics.operator_types)
         self.operators.extend(list(self.fz._tactics.operator_types))
+
+        self.scenarios = self.generators + self.operators
+        self.scenarios = list(filter(lambda x: x.startswith('SC_'), self.scenarios))
 
         for tactics in [self.fz._generic_tactics, self.fz._tactics]:
             for dt in tactics.generator_types:
