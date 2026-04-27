@@ -160,12 +160,11 @@ reset_dmakers = False
 ;;  self: Configuration applicable to the 'send' command and all derivatives
           (excluding the loop versions).
 ;;
-;;  reset_dmakers: When this property is False, the data makers (Generator and Operators) involved
-       in the send* commands will keep their state. Thus, when using again the same command (or the
-       data makers involved) their state will evolve based on their previous state.
-       Thus, if their is a change in the parameters provided, they won't be taken into account.
-       When this property is set to True, the data makers involved in the send* commands will be
-       reset before being used.  
+;;  reset_dmakers: [OBSOLETE] When this property is False, the data makers (Generator and Operators) involved
+      in the send* commands will keep their state, except if new parameters
+      are provided to them. In this case, all the data makers in the command will be reset.
+      When this property is set to True, the data makers involved in the send* commands will be
+      systematically reset before being used.  
 
 
 """)

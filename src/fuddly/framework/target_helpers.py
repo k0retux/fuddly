@@ -66,8 +66,10 @@ class Target(object):
 
     FBK_WAIT_FULL_TIME = 1
     fbk_wait_full_time_slot_msg = 'Wait for the full time slot allocated for feedback retrieval'
+    fbk_wait_full_time_slot_shortdesc = 'wait_full_time'
     FBK_WAIT_UNTIL_RECV = 2
     fbk_wait_until_recv_msg = 'Wait until the target has sent something back to us'
+    fbk_wait_until_recv_shortdesc = 'wait_until_recv'
 
     _feedback_mode = None
     supported_feedback_mode = [FBK_WAIT_FULL_TIME, FBK_WAIT_UNTIL_RECV]

@@ -410,6 +410,8 @@ class FmkPlumbing(object):
         self._burst_countdown = None
         self._orig_delay = None
         self._orig_burst = None
+        self._orig_fbk_timeout = {}
+        self._orig_fbk_mode = {}
 
         self._current_sent_date = None
 
@@ -1994,13 +1996,47 @@ class FmkPlumbing(object):
     def _save_current_sending_burst_counter(self):
         self._orig_burst = self._burst
 
+    def _save_current_feedback_timeout(self, tg_id):
+        """
+        Used to save the target state wrt. fbk timeout before a scenario is executed.
+        It is restored through _restore_previous_state.
+        """
+        if self._orig_fbk_timeout.get(tg_id, None) is None:
+            self._orig_fbk_timeout[tg_id] = self.targets[tg_id].feedback_timeout
+        else:
+            # If there is aleady a value stored in self._orig_fbk_timeout, we ignore the request to save.
+            # Only _restore_previous_state allows to go back to the initial state.
+            pass
+
+    def _save_current_feedback_mode(self, tg_id):
+        """
+        Used to save the target state wrt. fbk mode before a scenario is executed.
+        It is restored through _restore_previous_state.
+        """
+        if self._orig_fbk_mode.get(tg_id, None) is None:
+            self._orig_fbk_mode[tg_id] = self.targets[tg_id].feedback_mode
+        else:
+            # If there is aleady a value stored in self._orig_fbk_mode, we ignore the request to save.
+            # Only _restore_previous_state allows to go back to the initial state.
+            pass
+
     def _restore_previous_state(self):
+        self.lg.log_fmk_info('Restore Previous Framework State', do_record=False)
+
         if self._orig_delay is not None:
             self.set_delay_between_two_actions(self._orig_delay)
             self._orig_delay = None
         if self._orig_burst is not None:
             self.set_sending_burst_counter(self._orig_burst)
             self._orig_burst = None
+
+        for tg_id, fbk_timeout in self._orig_fbk_timeout.items():
+            self.set_feedback_timeout(fbk_timeout, tg_id=tg_id)
+        self._orig_fbk_timeout = {}
+
+        for tg_id, fbk_mode in self._orig_fbk_mode.items():
+            self.set_feedback_mode(fbk_mode, tg_id=tg_id)
+        self._orig_fbk_mode = {}
 
     @EnforceOrder(accepted_states=["S1", "S2"])
     def set_health_check_timeout(
@@ -2016,11 +2052,11 @@ class FmkPlumbing(object):
             self._hc_timeout_max = max(self._hc_timeout.values())
             if do_show or do_record:
                 if target is None:
-                    self.lg.log_fmk_info("Target(s) health-check timeout = {:.1f}s".format(timeout),
+                    self.lg.log_fmk_info("Target(s) health-check timeout = {:.2f}s".format(timeout),
                                          do_record=do_record)
                 else:
                     tg_desc = self._get_detailed_target_desc(target)
-                    self.lg.log_fmk_info("Target {!s} health-check timeout = {:.1f}s".format(tg_desc, timeout),
+                    self.lg.log_fmk_info("Target {!s} health-check timeout = {:.2f}s".format(tg_desc, timeout),
                                          do_record=do_record)
 
             return True
@@ -2058,7 +2094,7 @@ class FmkPlumbing(object):
                 if fbk_timeout_changed:
                     self._recompute_generic_timeouts(timeout, max_sending_delay, do_show=do_show)
                     if do_show or do_record:
-                        self.lg.log_fmk_info("Target(s) feedback timeout = {:.1f}s".format(timeout),
+                        self.lg.log_fmk_info("Target(s) feedback timeout = {:.2f}s".format(timeout),
                                              do_record=do_record)
             else:
                 tg = self.targets[tg_id]
@@ -2069,7 +2105,7 @@ class FmkPlumbing(object):
                     )
                     if do_show or do_record:
                         tg_desc = self._get_detailed_target_desc(tg)
-                        self.lg.log_fmk_info("Target {!s} feedback timeout = {:.1f}s".format(tg_desc, timeout),
+                        self.lg.log_fmk_info("Target {!s} feedback timeout = {:.2f}s".format(tg_desc, timeout),
                                              do_record=do_record)
             return True
         else:
@@ -2195,11 +2231,13 @@ class FmkPlumbing(object):
             if d.feedback_timeout is not None:
                 tg_ids = self._vtg_to_tg(d)
                 for tg_id in tg_ids:
+                    self._save_current_feedback_timeout(tg_id)
                     self.set_feedback_timeout(d.feedback_timeout, tg_id=tg_id)
 
             if d.feedback_mode is not None:
                 tg_ids = self._vtg_to_tg(d)
                 for tg_id in tg_ids:
+                    self._save_current_feedback_mode(tg_id)
                     self.set_feedback_mode(d.feedback_mode, tg_id=tg_id)
 
         blocked_data = list(filter(lambda x: x.is_blocked(), data_list))
@@ -2660,7 +2698,9 @@ class FmkPlumbing(object):
                 data_list = []
                 for d_desc in data_desc:
                     data = self.handle_data_desc(d_desc, resolve_dataprocess=True,
-                                                 save_generator_seed=save_generator_seed, reset_dmakers=reset_dmakers)
+                                                 save_generator_seed=save_generator_seed,
+                                                 reset_dmakers=reset_dmakers,
+                                                 ignore_new_ui=False)
                     if data is None:
                         data = Data()
                         data.make_unusable()
@@ -2697,6 +2737,8 @@ class FmkPlumbing(object):
                 if not go_on:
                     break
 
+        self._restore_previous_state()
+
         return sent_data
 
     @EnforceOrder(accepted_states=["S2"])
@@ -2725,7 +2767,6 @@ class FmkPlumbing(object):
         data_list = self._send_data(data_list)
 
         if self._sending_error or self._stop_sending:
-            self._restore_previous_state()
             return False, None
 
         if data_list is None:
@@ -5418,7 +5459,7 @@ class FmkShell(cmd.Cmd):
 
         self.print(colorize("\n  [ Shell Specific Information ]", rgb=Color.INFO))
         self.print(colorize(
-            f"        Reset mode for send* commands enabled: ", rgb=Color.SUBINFO)
+            f"        Reset mode for send* commands enabled [OBSOLETE]: ", rgb=Color.SUBINFO)
                    + repr(self._reset_dmakers_mode)
                    + colorize(f"\n          (can be changed through the switch_send_mode command) ",
                               rgb=Color.FMKSUBINFO))
@@ -6211,7 +6252,7 @@ class FmkShell(cmd.Cmd):
 
     def do_switch_feedback_mode(self, line):
         """
-        Switch target feedback mode between:
+       [OBSOLETE]  Switch target feedback mode between:
           - wait for the full time slot allocated for feedback retrieval
           - wait until the target has sent something back to us
 
@@ -6237,9 +6278,10 @@ class FmkShell(cmd.Cmd):
 
     def do_switch_send_mode(self, line):
         """
-        Switch the behavior of the send commands (and derivatives) between:
-          - use the current state of the data makers to process the command
-          - reset generators and operators involved in the command before processing it (and
+        [OBSOLETE] Switch the behavior of the send commands (and derivatives) between:
+          - use the current state of the data makers to process the command except if new parameters
+            are provided to them. In this case reset all the data makers.
+          - reset systematically generators and operators involved in the command before processing it (and
             thus take into account any change of data maker parameters)
 
         Only affects the commands: send, send_verbose, send_with.
