@@ -6250,6 +6250,73 @@ class FmkShell(cmd.Cmd):
         self.__error = False
         return False
 
+
+    def complete_set_feedback_timeout(self, text, line, begidx, endidx):
+        self._complete_helper_preambule(text, line, begidx, endidx, step_with_subparams=[])
+
+        if self.comp_step == 1:
+            ret = []
+        elif self.comp_step == 2:
+            ret = self._complete_helper_target(text)
+        else:
+            ret = []
+
+        return ret
+
+    def do_set_feedback_mode(self, line):
+        """
+        Set the feedback mode for the provided target
+        |  syntax: set_feedback_mode <arg> [targetID]
+        |  |_ possible values for <arg>:
+        |       wait_until_recv: Wait until the target has sent something back to us
+        |       wait_full_time: Wait for the full time slot allocated for feedback retrieval
+        |  |_ if targetID is not provided, the value applies to all enabled targets
+        """
+        self.__error = True
+
+        args = line.split()
+        args_len = len(args)
+
+        if 3 > args_len < 1:
+            return False
+
+        mode = {
+            Target.fbk_wait_full_time_slot_shortdesc: Target.FBK_WAIT_FULL_TIME,
+            Target.fbk_wait_until_recv_shortdesc: Target.FBK_WAIT_UNTIL_RECV
+        }.get(args[0])
+
+        if mode == None:
+            self.__error_msg = "Unrecognized mode!"
+            return False
+
+        tg_id = None
+        if args_len > 1:
+            try:
+                tg_id = int(args[1])
+            except ValueError:
+                self.__error_msg = "Parameter 2 shall be an integer!"
+                return False
+
+        self.fz.set_feedback_mode(mode, tg_id=tg_id)
+
+        self.__error = False
+        return False
+
+    def complete_set_feedback_mode(self, text, line, begidx, endidx):
+        self._complete_helper_preambule(text, line, begidx, endidx, step_with_subparams=[])
+
+        if self.comp_step == 1:
+            ret = list(filter(lambda x: x.startswith(text),
+                              [Target.fbk_wait_full_time_slot_shortdesc,
+                               Target.fbk_wait_until_recv_shortdesc]))
+        elif self.comp_step == 2:
+            ret = self._complete_helper_target(text)
+        else:
+            ret = []
+
+        return ret
+
+
     def do_switch_feedback_mode(self, line):
         """
        [OBSOLETE]  Switch target feedback mode between:
