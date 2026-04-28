@@ -38,7 +38,7 @@ project.default_dm = ['mydf', 'myproto']
 project.register_scenario_bricks(sbrick_burst)
 project.register_scenario_builders(sb_frag_01, sb_frag_02)
 
-project.map_targets_to_scenario('ex1', {0: 7, 1: 8, None: 8})
+project.map_targets_to_scenario(('ex1', 'ex2'), {0: 7, 1: 8, None: 8})
 
 logger = Logger(record_data=False, explicit_data_recording=False,
                 export_raw_data=False, enable_file_logging=False,

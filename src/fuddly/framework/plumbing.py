@@ -2020,23 +2020,37 @@ class FmkPlumbing(object):
             # Only _restore_previous_state allows to go back to the initial state.
             pass
 
-    def _restore_previous_state(self):
-        self.lg.log_fmk_info('Restore Previous Framework State', do_record=False)
+    def _restore_previous_state(self, reason=''):
+        if (self._orig_fbk_timeout or self._orig_fbk_mode
+                or self._orig_delay is not None or self._orig_burst is not None):
+            suffix = f' [{reason}]' if reason else ''
+            self.lg.log_fmk_info(f'Restore Previous Framework State{suffix}', do_record=False)
 
-        if self._orig_delay is not None:
-            self.set_delay_between_two_actions(self._orig_delay)
-            self._orig_delay = None
-        if self._orig_burst is not None:
-            self.set_sending_burst_counter(self._orig_burst)
-            self._orig_burst = None
+            if self._orig_delay is not None:
+                self.set_delay_between_two_actions(self._orig_delay)
+                self._orig_delay = None
+            if self._orig_burst is not None:
+                self.set_sending_burst_counter(self._orig_burst)
+                self._orig_burst = None
 
-        for tg_id, fbk_timeout in self._orig_fbk_timeout.items():
-            self.set_feedback_timeout(fbk_timeout, tg_id=tg_id)
-        self._orig_fbk_timeout = {}
+            for tg_id, fbk_timeout in self._orig_fbk_timeout.items():
+                self.set_feedback_timeout(fbk_timeout, tg_id=tg_id)
+            self._orig_fbk_timeout = {}
 
-        for tg_id, fbk_mode in self._orig_fbk_mode.items():
-            self.set_feedback_mode(fbk_mode, tg_id=tg_id)
-        self._orig_fbk_mode = {}
+            for tg_id, fbk_mode in self._orig_fbk_mode.items():
+                self.set_feedback_mode(fbk_mode, tg_id=tg_id)
+            self._orig_fbk_mode = {}
+
+        else:
+            suffix = f' [{reason}]' if reason else ''
+            self.lg.log_fmk_info(f'NO NEED to restore Previous Framework State{suffix}', do_record=False)
+            state_restored = False
+
+
+    @EnforceOrder(accepted_states=["S1", "S2"])
+    def restore_previous_fmk_state(self):
+        self._restore_previous_state()
+
 
     @EnforceOrder(accepted_states=["S1", "S2"])
     def set_health_check_timeout(
@@ -2737,7 +2751,6 @@ class FmkPlumbing(object):
                 if not go_on:
                     break
 
-        self._restore_previous_state()
 
         return sent_data
 
@@ -2753,6 +2766,7 @@ class FmkPlumbing(object):
         try:
             data_list = self._do_sending_and_logging_init(data_list)
         except (TargetFeedbackError, UserInterruption):
+            self._restore_previous_state(reason='user interruption or target error, before sending')
             return False, None
 
         # we delay sending after calling self._do_sending_and_logging_init(data_list)
@@ -2767,6 +2781,8 @@ class FmkPlumbing(object):
         data_list = self._send_data(data_list)
 
         if self._sending_error or self._stop_sending:
+            reason = 'no more data to process' if self._stop_sending else 'sending error'
+            self._restore_previous_state(reason=reason)
             return False, None
 
         if data_list is None:
@@ -2860,7 +2876,11 @@ class FmkPlumbing(object):
         if not console_display:
             self.lg.display_on_term = lg_display_on_term_save
 
-        return cont0 and cont1 and cont2, data_list
+        ok = cont0 and cont1 and cont2
+        if not ok:
+            self._restore_previous_state(reason='user interruption or target error')
+
+        return ok, data_list
 
     @EnforceOrder(accepted_states=["S2"])
     def _send_data(self, data_list: Sequence[Data]):
@@ -3669,11 +3689,11 @@ class FmkPlumbing(object):
                 data_list = self._send_data(data_list)
                 if self._sending_error:
                     self.lg.log_fmk_info("Director will shutdown because of a sending error")
-                    self._restore_previous_state()
+                    self._restore_previous_state(reason='sending error')
                     break
                 elif self._stop_sending:
                     self.lg.log_fmk_info("Director will shutdown because a DataProcess has yielded")
-                    self._restore_previous_state()
+                    self._restore_previous_state(reason='stop sending')
                     break
                 elif data_list is None:
                     self.lg.log_fmk_info("Director will shutdown because there is no data to send")
@@ -5452,6 +5472,21 @@ class FmkShell(cmd.Cmd):
         self.fz.show_targets()
 
         return False
+
+    def do_restore_fmk_internals(self, line):
+        """
+        Restore saved state for the following framework attributes:
+          - delay_between_two_actions
+          - sending_burst_counter
+          - for each targets:
+             - feedback_timeout
+             - feedback_mode
+
+        These attributes are automatically saved when a scenario is executed.
+        They are automaticaally restored at the end of a scenario or when it is
+        interrupted by the user (ctrl-C).
+        """
+        self.fz.restore_previous_fmk_state()
 
     def do_show_fmk_internals(self, line):
         """Show the framework internals"""
