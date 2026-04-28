@@ -32,7 +32,6 @@ from fuddly.framework.database import Database
 from fuddly.framework.global_resources import get_user_input
 from fuddly.libs.external_modules import *
 from fuddly.framework.plumbing import *
-from fuddly.libs.external_modules import colorize
 
 import argparse
 
@@ -168,6 +167,8 @@ def handle_date(date_str, fmkdb):
 
 
 def main():
+    global colorize
+
     args = parser.parse_args()
 
     fmkdb_path = args.fmkdb
