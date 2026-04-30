@@ -207,7 +207,7 @@ class EmptyBackend(DataBackend):
 
 class AttrGroup(object):
 
-    def __init__(self, attrs_desc):
+    def __init__(self, attrs_desc: dict):
         self._attrs = attrs_desc
 
     def set(self, name):
@@ -225,6 +225,10 @@ class AttrGroup(object):
             raise ValueError
         return self._attrs[name]
 
+    def __iter__(self):
+        for a in self._attrs.keys():
+            yield a
+
     def copy_from(self, attr_group):
         assert isinstance(attr_group, AttrGroup)
         self._attrs = copy.copy(attr_group._attrs)
@@ -240,9 +244,18 @@ class DataAttr(AttrGroup):
 
     Reset_DMakers = 1
 
+    # Scenario-related attributes
+    SC_FinalData = 10
+
+    description = {
+        Reset_DMakers: 'reset_dmaker',
+        SC_FinalData: 'sc_final_data'
+    }
+
     def __init__(self, attrs_to_set=None, attrs_to_clear=None):
         iv = {
-            DataAttr.Reset_DMakers: False
+            DataAttr.Reset_DMakers: False,
+            DataAttr.SC_FinalData: False
         }
         AttrGroup.__init__(self, iv)
         if attrs_to_set:
@@ -251,6 +264,12 @@ class DataAttr(AttrGroup):
         if attrs_to_clear:
             for a in attrs_to_clear:
                 self.clear(a)
+
+    def __str__(self):
+        desc = ''
+        for k, v in self._attrs.items():
+            desc += f'{self.description[k]} = {v}\n'
+        return desc[:-1]
 
 
 class Data(object):
@@ -309,7 +328,7 @@ class Data(object):
 
         self.scenario_dependence = None if from_data is None else from_data.scenario_dependence
 
-        # If True, the data will not interrupt the framework while processing
+        # If False, the data will not interrupt the framework while processing
         # the data even if the data is unusable, The framework will just go on
         # to its next task without handing over to the end user.
         # Used especially by the Scenario Infrastructure.
@@ -415,7 +434,7 @@ class Data(object):
         if data is not None:
             self.set_basic_attributes(from_data=data)
             if data.origin is not None:
-                self.add_info("Data instantiated from: {!s}".format(data.origin))
+                self.add_info(f"Data instantiated from: {str(data.origin)}")
             if data.info:
                 info_bundle_to_remove = []
                 for key, info_bundle in data.info.items():
@@ -430,7 +449,7 @@ class Data(object):
             initial_gen_user_input = data.get_initial_dmaker()[2]
 
         elif origin is not None:
-            self.add_info("Data instantiated from: {!s}".format(origin))
+            self.add_info(f"Data instantiated from: {str(origin)}")
         else:
             return
 

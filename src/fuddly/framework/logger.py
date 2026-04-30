@@ -32,9 +32,10 @@ import logging
 
 from typing import List, Tuple
 
+from fuddly.framework.scenario import Scenario
 from fuddly.libs.external_modules import *
 from fuddly.libs.utils import get_caller_object
-from fuddly.framework.data import Data
+from fuddly.framework.data import Data, DataAttr
 from fuddly.framework.global_resources import *
 from fuddly.framework.database import Database
 from fuddly.framework.knowledge.feedback_collector import FeedbackSource
@@ -227,6 +228,7 @@ class Logger(object):
         self._current_sent_date = None
         self._last_data_IDs = {}  # per target_ref
         self._returned_last_data_ID = None
+        self._returned_last_data_attrs = None
         self.last_data_recordable = None
 
         self._post_processed_info = None
@@ -417,6 +419,7 @@ class Logger(object):
         self._current_sent_date = None
         self._last_data_IDs = {}
         self._returned_last_data_ID = None
+        self._returned_last_data_attrs = None
         self.last_data_recordable = None
 
         self._stop_log_handler()
@@ -446,6 +449,8 @@ class Logger(object):
             self._current_group_id = group_id
 
             last_data_id = None
+            d_orig = self._current_data.origin
+            orig_ref = d_orig.reference if isinstance(d_orig, Scenario) else str(d_orig)
             for tg_ref, ack_date in self._current_ack_dates.items():
                 last_data_id = self.fmkDB.insert_data(
                     init_dmaker,
@@ -457,6 +462,8 @@ class Logger(object):
                     tg_ref,
                     prj_name,
                     group_id=group_id,
+                    origin=orig_ref,
+                    attrs=str(self._current_data.attrs)
                 )
                 # assert isinstance(tg_ref, FeedbackSource)
                 self._last_data_IDs[tg_ref.obj] = last_data_id
@@ -495,10 +502,17 @@ class Logger(object):
                     self.fmkDB.insert_fmk_info(last_data_id, msg, now)
 
             self._returned_last_data_ID = last_data_id
+            self._returned_last_data_attrs = self._current_data.attrs
             return last_data_id
 
         else:
             return None
+
+    def mark_last_data_final(self):
+        self._returned_last_data_attrs.set(DataAttr.SC_FinalData)
+        self.fmkDB.update_data(self._returned_last_data_ID,
+                               new_attrs=str(self._returned_last_data_attrs))
+
 
     def log_async_data(
         self,
@@ -890,6 +904,8 @@ class Logger(object):
             self._current_ack_dates[tg_ref] = date
 
     def log_data(self, data, verbose=False):
+        ret = True
+
         self.log_fn("### Data size: ", rgb=Color.LOGSECTION, nl_after=False)
         self._current_size = data.get_length()
         self.log_fn("%d bytes" % self._current_size, nl_before=False)
@@ -912,7 +928,6 @@ class Logger(object):
                     "### Emitted data is stored in the file:", rgb=Color.LOGSECTION
                 )
                 self.log_fn(ffn)
-                ret = True
             else:
                 self.print_console(
                     "ERROR: saving data in an extenal file has failed!",
@@ -921,7 +936,7 @@ class Logger(object):
                 )
                 ret = False
 
-        return True
+        return ret
 
     def _export_data_func(self, data, suffix=""):
         base_dir = gr.exported_data_folder

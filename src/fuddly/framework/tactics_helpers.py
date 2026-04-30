@@ -69,7 +69,7 @@ class Tactics(object):
 
     @staticmethod
     def scenario_ref_from(scenario):
-        return 'SC_' + scenario.name.upper()
+        return scenario.reference
 
     @staticmethod
     def scenario_cls_name_from(scenario):

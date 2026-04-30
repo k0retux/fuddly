@@ -50,6 +50,9 @@ class ProjectDuplicateError(ValueError):
         super().__init__(f"A project with the name '{name}' already exist!")
         self.name = name
 
+class DatabaseFormatError(Exception): pass
+
+
 class RegexParserError(DataModelDefinitionError): pass
 
 class EscapeError(RegexParserError):

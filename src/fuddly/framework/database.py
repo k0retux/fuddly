@@ -32,6 +32,7 @@ from typing import Optional
 
 from fuddly.framework import global_resources as gr
 from fuddly.framework.config import config
+from fuddly.framework.error_handling import DatabaseFormatError
 from fuddly.libs import external_modules as em
 from fuddly.framework.knowledge.feedback_collector import FeedbackSource
 from fuddly.libs.external_modules import *
@@ -151,7 +152,10 @@ class FeedbackGate(object):
 
 class Database(object):
 
+    CURRENT_DB_FORMAT_VERSION = 2
+
     DDL_fname = 'fmk_db.sql'
+    DDLv1_fname = 'fmk_db_v1.sql'
 
     DEFAULT_DB_NAME = 'fmkDB.db'
     DEFAULT_DM_NAME = '__DEFAULT_DATAMODEL'
@@ -170,6 +174,8 @@ class Database(object):
             self.fmk_db_path = os.path.join(gr.fuddly_data_folder, self.name)
         else:
             self.fmk_db_path = os.path.expanduser(fmkdb_path)
+
+        self._db_version_inuse = Database.CURRENT_DB_FORMAT_VERSION
 
         self._ref_names = {}
 
@@ -206,11 +212,18 @@ class Database(object):
     def get_default_db_path():
         return os.path.join(gr.fuddly_data_folder, Database.DEFAULT_DB_NAME)
 
-    def _is_valid(self, connection, cursor):
+    def _is_valid(self, connection, cursor, version=CURRENT_DB_FORMAT_VERSION):
         valid = False
+        if version == Database.CURRENT_DB_FORMAT_VERSION:
+            ddl_fname = self.DDL_fname
+        elif version == 1:
+            ddl_fname = self.DDLv1_fname
+        else:
+            raise DatabaseFormatError('Unknown DB Format')
+
         with connection:
             tmp_con = sqlite3.connect(':memory:', detect_types=sqlite3.PARSE_DECLTYPES)
-            with open(gr.fmk_folder + self.DDL_fname) as fd:
+            with open(gr.fmk_folder + ddl_fname) as fd:
                 fmk_db_sql = fd.read()
             with tmp_con:
                 cur = tmp_con.cursor()
@@ -238,7 +251,11 @@ class Database(object):
         if os.path.isfile(self.fmk_db_path):
             connection = sqlite3.connect(self.fmk_db_path, detect_types=sqlite3.PARSE_DECLTYPES)
             cursor = connection.cursor()
-            self._ok = self._is_valid(connection, cursor)
+            self._ok = self._is_valid(connection, cursor, version=Database.CURRENT_DB_FORMAT_VERSION)
+            if not self._ok:
+                self._ok = self._is_valid(connection, cursor, version=1)
+                if self._ok:
+                    self._db_version_inuse = 1
         else:
             connection = sqlite3.connect(self.fmk_db_path, detect_types=sqlite3.PARSE_DECLTYPES)
             fmk_db_sql = open(gr.fmk_folder + self.DDL_fname).read()
@@ -434,28 +451,44 @@ class Database(object):
         self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
 
 
-    def insert_dmaker(self, dm_name, dtype, name, is_gen, stateful, clone_type=None):
+    def insert_dmaker(self, dm_name, dtype, name, is_gen, stateful, is_scenario, clone_type=None,
+                      description=None, other_info=None):
         clone_name = None if clone_type is None else name
 
-        stmt = "INSERT INTO DMAKERS(DM_NAME,TYPE,NAME,CLONE_TYPE,CLONE_NAME,GENERATOR,STATEFUL)"\
-               " VALUES(?,?,?,?,?,?,?)"
-        params = (dm_name, dtype, name, clone_type, clone_name, is_gen, stateful)
+        if self._db_version_inuse == Database.CURRENT_DB_FORMAT_VERSION:
+            stmt = ("INSERT INTO DMAKERS(DM_NAME,TYPE,NAME,DESCRIPTION,OTHER_INFO,CLONE_TYPE,CLONE_NAME,"
+                    "GENERATOR,STATEFUL,SCENARIO)"
+                    " VALUES(?,?,?,?,?,?,?,?,?,?)")
+            params = (dm_name, dtype, name, description, other_info, clone_type, clone_name,
+                      is_gen, stateful, is_scenario)
+        else:
+            stmt = "INSERT INTO DMAKERS(DM_NAME,TYPE,NAME,CLONE_TYPE,CLONE_NAME,GENERATOR,STATEFUL)"\
+                   " VALUES(?,?,?,?,?,?,?)"
+            params = (dm_name, dtype, name, clone_type, clone_name, is_gen, stateful)
+
         err_msg = 'while inserting a value into table DATAMODEL!'
         self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
 
 
     def insert_data(self, dtype, dm_name, raw_data, sz, sent_date, ack_date,
-                    target_ref, prj_name, group_id=None):
+                    target_ref, prj_name, group_id=None, origin=None, attrs=None):
 
         if not self.enabled:
             return None
 
         blob = sqlite3.Binary(raw_data)
 
-        stmt = "INSERT INTO DATA(GROUP_ID,TYPE,DM_NAME,CONTENT,SIZE,SENT_DATE,ACK_DATE,"\
-               "TARGET,PRJ_NAME)"\
-               " VALUES(?,?,?,?,?,?,?,?,?)"
-        params = (group_id, dtype, dm_name, blob, sz, sent_date, ack_date, str(target_ref), prj_name)
+        if self._db_version_inuse == Database.CURRENT_DB_FORMAT_VERSION:
+            stmt = "INSERT INTO DATA(GROUP_ID,ORIGIN,ATTRS,TYPE,DM_NAME,CONTENT,SIZE,SENT_DATE,ACK_DATE,"\
+                   "TARGET,PRJ_NAME)"\
+                   " VALUES(?,?,?,?,?,?,?,?,?,?,?)"
+            params = (group_id, origin, attrs, dtype, dm_name, blob, sz, sent_date, ack_date, str(target_ref), prj_name)
+        else:
+            stmt = "INSERT INTO DATA(GROUP_ID,TYPE,DM_NAME,CONTENT,SIZE,SENT_DATE,ACK_DATE,"\
+                   "TARGET,PRJ_NAME)"\
+                   " VALUES(?,?,?,?,?,?,?,?,?)"
+            params = (group_id, dtype, dm_name, blob, sz, sent_date, ack_date, str(target_ref), prj_name)
+
         err_msg = 'while inserting a value into table DATA!'
 
         if self._data_id is None:
@@ -469,6 +502,19 @@ class Database(object):
         self._current_sent_date = sent_date
 
         return self._data_id
+
+
+    def update_data(self, data_id, new_attrs=None):
+        stmt = None
+        if new_attrs is not None and self._db_version_inuse >= 2:
+            stmt = ("UPDATE DATA "
+                    "SET ATTRS = ? "
+                    "WHERE ID == ?")
+            params = (new_attrs, data_id)
+            err_msg = 'unable to update table DATA with ATTRS'
+
+        if stmt is not None:
+            self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
 
 
     def get_next_data_id(self, prev_id=None):
@@ -668,7 +714,12 @@ class Database(object):
 
         prt = sys.stdout.write
 
-        data_id, gr_id, data_type, dm_name, data_content, size, sent_date, ack_date, tg, prj = data[0]
+        if self._db_version_inuse == Database.CURRENT_DB_FORMAT_VERSION:
+            data_id, gr_id, origin, attrs, data_type, dm_name, data_content, size, sent_date, ack_date, tg, prj = data[0]
+        else:
+            data_id, gr_id, data_type, dm_name, data_content, size, sent_date, ack_date, tg, prj = data[0]
+            origin = 'Not Available'
+            attrs = 'Not Available'
 
         steps = self.execute_sql_statement(
             "SELECT * FROM STEPS "
@@ -778,6 +829,9 @@ class Database(object):
         msg += colorize("{:s}".format(prj), rgb=Color.FMKSUBINFO)
         msg += colorize(" | Target: ", rgb=Color.FMKINFO)
         msg += colorize("{:s}".format(tg), rgb=Color.FMKSUBINFO)
+        origin_prefix = "    Origin: "
+        msg += colorize('\n' + origin_prefix, rgb=Color.FMKINFO)
+        msg += colorize(f"{origin}", rgb=Color.FMKSUBINFO)
         status_prefix = "    Status: "
         msg += colorize('\n' + status_prefix, rgb=Color.FMKINFO)
         src_max_sz = 0

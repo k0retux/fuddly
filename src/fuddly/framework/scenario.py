@@ -1001,7 +1001,11 @@ class Scenario(object):
         self._out_connectors = None
 
     def __str__(self):
-        return "Scenario '{:s}'".format(self.name)
+        return f"Scenario [name:'{self.name}']"
+
+    @property
+    def reference(self):
+        return 'SC_' + self.name.upper()
 
     @property
     def description(self):

@@ -798,15 +798,23 @@ class FmkPlumbing(object):
                 operator_names = tactics.get_operators_list(dis_type)
                 for dis_name in operator_names:
                     dis_obj = tactics.get_operator_obj(dis_type, dis_name)
-                    stateful = True if issubclass(dis_obj.__class__, StatefulOperator) else False
-                    self.fmkDB.insert_dmaker(dm_name, dis_type, dis_name, False, stateful)
+                    stateful = issubclass(dis_obj.__class__, StatefulOperator)
+                    desc = self._dmaker_desc_str(dis_obj, color=False)
+                    is_scenario = isinstance(dis_obj, DynOperatorFromScenario)
+                    self.fmkDB.insert_dmaker(dm_name, dis_type, dis_name,
+                                             False, stateful, is_scenario,
+                                             description=desc,other_info=None)
         generator_types = tactics.generator_types
         if generator_types:
             for gen_type in sorted(generator_types):
                 generator_names = tactics.get_generators_list(gen_type)
                 for gen_name in generator_names:
                     gen_obj = tactics.get_generator_obj(gen_type, gen_name)
-                    self.fmkDB.insert_dmaker(dm_name, gen_type, gen_name, True, True)
+                    desc = self._dmaker_desc_str(gen_obj, color=False)
+                    is_scenario = isinstance(gen_obj, DynGeneratorFromScenario)
+                    self.fmkDB.insert_dmaker(dm_name, gen_type, gen_name,
+                                             True, True, is_scenario,
+                                             description=desc,other_info=None)
 
     def _recover_target(self, tg):
         if self._recovered_tgs and tg in self._recovered_tgs:
@@ -874,7 +882,7 @@ class FmkPlumbing(object):
         if fmkDB_update:
             self.fmkDB.insert_data_model(Database.DEFAULT_DM_NAME)
             self.fmkDB.insert_dmaker(Database.DEFAULT_DM_NAME, Database.DEFAULT_GTYPE_NAME,
-                                     Database.DEFAULT_GEN_NAME, True, True)
+                                     Database.DEFAULT_GEN_NAME, True, True, False)
 
     def _get_data_models_from_fs(self, fmkDB_update=True):
         if not self._quiet:
@@ -1313,7 +1321,9 @@ class FmkPlumbing(object):
                         self._tactics.register_new_generator(gen_cls_name, gen, weight=1,
                                                               dmaker_type=dmaker_type, valid=True)
                         self.__dynamic_generator_ids[self.dm].append(dmaker_type)
-                        self.fmkDB.insert_dmaker(self.dm.name, dmaker_type, gen_cls_name, True, True)
+                        self.fmkDB.insert_dmaker(self.dm.name, dmaker_type, gen_cls_name,
+                                                 True, True, False,
+                                                 description=None, other_info=None)
 
                 if not self.__dynoperators_created[self.dm]:
                     self.__dynoperators_created[self.dm] = True
@@ -1341,12 +1351,20 @@ class FmkPlumbing(object):
                     self._tactics.register_scenarios(sc)
                     dmaker_type = self._tactics.scenario_ref_from(sc)
                     dmaker_cls_name = self._tactics.scenario_cls_name_from(sc)
+                    desc = self._dmaker_desc_str(
+                        self._tactics.get_generator_obj(dmaker_type, dmaker_cls_name),
+                        color=False)
                     if sc.backend == Scenario.Generator:
                         self.__dynamic_generator_ids[self.dm].append(dmaker_type)
+                        is_gen = True
                     elif sc.backend == Scenario.StatefulOperator:
                         self.__dynamic_operator_ids[self.dm].append(dmaker_type)
-                    self.fmkDB.insert_dmaker(self.dm.name, dmaker_type,
-                                             dmaker_cls_name, True, True)
+                        is_gen = False
+                    else:
+                        raise NotImplementedError
+                    self.fmkDB.insert_dmaker(self.dm.name, dmaker_type, dmaker_cls_name,
+                                             is_gen, True, True,
+                                             description=desc, other_info=None)
 
             self.print(colorize("*** Data Model '%s' loaded ***" % self.dm.name, rgb=Color.DATA_MODEL_LOADED))
             self._dm_to_be_reloaded = False
@@ -2716,6 +2734,7 @@ class FmkPlumbing(object):
                                                  reset_dmakers=reset_dmakers,
                                                  ignore_new_ui=False)
                     if data is None:
+                        # When a scenario reach its Final Step, we end up here
                         data = Data()
                         data.make_unusable()
                     elif validator_func is not None:
@@ -2782,6 +2801,7 @@ class FmkPlumbing(object):
 
         if self._sending_error or self._stop_sending:
             reason = 'no more data to process' if self._stop_sending else 'sending error'
+            self._update_last_recorded_data()
             self._restore_previous_state(reason=reason)
             return False, None
 
@@ -3097,6 +3117,10 @@ class FmkPlumbing(object):
                     self.lg.log_target_ack_date()
 
                 self.lg.reset_current_state()
+
+    def _update_last_recorded_data(self):
+        if self.fmkDB.enabled:
+            self.lg.mark_last_data_final()
 
     @EnforceOrder(accepted_states=["S2"])
     def _setup_new_sending(self):
@@ -3978,13 +4002,17 @@ class FmkPlumbing(object):
                     assert dmaker_obj is not None
                     is_gen = issubclass(dmaker_obj.__class__, Generator)
                     stateful = is_gen or issubclass(dmaker_obj.__class__, StatefulOperator)
+                    desc = self._dmaker_desc_str(dmaker_obj, color=False)
+                    is_scenario = isinstance(dmaker_obj, (DynOperatorFromScenario, DynGeneratorFromScenario))
 
                     if not ok:
                         self.set_error(err_msg, code=Error.CloneError)
                         return None, True
 
                     self.fmkDB.insert_dmaker(self.dm.name, dmaker_type, cloned_dmaker_name,
-                                             is_gen, stateful, clone_type=cloned_dmaker_type)
+                                             is_gen, stateful, is_scenario,
+                                             clone_type=cloned_dmaker_type,
+                                             description=desc, other_info=None)
 
             if provided_dmaker_name is None:
                 dmaker_obj = get_random_dmaker_obj(dmaker_type, valid_gen)
@@ -4453,13 +4481,22 @@ class FmkPlumbing(object):
     def _make_str(self, k, v,
                   prefix1="    |_ ",
                   prefix2="    |  ",
-                  prefix3="   | "):
+                  prefix3="   | ",
+                  color=True):
+        global colorize
+
+        if color:
+            add_color = colorize
+        else:
+            def add_color(string, rgb=None, ansi=None, bg=None, ansi_bg=None, fd=1):
+                return string
+
         desc, default, arg_type = v
         l = self._chunk_lines(desc, 60)
         k_len = len(k)
         desc_prefix = "desc: "
-        prefix = '\n' + prefix1 + colorize(k, rgb=Color.INFO_ALT) + \
-                 '\n' + prefix2 + prefix3 + colorize(desc_prefix, rgb=Color.SUBINFO_ALT)
+        prefix = '\n' + prefix1 + add_color(k, rgb=Color.INFO_ALT) + \
+                 '\n' + prefix2 + prefix3 + add_color(desc_prefix, rgb=Color.SUBINFO_ALT)
         msg = prefix
         indent = 0
         for chk, cpt in zip(l, range(len(l), 0, -1)):
@@ -4475,19 +4512,19 @@ class FmkPlumbing(object):
             args_type_desc = "unspecified"
         else:
             args_type_desc = arg_type.__name__
-        msg += prefix2 + prefix3 + colorize("default: ", rgb=Color.SUBINFO_ALT) + \
-               colorize(repr(default), rgb=Color.SUBINFO_ALT_HLIGHT) + " [type: {:s}]".format(args_type_desc)
+        msg += prefix2 + prefix3 + add_color("default: ", rgb=Color.SUBINFO_ALT) + \
+               add_color(repr(default), rgb=Color.SUBINFO_ALT_HLIGHT) + " [type: {:s}]".format(args_type_desc)
         return msg
 
-    def _dmaker_desc_str(self, obj, short_desc=False):
+    def _dmaker_desc_str(self, obj, short_desc=False, color=True):
         if obj.__doc__:
-            msg = "\n" + colorize(obj.__doc__, rgb=Color.INFO_ALT_HLIGHT)
+            msg = "\n" + colorize(obj.__doc__, rgb=Color.INFO_ALT_HLIGHT) if color else obj.__doc__
         else:
             msg = ""
         if not short_desc and obj._args_desc:
             msg += "\n  parameters: "
             for k, v in obj._args_desc.items():
-                msg += self._make_str(k, v)
+                msg += self._make_str(k, v, color=color)
 
         return msg
 
