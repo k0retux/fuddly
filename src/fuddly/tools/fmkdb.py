@@ -115,6 +115,10 @@ group.add_argument('-r', '--remove-one-data', type=int, metavar='DATA_ID',
                    help='Remove data ID and all related information from fmkDB')
 
 group = parser.add_argument_group('Fuddly Database Analysis')
+group = group.add_mutually_exclusive_group()
+group.add_argument('--scenario-analysis', action='store_true',
+                   help="Retrieve all scenarios within the fmkDB and provide information about it"
+                        "(e.g., included data IDs, if some data negatively impacted a target, ...)")
 group.add_argument('--data-with-impact', action='store_true',
                    help="Retrieve data that negatively impacted a target. Analysis is performed "
                         "based on feedback status and user analysis if present")
@@ -171,16 +175,17 @@ def main():
 
     args = parser.parse_args()
 
+    colorized = not args.no_color
+    if not colorized:
+        def colorize(string, rgb=None, ansi=None, bg=None, ansi_bg=None, fd=1):
+            return string
+
     fmkdb_path = args.fmkdb
     if fmkdb_path is not None and not os.path.isfile(fmkdb_path):
         print(colorize("*** ERROR: '{:s}' does not exist ***".format(fmkdb_path), rgb=Color.ERROR))
         sys.exit(-1)
 
     verbose = args.verbose
-    colorized = not args.no_color
-    if not colorized:
-        def colorize(string, rgb=None, ansi=None, bg=None, ansi_bg=None, fd=1):
-            return string
 
     page_width = args.page_width
 
@@ -209,6 +214,7 @@ def main():
     data_atom_name = args.data_atom
     fbk_atom_name = args.fbk_atom
 
+    scenario_analysis = args.scenario_analysis
     impact_analysis = args.data_with_impact
     raw_impact_analysis = args.data_with_impact_raw
     data_without_fbk = args.data_without_fbk
@@ -330,6 +336,12 @@ def main():
                                    verbose=verbose,
                                    raw_analysis=raw_impact_analysis,
                                    colorized=colorized)
+
+    elif scenario_analysis:
+        fmkdb.get_scenario_analysis(prj_name=prj_name, fbk_src=fbk_src, fbk_status_formula=fbk_status_formula,
+                                    verbose=verbose,
+                                    raw_analysis=raw_impact_analysis,
+                                    colorized=colorized)
 
     elif data_without_fbk:
         fmkdb.get_data_without_fbk(prj_name=prj_name, fbk_src=fbk_src, colorized=colorized)

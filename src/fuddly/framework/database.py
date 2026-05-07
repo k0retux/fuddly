@@ -183,6 +183,7 @@ class Database(object):
         self.enabled = False
 
         self.fbk_timeout_re = re.compile('.*feedback timeout = (.*)s$')
+        self.last_data_in_scenario_re = re.compile('.*sc_final_data = True', flags=re.S)
 
         # self.current_project = None
         #
@@ -1294,6 +1295,137 @@ class Database(object):
             )
 
         return prj_records
+
+
+    def get_scenario_records(self, prj_name=None):
+
+        if self._db_version_inuse < 2:
+            return None
+
+        if prj_name:
+            prj_records = self.execute_sql_statement(
+                "SELECT ID, ORIGIN, ATTRS, SENT_DATE, TARGET, PRJ_NAME FROM DATA "
+                "WHERE (PRJ_NAME == ? AND ORIGIN IS NOT NULL) "
+                "ORDER BY PRJ_NAME ASC, TARGET ASC;",
+                params=(prj_name,)
+            )
+        else:
+            prj_records = self.execute_sql_statement(
+                "SELECT ID, ORIGIN, ATTRS, SENT_DATE, TARGET, PRJ_NAME FROM DATA "
+                "WHERE ORIGIN IS NOT NULL "
+                "ORDER BY PRJ_NAME ASC, TARGET ASC;",
+            )
+
+        return prj_records
+
+
+    def get_scenario_analysis(self, prj_name=None, fbk_src=None, fbk_status_formula='? < 0',
+                             display=True, verbose=False,
+                             raw_analysis=False,
+                             colorized=True):
+
+        fbk_status_formula =  fbk_status_formula.replace('?', 'STATUS')
+        colorize = self._get_color_function(colorized)
+        scenario_list = None
+
+        if self._db_version_inuse < 2:
+            print(colorize('*** ERROR: incompatible FmkDB ***', rgb=Color.ERROR))
+            return None
+
+        sc_records = self.get_scenario_records(prj_name)
+        if sc_records:
+            scenario_list = []
+            current_scenario = None
+            for rec in sc_records:
+                data_id, origin, attrs, sent_date, target, prj = rec
+                sc_end = self.last_data_in_scenario_re.match(attrs)
+                if (current_scenario is None
+                        or current_scenario['name'] != origin):
+                    # last condition is to capture scenario that did not end explicitly
+                    # (meaning it was interrupted and never reached a Final step)
+
+                    current_scenario = {
+                        'name': origin,
+                        'first_data_id': data_id,
+                        'last_data_id': None,
+                        'prj': prj,
+                        'start_date': sent_date,
+                        'end_date': None,
+                        'data_with_impact': []
+                    }
+
+                current_scenario['last_data_id'] = data_id
+                current_scenario['end_date'] = sent_date
+                if sc_end:
+                    scenario_list.append(current_scenario)
+                    current_scenario = None
+
+            for sc in scenario_list:
+                # TODO: take into account the ANALYSIS table
+                first_id = sc['first_data_id']
+                last_id = sc['last_data_id']
+
+                if fbk_src:
+                    fbk_records = self.execute_sql_statement(
+                        f"SELECT DATA_ID, CONTENT, STATUS, SOURCE FROM FEEDBACK "
+                        f"WHERE DATA_ID >= ? AND DATA_ID <= ? AND {fbk_status_formula} AND SOURCE REGEXP ?;",
+                        params=(first_id, last_id, fbk_src)
+                    )
+                else:
+                    fbk_records = self.execute_sql_statement(
+                        f"SELECT DATA_ID, CONTENT, STATUS, SOURCE FROM FEEDBACK "
+                        f"WHERE DATA_ID >= ? AND DATA_ID <= ? AND {fbk_status_formula};",
+                        params=(first_id, last_id)
+                    )
+
+                if fbk_records:
+                    for rec in fbk_records:
+                        data_id, content, status, src = rec
+                        sc['data_with_impact'].append((data_id, content, status, src))
+
+            if display:
+                for sc in scenario_list:
+                    hdr1 = colorize('=' * 40 + '[ SCENARIO | ', rgb=Color.FMKINFOGROUP)
+                    hdr2 = colorize(f"{sc['name']}", rgb=Color.FMKINFO)
+                    hdr3 = colorize(" ]===", rgb=Color.FMKINFOGROUP)
+                    print(hdr1 + hdr2 + hdr3)
+                    prj = colorize(f" |_ Project: ", rgb=Color.FMKINFO)
+                    prj += colorize(f"{sc['prj']}", rgb=Color.FMKSUBINFO)
+                    print(prj)
+                    start_date = colorize(f" |_ Start Date: ", rgb=Color.FMKINFO)
+                    start_date += colorize(f"{sc['start_date']}", rgb=Color.FMKSUBINFO)
+                    print(start_date)
+                    end_date = colorize(f" |_ End Date:   ", rgb=Color.FMKINFO)
+                    end_date += colorize(f"{sc['end_date']}", rgb=Color.FMKSUBINFO)
+                    print(end_date)
+                    fdata1 = colorize(f" |_ First DataID: ", rgb=Color.FMKINFO)
+                    fdata2 = colorize(f"{sc['first_data_id']}", rgb=Color.FMKSUBINFO)
+                    print(fdata1 + fdata2)
+                    ldata1 = colorize(f" |_ Last DataID:  ", rgb=Color.FMKINFO)
+                    ldata2 = colorize(f"{sc['last_data_id']}", rgb=Color.FMKSUBINFO)
+                    print(ldata1 + ldata2)
+                    impact_list = sc['data_with_impact']
+                    if impact_list:
+                        impact1 = colorize(f" |_ ", rgb=Color.FMKINFO)
+                        impact1 += colorize(f"Impacting Data: ", rgb=Color.ERROR)
+                        print(impact1)
+                        for impact in impact_list:
+                            data_id, content, status, src = impact
+                            imp_data1 = colorize(f"    - ID #", rgb=Color.FMKINFO)
+                            imp_data1 += colorize(f"{data_id}", rgb=Color.FMKSUBINFO)
+                            tmp1 = colorize(f" | Status: ", rgb=Color.FMKINFO)
+                            tmp2 = colorize(f"{status}", rgb=Color.FMKSUBINFO)
+                            tmp3 = colorize(f" | From: ", rgb=Color.FMKINFO)
+                            tmp4 = colorize(f"{src}", rgb=Color.FMKSUBINFO)
+                            imp_data2 = tmp1 + tmp2 + tmp3 + tmp4
+                            print(imp_data1 + imp_data2)
+                            if verbose:
+                                print(colorize(f'      {str(content)}', rgb=Color.DATAINFO_ALT))
+                    else:
+                        print(colorize(f" |_ No Detected Impact", rgb=Color.FMKINFO))
+
+        return scenario_list
+
 
     def get_data_with_impact(self, prj_name=None, fbk_src=None, fbk_status_formula='? < 0',
                              display=True, verbose=False,
