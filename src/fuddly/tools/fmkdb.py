@@ -42,7 +42,7 @@ group.add_argument('--fmkdb', metavar='PATH', help='Path to an alternative fmkDB
 group.add_argument('--no-color', action='store_true', help='Do not use colors')
 group.add_argument('-v', '--verbose', action='store_true', help='Verbose mode')
 group.add_argument('--page-width', type=int, metavar='WIDTH', default=100,
-                    help='Width hint for displaying information')
+                   help='Width hint for displaying information')
 
 group = parser.add_argument_group('Configuration Handles')
 group.add_argument('--fbk-src', metavar='FEEDBACK_SOURCES',
@@ -58,6 +58,9 @@ group.add_argument('--fbk-status-formula', metavar='STATUS_REF', default='? < 0'
                         'This option provides the formula to be used for feedback status '
                         'filtering (the character "?" should be used in place of the status value that will be checked). '
                         'Supported by: --data-with-impact')
+group.add_argument('--min-record-size', type=int, metavar='MIN_SIZE', default=4,
+                   help='Minimum record size. '
+                        'Supported by: --db-analysis')
 
 group = parser.add_argument_group('Fuddly Database Visualization')
 group.add_argument('-s', '--all-stats', action='store_true', help='Show all statistics')
@@ -116,8 +119,8 @@ group.add_argument('-r', '--remove-one-data', type=int, metavar='DATA_ID',
 
 group = parser.add_argument_group('Fuddly Database Analysis')
 group = group.add_mutually_exclusive_group()
-group.add_argument('--scenario-analysis', action='store_true',
-                   help="Retrieve all scenarios within the fmkDB and provide information about it"
+group.add_argument('--db-analysis', action='store_true',
+                   help="Retrieve all scenarios and batch processing within the fmkDB and provide information about it"
                         "(e.g., included data IDs, if some data negatively impacted a target, ...)")
 group.add_argument('--data-with-impact', action='store_true',
                    help="Retrieve data that negatively impacted a target. Analysis is performed "
@@ -214,7 +217,9 @@ def main():
     data_atom_name = args.data_atom
     fbk_atom_name = args.fbk_atom
 
-    scenario_analysis = args.scenario_analysis
+    db_analysis = args.db_analysis
+    min_rec_sz = args.min_record_size
+
     impact_analysis = args.data_with_impact
     raw_impact_analysis = args.data_with_impact_raw
     data_without_fbk = args.data_without_fbk
@@ -337,11 +342,12 @@ def main():
                                    raw_analysis=raw_impact_analysis,
                                    colorized=colorized)
 
-    elif scenario_analysis:
-        fmkdb.get_scenario_analysis(prj_name=prj_name, fbk_src=fbk_src, fbk_status_formula=fbk_status_formula,
-                                    verbose=verbose,
-                                    raw_analysis=raw_impact_analysis,
-                                    colorized=colorized)
+    elif db_analysis:
+        fmkdb.get_db_analysis(prj_name=prj_name, fbk_src=fbk_src, fbk_status_formula=fbk_status_formula,
+                              verbose=verbose,
+                              op_record_min_size = min_rec_sz,
+                              raw_analysis=raw_impact_analysis,
+                              colorized=colorized)
 
     elif data_without_fbk:
         fmkdb.get_data_without_fbk(prj_name=prj_name, fbk_src=fbk_src, colorized=colorized)

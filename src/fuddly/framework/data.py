@@ -207,8 +207,9 @@ class EmptyBackend(DataBackend):
 
 class AttrGroup(object):
 
-    def __init__(self, attrs_desc: dict):
+    def __init__(self, attrs_desc: dict = None):
         self._attrs = attrs_desc
+        self._ext_attrs = {}
 
     def set(self, name):
         if name not in self._attrs:
@@ -225,6 +226,14 @@ class AttrGroup(object):
             raise ValueError
         return self._attrs[name]
 
+    def set_value(self, key, value):
+        self._ext_attrs[key] = value
+
+    def get_value(self, key):
+        if key not in self._ext_attrs:
+            raise ValueError('Unknown key')
+        return self._ext_attrs[key]
+
     def __iter__(self):
         for a in self._attrs.keys():
             yield a
@@ -232,11 +241,13 @@ class AttrGroup(object):
     def copy_from(self, attr_group):
         assert isinstance(attr_group, AttrGroup)
         self._attrs = copy.copy(attr_group._attrs)
+        self._ext_attrs = copy.copy(attr_group._ext_attrs)
 
     def __copy__(self):
         new_attrgr = type(self)()
         new_attrgr.__dict__.update(self.__dict__)
         new_attrgr._attrs = copy.copy(self._attrs)
+        new_attrgr._ext_attrs = copy.copy(self._ext_attrs)
         return new_attrgr
 
 
@@ -249,7 +260,7 @@ class DataAttr(AttrGroup):
 
     description = {
         Reset_DMakers: 'reset_dmaker',
-        SC_FinalData: 'sc_final_data'
+        SC_FinalData: 'final_data'
     }
 
     def __init__(self, attrs_to_set=None, attrs_to_clear=None):
@@ -266,9 +277,14 @@ class DataAttr(AttrGroup):
                 self.clear(a)
 
     def __str__(self):
-        desc = ''
+        desc = '[bool attrs]\n'
         for k, v in self._attrs.items():
             desc += f'{self.description[k]} = {v}\n'
+        if self._ext_attrs:
+            desc += '[extended attrs]\n'
+            for k, v in self._ext_attrs.items():
+                desc += f'{k} = {v}\n'
+
         return desc[:-1]
 
 

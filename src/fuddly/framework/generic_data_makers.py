@@ -239,13 +239,13 @@ class sd_walk_data_model(StatefulOperator):
 
     def transform_data(self, dm, target, data):
         try:
-            rnode, consumed_node, orig_node_val, idx = next(self.walker)
+            rnode, consumed_node, orig_node_val, self.idx = next(self.walker)
         except StopIteration:
             data.make_unusable()
             self.handover()
             return data
 
-        data.add_info('model walking index: {:d}'.format(idx))
+        data.add_info('model walking index: {:d}'.format(self.idx))
         data.add_info('current node:     {!s}'.format(self.modelwalker.consumed_node_path))
 
         if self.clone_node:
@@ -405,7 +405,7 @@ class sd_fuzz_typed_nodes(StatefulOperator):
 
     def transform_data(self, dm, target, data):
         try:
-            rnode, consumed_node, orig_node_val, idx = next(self.walker)
+            rnode, consumed_node, orig_node_val, self.idx = next(self.walker)
         except StopIteration:
             data.make_unusable()
             self.handover()
@@ -421,7 +421,7 @@ class sd_fuzz_typed_nodes(StatefulOperator):
 
         corrupt_node_bytes = consumed_node.to_bytes()
 
-        data.add_info('model walking index: {:d}'.format(idx))
+        data.add_info('model walking index: {:d}'.format(self.idx))
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
         data.add_info('current fuzzed node:     {!s}'.format(self.modelwalker.consumed_node_path))
         data.add_info(' |_ value type:          {!s}'.format(consumed_node.cc.get_value_type()))
@@ -511,7 +511,7 @@ class sd_switch_to_alternate_conf(StatefulOperator):
     def transform_data(self, dm, target, data):
 
         try:
-            rnode, consumed_node, orig_node_val, idx = next(self.walker)
+            rnode, consumed_node, orig_node_val, self.idx = next(self.walker)
         except StopIteration:
             data.make_unusable()
             self.handover()
@@ -525,7 +525,7 @@ class sd_switch_to_alternate_conf(StatefulOperator):
         else:
             self.run_num +=1
 
-        data.add_info('model walking index: {:d}'.format(idx))
+        data.add_info('model walking index: {:d}'.format(self.idx))
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
         data.add_info('current node with alternate conf: {!s}'.format(self.modelwalker.consumed_node_path))
         data.add_info(' |_ associated value: {!s}'.format(truncate_info(consumed_node.to_bytes())))
@@ -591,7 +591,7 @@ class sd_fuzz_separator_nodes(StatefulOperator):
 
     def transform_data(self, dm, target, data):
         try:
-            rnode, consumed_node, orig_node_val, idx = next(self.walker)
+            rnode, consumed_node, orig_node_val, self.idx = next(self.walker)
         except StopIteration:
             data.make_unusable()
             self.handover()
@@ -607,7 +607,7 @@ class sd_fuzz_separator_nodes(StatefulOperator):
 
         corrupt_node_bytes = consumed_node.to_bytes()
 
-        data.add_info('model walking index: {:d}'.format(idx))
+        data.add_info('model walking index: {:d}'.format(self.idx))
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
         data.add_info('current fuzzed separator:     {!s}'.format(self.modelwalker.consumed_node_path))
         data.add_info(' |_ value type:         {!s}'.format(consumed_node.cc.get_value_type()))
@@ -1834,7 +1834,7 @@ class sd_constraint_fuzz(StatefulOperator):
         assert self.sample_idx > 0
 
         self._first_call = True
-        self._count = 0
+        self.idx = 0
         self._constraint_negated = False
         self._current_constraint_idx = self.const_idx-1
         self._sample_count = 0
@@ -1922,9 +1922,9 @@ class sd_constraint_fuzz(StatefulOperator):
                 return data
 
         self.seed.freeze(resolve_csp=True)
-        self._count += 1
+        self.idx += 1
 
-        data.add_info(f'constraint fuzzing test case index: {self._count}')
+        data.add_info(f'constraint fuzzing test case index: {self.idx}')
         data.add_info(f' |_ constraint number: {self._current_constraint_idx+1}/{self.csp.nb_constraints}')
         data.add_info(f' |_ sample index: {self._sample_count}/{self.samples_per_cst}')
         data.add_info(' |_ variables assignment:')

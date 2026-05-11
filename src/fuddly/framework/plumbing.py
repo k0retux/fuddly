@@ -3854,6 +3854,9 @@ class FmkPlumbing(object):
         clone_dmaker = self._tactics.clone_generator
         clone_gen_dmaker = self._generic_tactics.clone_generator
 
+        dmaker_type = None
+        dmaker_obj = None
+
         if seed != None:
             data = copy.copy(seed)
             initial_generator_info = seed.get_initial_dmaker()
@@ -4247,6 +4250,11 @@ class FmkPlumbing(object):
 
         data.set_history(l)
         data.set_initial_dmaker(initial_generator_info)
+        if data.scenario_dependence is None:
+            if isinstance(dmaker_obj, (Operator, StatefulOperator)):
+                data.origin = dmaker_obj.op_type
+            if isinstance(dmaker_obj, StatefulOperator) and hasattr(dmaker_obj, 'idx'):
+                data.attrs.set_value('op_index', dmaker_obj.idx)
 
         if not self._is_data_valid(data):
             self.set_error("Data is empty (probable reason: used data maker is disabled and need "

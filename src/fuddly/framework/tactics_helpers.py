@@ -199,6 +199,8 @@ class Tactics(object):
             name = val['obj'].__class__.__name__
             weight = val['weight']
             valid = val['valid']
+            if isinstance(new_obj, (Operator, StatefulOperator)):
+                new_obj.op_type = dmaker_type
 
             new_obj.set_attr(DataMakerAttr.Active)
             new_obj.clear_attr(DataMakerAttr.HandOver)
@@ -560,6 +562,8 @@ class DataMaker(object):
 
     def __init__(self):
         self._fmkops = None
+        if self._modelwalker_user:
+            self.idx = None
 
     def set_exportable_fmk_ops(self, fmkops):
         self._fmkops = fmkops
@@ -604,6 +608,7 @@ class Generator(DataMaker):
             return False
 
         _handle_user_inputs(self, user_input)
+        ok = False
         try:
             ok = self.setup(dm, user_input)
         except:
@@ -654,7 +659,7 @@ class Operator(DataMaker):
             DataMakerAttr.Controller: False,
             DataMakerAttr.HandOver: False,
             DataMakerAttr.SetupRequired: True
-            }
+        }
 
     def transform_data(self, dm, target, prev_data):
         raise NotImplementedError
@@ -695,6 +700,7 @@ class Operator(DataMaker):
             return False
 
         _handle_user_inputs(self, user_input)
+        ok = False
         try:
             ok = self.setup(dm, user_input)
         except:
@@ -728,7 +734,7 @@ class StatefulOperator(DataMaker):
             DataMakerAttr.HandOver: False,
             DataMakerAttr.SetupRequired: True,
             DataMakerAttr.NeedSeed: True
-            }
+        }
 
     def set_seed(self, prev_data):
         raise NotImplementedError
@@ -782,6 +788,7 @@ class StatefulOperator(DataMaker):
             return False
 
         _handle_user_inputs(self, user_input)
+        ok = False
         try:
             ok = self.setup(dm, user_input)
         except:
@@ -1474,6 +1481,7 @@ def operator(st, dtype, weight=1, valid=False, args=None, modelwalker_user=False
             operator_cls._args_desc = {} if args is None else args
         # register an object of this class
         operator = operator_cls()
+        operator.op_type = dtype
         if issubclass(operator_cls, StatefulOperator):
             operator.set_attr(DataMakerAttr.Controller)
         st.register_new_operator(operator.__class__.__name__, operator, weight, dtype, valid)

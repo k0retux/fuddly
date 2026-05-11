@@ -183,7 +183,8 @@ class Database(object):
         self.enabled = False
 
         self.fbk_timeout_re = re.compile('.*feedback timeout = (.*)s$')
-        self.last_data_in_scenario_re = re.compile('.*sc_final_data = True', flags=re.S)
+        self.last_data_in_scenario_re = re.compile('.*final_data = True', flags=re.S)
+        self.stateful_op_idx_re = re.compile('.*op_index = (\\d*)', flags=re.S)
 
         # self.current_project = None
         #
@@ -1303,30 +1304,59 @@ class Database(object):
             return None
 
         if prj_name:
-            prj_records = self.execute_sql_statement(
+            sc_records = self.execute_sql_statement(
                 "SELECT ID, ORIGIN, ATTRS, SENT_DATE, TARGET, PRJ_NAME FROM DATA "
-                "WHERE (PRJ_NAME == ? AND ORIGIN IS NOT NULL) "
+                "WHERE PRJ_NAME == ? AND ORIGIN LIKE 'SC_%' "
                 "ORDER BY PRJ_NAME ASC, TARGET ASC;",
                 params=(prj_name,)
             )
         else:
-            prj_records = self.execute_sql_statement(
+            sc_records = self.execute_sql_statement(
                 "SELECT ID, ORIGIN, ATTRS, SENT_DATE, TARGET, PRJ_NAME FROM DATA "
-                "WHERE ORIGIN IS NOT NULL "
-                "ORDER BY PRJ_NAME ASC, TARGET ASC;",
+                "WHERE ORIGIN LIKE 'SC_%' "
+                "ORDER BY PRJ_NAME ASC, TARGET ASC;"
             )
 
-        return prj_records
+        return sc_records
 
 
-    def get_scenario_analysis(self, prj_name=None, fbk_src=None, fbk_status_formula='? < 0',
-                             display=True, verbose=False,
-                             raw_analysis=False,
-                             colorized=True):
+    def get_stateful_operator_records(self, prj_name=None):
+
+        if self._db_version_inuse < 2:
+            return None
+
+        if prj_name:
+            op_records = self.execute_sql_statement(
+                "SELECT DATA.ID, DATA.ORIGIN, DATA.ATTRS, DATA.SENT_DATE, DATA.TARGET, DATA.PRJ_NAME "
+                "FROM DATA "
+                "INNER JOIN DMAKERS ON DATA.ORIGIN = DMAKERS.TYPE "
+                "WHERE DATA.PRJ_NAME == ? AND DATA.ORIGIN != 'None' AND DATA.ORIGIN NOT LIKE 'SC_%' "
+                "ORDER BY DATA.PRJ_NAME ASC, DATA.TARGET ASC, DATA.ID ASC;",
+                params=(prj_name,)
+            )
+        else:
+            op_records = self.execute_sql_statement(
+                "SELECT DATA.ID, DATA.ORIGIN, DATA.ATTRS, DATA.SENT_DATE, DATA.TARGET, DATA.PRJ_NAME "
+                "FROM DATA "
+                "INNER JOIN DMAKERS ON DATA.ORIGIN = DMAKERS.TYPE "
+                "WHERE DATA.ORIGIN != 'None' AND DATA.ORIGIN NOT LIKE 'SC_%' "
+                "ORDER BY DATA.PRJ_NAME ASC, DATA.TARGET ASC, DATA.ID ASC;"
+            )
+
+        return op_records
+
+
+
+    def get_db_analysis(self, prj_name=None, fbk_src=None, fbk_status_formula='? < 0',
+                        display=True, verbose=False,
+                        op_record_min_size = 4,
+                        raw_analysis=False,
+                        colorized=True):
 
         fbk_status_formula =  fbk_status_formula.replace('?', 'STATUS')
         colorize = self._get_color_function(colorized)
         scenario_list = None
+        op_list = None
 
         if self._db_version_inuse < 2:
             print(colorize('*** ERROR: incompatible FmkDB ***', rgb=Color.ERROR))
@@ -1360,10 +1390,68 @@ class Database(object):
                     scenario_list.append(current_scenario)
                     current_scenario = None
 
-            for sc in scenario_list:
+        op_records = self.get_stateful_operator_records(prj_name)
+        if op_records:
+            op_list = []
+            current_op = None
+            previous_op_idx = None
+            previous_data_id = None
+            previous_sent_date = None
+            record_ongoing = False
+            for rec in op_records:
+                data_id, origin, attrs, sent_date, target, prj = rec
+                parsed = self.stateful_op_idx_re.match(attrs)
+                op_idx = parsed.group(1) if parsed else None
+                try:
+                    op_idx = int(op_idx)
+                except (TypeError, ValueError):
+                    op_idx = None
+
+                if ((current_op is not None and (current_op['name'] != origin or current_op['target'] != target)) or
+                        (previous_op_idx is not None and op_idx is not None and previous_op_idx != op_idx-1)):
+                    if previous_data_id - current_op['first_data_id'] + 2 > op_record_min_size:
+                        current_op['last_data_id'] = previous_data_id
+                        current_op['last_operator_idx'] = previous_op_idx
+                        current_op['end_date'] = previous_sent_date
+                        op_list.append(current_op)
+                    else:
+                        pass
+
+                    record_ongoing = False
+                    current_op = None
+
+                previous_op_idx = op_idx
+                previous_data_id = data_id
+                previous_sent_date = sent_date
+
+                if current_op is None and op_idx is not None:
+                    record_ongoing = True
+                    current_op = {
+                        'name': origin,
+                        'first_data_id': data_id,
+                        'last_data_id': None,
+                        'first_operator_idx': op_idx,
+                        'last_operator_idx': None,
+                        'prj': prj,
+                        'target': target,
+                        'start_date': sent_date,
+                        'end_date': None,
+                        'data_with_impact': [],
+                    }
+
+            if record_ongoing and previous_data_id - current_op['first_data_id'] + 2 > op_record_min_size:
+                record_ongoing = False
+                current_op['last_data_id'] = previous_data_id
+                current_op['last_operator_idx'] = previous_op_idx
+                current_op['end_date'] = previous_sent_date
+                op_list.append(current_op)
+
+
+        def process_obj_list(obj_list, display=True, prompt = 'OBJ RECORD'):
+            for obj in obj_list:
                 # TODO: take into account the ANALYSIS table
-                first_id = sc['first_data_id']
-                last_id = sc['last_data_id']
+                first_id = obj['first_data_id']
+                last_id = obj['last_data_id']
 
                 if fbk_src:
                     fbk_records = self.execute_sql_statement(
@@ -1381,30 +1469,42 @@ class Database(object):
                 if fbk_records:
                     for rec in fbk_records:
                         data_id, content, status, src = rec
-                        sc['data_with_impact'].append((data_id, content, status, src))
+                        obj['data_with_impact'].append((data_id, content, status, src))
 
             if display:
-                for sc in scenario_list:
-                    hdr1 = colorize('=' * 40 + '[ SCENARIO | ', rgb=Color.FMKINFOGROUP)
-                    hdr2 = colorize(f"{sc['name']}", rgb=Color.FMKINFO)
+                for idx, obj in enumerate(obj_list, start=1):
+                    hdr1 = colorize('=' * 40 + f'[ {prompt} #{idx} | ', rgb=Color.FMKINFOGROUP)
+                    hdr2 = colorize(f"{obj['name']}", rgb=Color.FMKINFO)
                     hdr3 = colorize(" ]===", rgb=Color.FMKINFOGROUP)
                     print(hdr1 + hdr2 + hdr3)
                     prj = colorize(f" |_ Project: ", rgb=Color.FMKINFO)
-                    prj += colorize(f"{sc['prj']}", rgb=Color.FMKSUBINFO)
+                    prj += colorize(f"{obj['prj']}", rgb=Color.FMKSUBINFO)
                     print(prj)
+                    if 'target' in obj:
+                        tg = colorize(f" |_ Target: ", rgb=Color.FMKINFO)
+                        tg += colorize(f"{obj['target']}", rgb=Color.FMKSUBINFO)
+                        print(tg)
                     start_date = colorize(f" |_ Start Date: ", rgb=Color.FMKINFO)
-                    start_date += colorize(f"{sc['start_date']}", rgb=Color.FMKSUBINFO)
+                    start_date += colorize(f"{obj['start_date']}", rgb=Color.FMKSUBINFO)
                     print(start_date)
                     end_date = colorize(f" |_ End Date:   ", rgb=Color.FMKINFO)
-                    end_date += colorize(f"{sc['end_date']}", rgb=Color.FMKSUBINFO)
+                    end_date += colorize(f"{obj['end_date']}", rgb=Color.FMKSUBINFO)
                     print(end_date)
                     fdata1 = colorize(f" |_ First DataID: ", rgb=Color.FMKINFO)
-                    fdata2 = colorize(f"{sc['first_data_id']}", rgb=Color.FMKSUBINFO)
+                    fdata2 = colorize(f"{obj['first_data_id']}", rgb=Color.FMKSUBINFO)
                     print(fdata1 + fdata2)
                     ldata1 = colorize(f" |_ Last DataID:  ", rgb=Color.FMKINFO)
-                    ldata2 = colorize(f"{sc['last_data_id']}", rgb=Color.FMKSUBINFO)
+                    ldata2 = colorize(f"{obj['last_data_id']}", rgb=Color.FMKSUBINFO)
                     print(ldata1 + ldata2)
-                    impact_list = sc['data_with_impact']
+                    if 'first_operator_idx' in obj:
+                        f_op_idx = colorize(f" |_ First Operator Index: ", rgb=Color.FMKINFO)
+                        f_op_idx += colorize(f"{obj['first_operator_idx']}", rgb=Color.FMKSUBINFO)
+                        print(f_op_idx)
+                        l_op_idx = colorize(f" |_ Last Operator Index:  ", rgb=Color.FMKINFO)
+                        l_op_idx += colorize(f"{obj['last_operator_idx']}", rgb=Color.FMKSUBINFO)
+                        print(l_op_idx)
+
+                    impact_list = obj['data_with_impact']
                     if impact_list:
                         impact1 = colorize(f" |_ ", rgb=Color.FMKINFO)
                         impact1 += colorize(f"Impacting Data: ", rgb=Color.ERROR)
@@ -1424,7 +1524,15 @@ class Database(object):
                     else:
                         print(colorize(f" |_ No Detected Impact", rgb=Color.FMKINFO))
 
-        return scenario_list
+
+        if sc_records:
+            process_obj_list(scenario_list, display=display, prompt='SCENARIO RECORD')
+
+        if op_records:
+            process_obj_list(op_list, display=display, prompt='STATEFUL OPERATOR RECORD')
+
+
+        return scenario_list, op_list
 
 
     def get_data_with_impact(self, prj_name=None, fbk_src=None, fbk_status_formula='? < 0',
