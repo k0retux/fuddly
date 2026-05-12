@@ -3856,6 +3856,7 @@ class FmkPlumbing(object):
 
         dmaker_type = None
         dmaker_obj = None
+        store_extended_attr = False
 
         if seed != None:
             data = copy.copy(seed)
@@ -4115,6 +4116,7 @@ class FmkPlumbing(object):
                                        code=Error.UnrecoverableError)
 
                     self.__initialized_dmakers[dmaker_obj] = (True, user_input)
+                    store_extended_attr = True
 
             except Exception:
                 setup_crashed = True
@@ -4261,22 +4263,27 @@ class FmkPlumbing(object):
         else:
             data.set_history(l)
             data.set_initial_dmaker(initial_generator_info)
-            if data.scenario_dependence is not None:
-                data.attrs.set_value('sc_input', str(original_generator_ui))
-            data.attrs.set_value('generator', initial_generator_info[0])
-            data.attrs.set_value('gen_input', str(initial_generator_info[2]))
-            # len(l) provide the correct length of a data makers sequence the
-            # first time the sequence is executed. Afterwards, it maybe wrong as
-            # the generator maybe disabled if follow any stateful operators
-            data.attrs.set_value('dmakers_seq_sz', len(l))
+            if store_extended_attr or data.scenario_dependence is not None:
+                if data.scenario_dependence is not None:
+                    data.attrs.set_value('sc_input', str(original_generator_ui))
+                data.attrs.set_value('generator', initial_generator_info[0])
+                data.attrs.set_value('gen_input', str(initial_generator_info[2]))
+                # len(l) provide the correct length of a data makers sequence the
+                # first time the sequence is executed. Afterwards, it maybe wrong as
+                # the generator maybe disabled if follow any stateful operators
+                data.attrs.set_value('dmakers_seq_sz', len(l))
+                for i in range(1,len(l)):
+                    dmaker, _, ui = l[i]
+                    data.attrs.set_value(f'op{i}', dmaker)
+                    data.attrs.set_value(f'op{i}_ui', str(ui))
+
             if data.scenario_dependence is None and last_stateful_op is not None:
                 l_sop_obj = last_stateful_op[0]
-                l_sop_ui = last_stateful_op[1]
                 if isinstance(l_sop_obj, (Operator, StatefulOperator)):
                     data.origin = l_sop_obj.op_type
-                    # Position of the Operator in the sequence (start at 0)
-                    data.attrs.set_value('last_sop_pos', last_stateful_op[2])
-                    data.attrs.set_value('last_sop_input', str(l_sop_ui))
+                    if store_extended_attr:
+                        # Position of the Operator in the sequence (start at 0)
+                        data.attrs.set_value('last_sop_pos', last_stateful_op[2])
                 if isinstance(l_sop_obj, StatefulOperator) and hasattr(l_sop_obj, 'idx'):
                     data.attrs.set_value('last_sop_idx', l_sop_obj.idx)
 

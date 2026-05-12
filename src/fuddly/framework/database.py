@@ -190,8 +190,10 @@ class Database(object):
             r'.*generator = (.*?)\ngen_input = (.*?)\ndmakers_seq_sz = (\d*?)\n', flags=re.S)
         self.dmaker_seq_sz_re = re.compile(
             r'.*dmakers_seq_sz = (\d*?)\n', flags=re.S)
-        self.stateful_last_sop_input_re = re.compile(
-            r'.*last_sop_pos = (\d*?)\nlast_sop_input = (.*?)\n', flags=re.S)
+        self.op_list_re = re.compile(
+            r'.*?op\d*? = (.*?)\nop\d*?_ui = (.*?)\n', flags=re.S)
+        self.stateful_last_sop_pos_re = re.compile(
+            r'.*last_sop_pos = (\d*?)\n', flags=re.S)
         self.stateful_last_sop_idx_re = re.compile(r'.*last_sop_idx = (\d*?)\n', flags=re.S)
 
     @staticmethod
@@ -1366,10 +1368,19 @@ class Database(object):
                     parsed = self.scenario_input_re.match(attrs)
                     sc_input = parsed.group(1) if parsed else None
 
+                    s_idx = 0
+                    op_seq = []
+                    for i in range(dmakers_seq_sz):
+                        parsed = self.op_list_re.match(attrs[s_idx:])
+                        if parsed:
+                            op_seq.append((parsed.group(1), parsed.group(2)))
+                            s_idx += parsed.end()
+
                     current_scenario = {
                         'dmakers_seq_sz': dmakers_seq_sz,
                         'name': origin,
                         'sc_input': sc_input,
+                        'op_seq': op_seq,
                         'first_data_id': data_id,
                         'last_data_id': None,
                         'prj': prj,
@@ -1432,12 +1443,20 @@ class Database(object):
                     parsed = self.dmaker_seq_sz_re.match(attrs)
                     dmakers_seq_sz = int(parsed.group(1)) if parsed else None
 
-                    parsed = self.stateful_last_sop_input_re.match(attrs)
+                    op_seq = []
+                    if dmakers_seq_sz:
+                        s_idx = 0
+                        for i in range(dmakers_seq_sz):
+                            parsed = self.op_list_re.match(attrs[s_idx:])
+                            if parsed:
+                                op_seq.append((parsed.group(1), parsed.group(2)))
+                                s_idx += parsed.end()
+
+                    parsed = self.stateful_last_sop_pos_re.match(attrs)
                     if parsed:
                         last_sop_pos = int(parsed.group(1))
-                        last_sop_input = parsed.group(2)
                     else:
-                        last_sop_input = last_sop_pos = None
+                        last_sop_pos = None
 
                     current_op = {
                         'dmakers_seq_sz': dmakers_seq_sz,
@@ -1446,8 +1465,8 @@ class Database(object):
                         'last_data_id': None,
                         'generator': generator,
                         'gen_input': gen_input,
+                        'op_seq': op_seq,
                         'last_sop_pos': last_sop_pos,
-                        'last_sop_input': last_sop_input,
                         'l_sop_starting_idx': l_op_idx,
                         'l_sop_final_idx': None,
                         'prj': prj,
@@ -1493,25 +1512,30 @@ class Database(object):
                 for idx, obj in enumerate(obj_list, start=1):
                     hdr1 = colorize('=' * 45 + f'[ {prompt} #{idx} | ', rgb=Color.FMKINFOGROUP)
                     seq_sz = obj['dmakers_seq_sz']
-                    if is_batch_proc:
-                        if seq_sz > 2:
+                    op_seq = obj['op_seq']
+                    if seq_sz is not None:
+                        if is_batch_proc:
                             last_sop_pos = obj['last_sop_pos']
-                            title = f"{obj['generator']} / "
-                            for i in range(1,seq_sz):
-                                if i == last_sop_pos:
-                                    title += f"{obj['last_stateful_op']} / "
-                                else:
-                                    title += f" ? / "
+                            if seq_sz > 2:
+                                title = f"{obj['generator']} / "
+                                for i, op in enumerate(op_seq):
+                                    op_name, _ = op
+                                    title += f"{op_name} / "
+                                title = title[:-3]
+
+                                hdr2 = colorize(title, rgb=Color.FMKINFO)
+                            else:
+                                hdr2 = colorize(f"{obj['generator']} / {obj['last_stateful_op']}", rgb=Color.FMKINFO)
+                        else:
+                            title = f"{obj['name']} / "
+                            for i, op in enumerate(op_seq):
+                                op_name, _ = op
+                                title += f"{op_name} / "
                             title = title[:-3]
 
                             hdr2 = colorize(title, rgb=Color.FMKINFO)
-                        else:
-                            hdr2 = colorize(f"{obj['generator']} / {obj['last_stateful_op']}", rgb=Color.FMKINFO)
                     else:
-                        title = f"{obj['name']}"
-                        if seq_sz > 1:
-                            title += f" / ?"
-                        hdr2 = colorize(title, rgb=Color.FMKINFO)
+                        hdr2 = ''
 
                     hdr3 = colorize(" ]===", rgb=Color.FMKINFOGROUP)
                     print(hdr1 + hdr2 + hdr3)
@@ -1534,36 +1558,39 @@ class Database(object):
                     ldata1 = colorize(f" |_ Last DataID:  ", rgb=Color.FMKINFO)
                     ldata2 = colorize(f"{obj['last_data_id']}", rgb=Color.FMKSUBINFO)
                     print(ldata1 + ldata2)
+                    bp_info = colorize(f" |_ Batch Processing Info:\n", rgb=Color.FMKINFO)
                     if is_batch_proc:
-                        bp_info = colorize(f" |_ Batch Processing Info:\n", rgb=Color.FMKINFO)
                         bp_info += colorize(f"    - generator: ", rgb=Color.FMKINFO)
                         bp_info += colorize(f"{obj['generator']}\n", rgb=Color.FMKSUBINFO)
                         bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
-                        bp_info += colorize(f"{obj['gen_input']}\n", rgb=Color.FMKSUBINFO)
-                        bp_info += colorize(f"    - last stateful operator: ", rgb=Color.FMKINFO)
-                        bp_info += colorize(f"{obj['last_stateful_op']}\n", rgb=Color.FMKSUBINFO)
-                        bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
-                        bp_info += colorize(f"{obj['last_sop_input']}", rgb=Color.FMKSUBINFO)
-                        print(bp_info)
-                        if 'l_sop_starting_idx' in obj:
-                            op_idx = colorize(f"      |_ starting index: ", rgb=Color.FMKINFO)
-                            op_idx += colorize(f"{obj['l_sop_starting_idx']}\n", rgb=Color.FMKSUBINFO)
-                            op_idx += colorize(f"      |_ final index:    ", rgb=Color.FMKINFO)
-                            op_idx += colorize(f"{obj['l_sop_final_idx']}", rgb=Color.FMKSUBINFO)
-                            print(op_idx)
-
-                        if seq_sz > 2:
-                            print(colorize(f"    [...]", rgb=Color.FMKSUBINFO))
+                        bp_info += colorize(f"{obj['gen_input']}", rgb=Color.FMKSUBINFO)
 
                     else:
-                        sc_info = colorize(f" |_ Scenario Info:\n", rgb=Color.FMKINFO)
-                        sc_info += colorize(f"    - name: ", rgb=Color.FMKINFO)
-                        sc_info += colorize(f"{obj['name']}\n", rgb=Color.FMKSUBINFO)
-                        sc_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
-                        sc_info += colorize(f"{obj['sc_input']}", rgb=Color.FMKSUBINFO)
-                        print(sc_info)
-                        # if seq_sz > 1:
-                        #     print(colorize(f"    [...]", rgb=Color.FMKSUBINFO))
+                        bp_info += colorize(f"    - generator (scenario): ", rgb=Color.FMKINFO)
+                        bp_info += colorize(f"{obj['name']}\n", rgb=Color.FMKSUBINFO)
+                        bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
+                        bp_info += colorize(f"{obj['sc_input']}", rgb=Color.FMKSUBINFO)
+
+                    for pos, op in enumerate(op_seq, start=1):
+                        op_name, op_ui = op
+                        if is_batch_proc and pos == last_sop_pos:
+                            bp_info += colorize(f"\n    - operator #{pos} (last stateful): ", rgb=Color.FMKINFO)
+                            bp_info += colorize(f"{op_name}\n", rgb=Color.FMKSUBINFO)
+                            bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
+                            bp_info += colorize(f"{op_ui}", rgb=Color.FMKSUBINFO)
+                            if 'l_sop_starting_idx' in obj:
+                                bp_info += colorize(f"\n      |_ starting index: ", rgb=Color.FMKINFO)
+                                bp_info += colorize(f"{obj['l_sop_starting_idx']}\n", rgb=Color.FMKSUBINFO)
+                                bp_info += colorize(f"      |_ final index:    ", rgb=Color.FMKINFO)
+                                bp_info += colorize(f"{obj['l_sop_final_idx']}", rgb=Color.FMKSUBINFO)
+
+                        else:
+                            bp_info += colorize(f"\n    - operator #{pos}: ", rgb=Color.FMKINFO)
+                            bp_info += colorize(f"{op_name}\n", rgb=Color.FMKSUBINFO)
+                            bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
+                            bp_info += colorize(f"{op_ui}", rgb=Color.FMKSUBINFO)
+
+                    print(bp_info)
 
                     impact_list = obj['data_with_impact']
                     if impact_list:
