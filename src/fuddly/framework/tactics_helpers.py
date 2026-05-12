@@ -1347,6 +1347,7 @@ class DynGeneratorFromScenario(Generator, CommonMethodsForScenarioDM):
     def setup(self, dm, user_input):
         self.__class__.scenario.set_data_model(dm)
         self.scenario = copy.copy(self.__class__.scenario)
+        self.first_data_sent = True
 
         assert (self.data_fuzz and not (self.cond_fuzz or self.ignore_timing)) or not self.data_fuzz
         assert not self.stutter or (self.stutter and not (self.cond_fuzz or self.ignore_timing or self.data_fuzz))
@@ -1464,6 +1465,10 @@ class DynGeneratorFromScenario(Generator, CommonMethodsForScenarioDM):
         data.register_callback(self._callback_dispatcher_final, hook=HOOK.final)
 
         data.scenario_dependence = self.scenario.name
+
+        if self.first_data_sent:
+            self.first_data_sent = False
+            data.attrs.set(DataAttr.SC_StartingData)
 
         return data
 

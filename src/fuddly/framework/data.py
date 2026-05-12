@@ -256,17 +256,20 @@ class DataAttr(AttrGroup):
     Reset_DMakers = 1
 
     # Scenario-related attributes
-    SC_FinalData = 10
+    SC_StartingData = 10
+    SC_FinalData = 11
 
     description = {
         Reset_DMakers: 'reset_dmaker',
-        SC_FinalData: 'final_data'
+        SC_StartingData: 'starting_data',
+        SC_FinalData: 'final_data',
     }
 
     def __init__(self, attrs_to_set=None, attrs_to_clear=None):
         iv = {
             DataAttr.Reset_DMakers: False,
-            DataAttr.SC_FinalData: False
+            DataAttr.SC_StartingData: False,
+            DataAttr.SC_FinalData: False,
         }
         AttrGroup.__init__(self, iv)
         if attrs_to_set:

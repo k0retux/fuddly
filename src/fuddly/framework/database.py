@@ -183,6 +183,7 @@ class Database(object):
         self.enabled = False
 
         self.fbk_timeout_re = re.compile('.*feedback timeout = (.*)s$')
+        self.first_data_in_scenario_re = re.compile(r'.*starting_data = True', flags=re.S)
         self.last_data_in_scenario_re = re.compile(r'.*final_data = True', flags=re.S)
         self.scenario_input_re = re.compile(
             r'.*sc_input = (.*?)\n', flags=re.S)
@@ -1354,9 +1355,9 @@ class Database(object):
             current_scenario = None
             for rec in sc_records:
                 data_id, origin, attrs, sent_date, target, prj = rec
+                sc_start = self.first_data_in_scenario_re.match(attrs)
                 sc_end = self.last_data_in_scenario_re.match(attrs)
-                if (current_scenario is None
-                        or current_scenario['name'] != origin):
+                if (sc_start or current_scenario is None or current_scenario['name'] != origin):
                     # last condition is to capture scenario that did not end explicitly
                     # (meaning it was interrupted and never reached a Final step)
                     # TODO: if scenario was interrupted, reset, then reexecuted,
