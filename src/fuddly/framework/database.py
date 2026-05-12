@@ -184,10 +184,15 @@ class Database(object):
 
         self.fbk_timeout_re = re.compile('.*feedback timeout = (.*)s$')
         self.last_data_in_scenario_re = re.compile(r'.*final_data = True', flags=re.S)
+        self.scenario_input_re = re.compile(
+            r'.*sc_input = (.*?)\n', flags=re.S)
         self.batch_processing_info_re = re.compile(
-            r'.*generator = (.*?)\n.*gen_input = (.*?)\n.*dmakers_seq_sz = (\d*?)\n', flags=re.S)
-        self.stateful_last_op_input_re = re.compile(r'.*last_op_input = (.*?)\n', flags=re.S)
-        self.stateful_last_op_idx_re = re.compile(r'.*last_op_idx = (\d*?)\n', flags=re.S)
+            r'.*generator = (.*?)\ngen_input = (.*?)\ndmakers_seq_sz = (\d*?)\n', flags=re.S)
+        self.dmaker_seq_sz_re = re.compile(
+            r'.*dmakers_seq_sz = (\d*?)\n', flags=re.S)
+        self.stateful_last_sop_input_re = re.compile(
+            r'.*last_sop_pos = (\d*?)\nlast_sop_input = (.*?)\n', flags=re.S)
+        self.stateful_last_sop_idx_re = re.compile(r'.*last_sop_idx = (\d*?)\n', flags=re.S)
 
     @staticmethod
     def get_default_db_path():
@@ -1353,8 +1358,18 @@ class Database(object):
                     # last condition is to capture scenario that did not end explicitly
                     # (meaning it was interrupted and never reached a Final step)
 
+                    # valid only for the first data ID in a data makers sequence as the size
+                    # decrease by one after the generator provide data to the stateful operator
+                    parsed = self.dmaker_seq_sz_re.match(attrs)
+                    dmakers_seq_sz = int(parsed.group(1)) if parsed else None
+
+                    parsed = self.scenario_input_re.match(attrs)
+                    sc_input = parsed.group(1) if parsed else None
+
                     current_scenario = {
+                        'dmakers_seq_sz': dmakers_seq_sz,
                         'name': origin,
+                        'sc_input': sc_input,
                         'first_data_id': data_id,
                         'last_data_id': None,
                         'prj': prj,
@@ -1379,18 +1394,18 @@ class Database(object):
             record_ongoing = False
             for rec in op_records:
                 data_id, origin, attrs, sent_date, target, prj = rec
-                parsed = self.stateful_last_op_idx_re.match(attrs)
+                parsed = self.stateful_last_sop_idx_re.match(attrs)
                 l_op_idx = parsed.group(1) if parsed else None
                 try:
                     l_op_idx = int(l_op_idx)
                 except (TypeError, ValueError):
                     l_op_idx = None
 
-                if ((current_op is not None and (current_op['last_operator'] != origin or current_op['target'] != target)) or
+                if ((current_op is not None and (current_op['last_stateful_op'] != origin or current_op['target'] != target)) or
                         (previous_l_op_idx is not None and l_op_idx is not None and previous_l_op_idx != l_op_idx-1)):
                     if previous_data_id - current_op['first_data_id'] + 2 > op_record_min_size:
                         current_op['last_data_id'] = previous_data_id
-                        current_op['last_operator_idx'] = previous_l_op_idx
+                        current_op['l_sop_final_idx'] = previous_l_op_idx
                         current_op['end_date'] = previous_sent_date
                         op_list.append(current_op)
                     else:
@@ -1409,25 +1424,32 @@ class Database(object):
                     if parsed:
                         generator = parsed.group(1)
                         gen_input = parsed.group(2)
-                        # valid only for the first data ID in a data makers sequence as the size
-                        # decrease by one after the generator provide data to the stateful operator
-                        dmakers_seq_sz = int(parsed.group(3))
                     else:
                         generator = gen_input = dmakers_seq_sz = None
 
-                    parsed = self.stateful_last_op_input_re.match(attrs)
-                    last_op_input = parsed.group(1) if parsed else None
+                    # valid only for the first data ID in a data makers sequence as the size
+                    # decrease by one after the generator provide data to the stateful operator
+                    parsed = self.dmaker_seq_sz_re.match(attrs)
+                    dmakers_seq_sz = int(parsed.group(1)) if parsed else None
+
+                    parsed = self.stateful_last_sop_input_re.match(attrs)
+                    if parsed:
+                        last_sop_pos = int(parsed.group(1))
+                        last_sop_input = parsed.group(2)
+                    else:
+                        last_sop_input = last_sop_pos = None
 
                     current_op = {
-                        'last_operator': origin,
+                        'dmakers_seq_sz': dmakers_seq_sz,
+                        'last_stateful_op': origin,
                         'first_data_id': data_id,
                         'last_data_id': None,
                         'generator': generator,
                         'gen_input': gen_input,
-                        'dmakers_seq_sz': dmakers_seq_sz,
-                        'last_op_input': last_op_input,
-                        'l_op_starting_idx': l_op_idx,
-                        'l_op_final_idx': None,
+                        'last_sop_pos': last_sop_pos,
+                        'last_sop_input': last_sop_input,
+                        'l_sop_starting_idx': l_op_idx,
+                        'l_sop_final_idx': None,
                         'prj': prj,
                         'target': target,
                         'start_date': sent_date,
@@ -1438,7 +1460,7 @@ class Database(object):
             if record_ongoing and previous_data_id - current_op['first_data_id'] + 2 > op_record_min_size:
                 record_ongoing = False
                 current_op['last_data_id'] = previous_data_id
-                current_op['l_op_final_idx'] = previous_l_op_idx
+                current_op['l_sop_final_idx'] = previous_l_op_idx
                 current_op['end_date'] = previous_sent_date
                 op_list.append(current_op)
 
@@ -1469,15 +1491,28 @@ class Database(object):
 
             if display:
                 for idx, obj in enumerate(obj_list, start=1):
-                    hdr1 = colorize('=' * 40 + f'[ {prompt} #{idx} | ', rgb=Color.FMKINFOGROUP)
+                    hdr1 = colorize('=' * 45 + f'[ {prompt} #{idx} | ', rgb=Color.FMKINFOGROUP)
+                    seq_sz = obj['dmakers_seq_sz']
                     if is_batch_proc:
-                        seq_sz = obj['dmakers_seq_sz']
                         if seq_sz > 2:
-                            hdr2 = colorize(f"{obj['generator']} / ... / {obj['last_operator']}", rgb=Color.FMKINFO)
+                            last_sop_pos = obj['last_sop_pos']
+                            title = f"{obj['generator']} / "
+                            for i in range(1,seq_sz):
+                                if i == last_sop_pos:
+                                    title += f"{obj['last_stateful_op']} / "
+                                else:
+                                    title += f" ? / "
+                            title = title[:-3]
+
+                            hdr2 = colorize(title, rgb=Color.FMKINFO)
                         else:
-                            hdr2 = colorize(f"{obj['generator']} / {obj['last_operator']}", rgb=Color.FMKINFO)
+                            hdr2 = colorize(f"{obj['generator']} / {obj['last_stateful_op']}", rgb=Color.FMKINFO)
                     else:
-                        hdr2 = colorize(f"{obj['name']}", rgb=Color.FMKINFO)
+                        title = f"{obj['name']}"
+                        if seq_sz > 1:
+                            title += f" / ?"
+                        hdr2 = colorize(title, rgb=Color.FMKINFO)
+
                     hdr3 = colorize(" ]===", rgb=Color.FMKINFOGROUP)
                     print(hdr1 + hdr2 + hdr3)
                     prj = colorize(f" |_ Project: ", rgb=Color.FMKINFO)
@@ -1505,19 +1540,30 @@ class Database(object):
                         bp_info += colorize(f"{obj['generator']}\n", rgb=Color.FMKSUBINFO)
                         bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
                         bp_info += colorize(f"{obj['gen_input']}\n", rgb=Color.FMKSUBINFO)
-                        if seq_sz > 2:
-                            bp_info += colorize(f"    [...]\n", rgb=Color.FMKSUBINFO)
-                        bp_info += colorize(f"    - last operator: ", rgb=Color.FMKINFO)
-                        bp_info += colorize(f"{obj['last_operator']}\n", rgb=Color.FMKSUBINFO)
+                        bp_info += colorize(f"    - last stateful operator: ", rgb=Color.FMKINFO)
+                        bp_info += colorize(f"{obj['last_stateful_op']}\n", rgb=Color.FMKSUBINFO)
                         bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
-                        bp_info += colorize(f"{obj['last_op_input']}", rgb=Color.FMKSUBINFO)
+                        bp_info += colorize(f"{obj['last_sop_input']}", rgb=Color.FMKSUBINFO)
                         print(bp_info)
-                        if 'l_op_starting_idx' in obj:
+                        if 'l_sop_starting_idx' in obj:
                             op_idx = colorize(f"      |_ starting index: ", rgb=Color.FMKINFO)
-                            op_idx += colorize(f"{obj['l_op_starting_idx']}\n", rgb=Color.FMKSUBINFO)
+                            op_idx += colorize(f"{obj['l_sop_starting_idx']}\n", rgb=Color.FMKSUBINFO)
                             op_idx += colorize(f"      |_ final index:    ", rgb=Color.FMKINFO)
-                            op_idx += colorize(f"{obj['l_op_final_idx']}", rgb=Color.FMKSUBINFO)
+                            op_idx += colorize(f"{obj['l_sop_final_idx']}", rgb=Color.FMKSUBINFO)
                             print(op_idx)
+
+                        if seq_sz > 2:
+                            print(colorize(f"    [...]", rgb=Color.FMKSUBINFO))
+
+                    else:
+                        sc_info = colorize(f" |_ Scenario Info:\n", rgb=Color.FMKINFO)
+                        sc_info += colorize(f"    - name: ", rgb=Color.FMKINFO)
+                        sc_info += colorize(f"{obj['name']}\n", rgb=Color.FMKSUBINFO)
+                        sc_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
+                        sc_info += colorize(f"{obj['sc_input']}", rgb=Color.FMKSUBINFO)
+                        print(sc_info)
+                        # if seq_sz > 1:
+                        #     print(colorize(f"    [...]", rgb=Color.FMKSUBINFO))
 
                     impact_list = obj['data_with_impact']
                     if impact_list:
