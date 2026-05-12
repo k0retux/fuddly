@@ -285,7 +285,7 @@ class DataAttr(AttrGroup):
             for k, v in self._ext_attrs.items():
                 desc += f'{k} = {v}\n'
 
-        return desc[:-1]
+        return desc
 
 
 class Data(object):

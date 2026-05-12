@@ -183,32 +183,11 @@ class Database(object):
         self.enabled = False
 
         self.fbk_timeout_re = re.compile('.*feedback timeout = (.*)s$')
-        self.last_data_in_scenario_re = re.compile('.*final_data = True', flags=re.S)
-        self.stateful_op_idx_re = re.compile('.*op_index = (\\d*)', flags=re.S)
-
-        # self.current_project = None
-        #
-        # self.last_feedback = {}
-        # self.feedback_trail = {}  # store feedback entries for self.feedback_trail_time_window
-        # self.feedback_trail_init_ts = None
-        # self.feedback_trail_time_window = self.FEEDBACK_TRAIL_TIME_WINDOW
-        #
-        # self._data_id = None
-        # self._current_sent_date = None
-        #
-        # self._sql_handler_thread = None
-        # self._sql_handler_stop_event = threading.Event()
-        #
-        # self._thread_initialized = threading.Event()
-        # self._sql_stmt_submitted_cond = threading.Condition()
-        # self._sql_stmt_list = []
-        # self._sql_stmt_handled = threading.Event()
-        #
-        # self._sql_stmt_outcome_lock = threading.Lock()
-        # self._sql_stmt_outcome = None
-        #
-        # self._sync_lock = threading.Lock()
-
+        self.last_data_in_scenario_re = re.compile(r'.*final_data = True', flags=re.S)
+        self.batch_processing_info_re = re.compile(
+            r'.*generator = (.*?)\n.*gen_input = (.*?)\n.*dmakers_seq_sz = (\d*?)\n', flags=re.S)
+        self.stateful_last_op_input_re = re.compile(r'.*last_op_input = (.*?)\n', flags=re.S)
+        self.stateful_last_op_idx_re = re.compile(r'.*last_op_idx = (\d*?)\n', flags=re.S)
 
     @staticmethod
     def get_default_db_path():
@@ -1320,7 +1299,7 @@ class Database(object):
         return sc_records
 
 
-    def get_stateful_operator_records(self, prj_name=None):
+    def get_batch_processing_records(self, prj_name=None):
 
         if self._db_version_inuse < 2:
             return None
@@ -1330,7 +1309,7 @@ class Database(object):
                 "SELECT DATA.ID, DATA.ORIGIN, DATA.ATTRS, DATA.SENT_DATE, DATA.TARGET, DATA.PRJ_NAME "
                 "FROM DATA "
                 "INNER JOIN DMAKERS ON DATA.ORIGIN = DMAKERS.TYPE "
-                "WHERE DATA.PRJ_NAME == ? AND DATA.ORIGIN != 'None' AND DATA.ORIGIN NOT LIKE 'SC_%' "
+                "WHERE DATA.PRJ_NAME == ? AND DATA.ORIGIN != 'None'"
                 "ORDER BY DATA.PRJ_NAME ASC, DATA.TARGET ASC, DATA.ID ASC;",
                 params=(prj_name,)
             )
@@ -1339,7 +1318,7 @@ class Database(object):
                 "SELECT DATA.ID, DATA.ORIGIN, DATA.ATTRS, DATA.SENT_DATE, DATA.TARGET, DATA.PRJ_NAME "
                 "FROM DATA "
                 "INNER JOIN DMAKERS ON DATA.ORIGIN = DMAKERS.TYPE "
-                "WHERE DATA.ORIGIN != 'None' AND DATA.ORIGIN NOT LIKE 'SC_%' "
+                "WHERE DATA.ORIGIN != 'None'"
                 "ORDER BY DATA.PRJ_NAME ASC, DATA.TARGET ASC, DATA.ID ASC;"
             )
 
@@ -1390,28 +1369,28 @@ class Database(object):
                     scenario_list.append(current_scenario)
                     current_scenario = None
 
-        op_records = self.get_stateful_operator_records(prj_name)
+        op_records = self.get_batch_processing_records(prj_name)
         if op_records:
             op_list = []
             current_op = None
-            previous_op_idx = None
+            previous_l_op_idx = None
             previous_data_id = None
             previous_sent_date = None
             record_ongoing = False
             for rec in op_records:
                 data_id, origin, attrs, sent_date, target, prj = rec
-                parsed = self.stateful_op_idx_re.match(attrs)
-                op_idx = parsed.group(1) if parsed else None
+                parsed = self.stateful_last_op_idx_re.match(attrs)
+                l_op_idx = parsed.group(1) if parsed else None
                 try:
-                    op_idx = int(op_idx)
+                    l_op_idx = int(l_op_idx)
                 except (TypeError, ValueError):
-                    op_idx = None
+                    l_op_idx = None
 
-                if ((current_op is not None and (current_op['name'] != origin or current_op['target'] != target)) or
-                        (previous_op_idx is not None and op_idx is not None and previous_op_idx != op_idx-1)):
+                if ((current_op is not None and (current_op['last_operator'] != origin or current_op['target'] != target)) or
+                        (previous_l_op_idx is not None and l_op_idx is not None and previous_l_op_idx != l_op_idx-1)):
                     if previous_data_id - current_op['first_data_id'] + 2 > op_record_min_size:
                         current_op['last_data_id'] = previous_data_id
-                        current_op['last_operator_idx'] = previous_op_idx
+                        current_op['last_operator_idx'] = previous_l_op_idx
                         current_op['end_date'] = previous_sent_date
                         op_list.append(current_op)
                     else:
@@ -1420,18 +1399,35 @@ class Database(object):
                     record_ongoing = False
                     current_op = None
 
-                previous_op_idx = op_idx
+                previous_l_op_idx = l_op_idx
                 previous_data_id = data_id
                 previous_sent_date = sent_date
 
-                if current_op is None and op_idx is not None:
+                if current_op is None and l_op_idx is not None:
                     record_ongoing = True
+                    parsed = self.batch_processing_info_re.match(attrs)
+                    if parsed:
+                        generator = parsed.group(1)
+                        gen_input = parsed.group(2)
+                        # valid only for the first data ID in a data makers sequence as the size
+                        # decrease by one after the generator provide data to the stateful operator
+                        dmakers_seq_sz = int(parsed.group(3))
+                    else:
+                        generator = gen_input = dmakers_seq_sz = None
+
+                    parsed = self.stateful_last_op_input_re.match(attrs)
+                    last_op_input = parsed.group(1) if parsed else None
+
                     current_op = {
-                        'name': origin,
+                        'last_operator': origin,
                         'first_data_id': data_id,
                         'last_data_id': None,
-                        'first_operator_idx': op_idx,
-                        'last_operator_idx': None,
+                        'generator': generator,
+                        'gen_input': gen_input,
+                        'dmakers_seq_sz': dmakers_seq_sz,
+                        'last_op_input': last_op_input,
+                        'l_op_starting_idx': l_op_idx,
+                        'l_op_final_idx': None,
                         'prj': prj,
                         'target': target,
                         'start_date': sent_date,
@@ -1442,12 +1438,12 @@ class Database(object):
             if record_ongoing and previous_data_id - current_op['first_data_id'] + 2 > op_record_min_size:
                 record_ongoing = False
                 current_op['last_data_id'] = previous_data_id
-                current_op['last_operator_idx'] = previous_op_idx
+                current_op['l_op_final_idx'] = previous_l_op_idx
                 current_op['end_date'] = previous_sent_date
                 op_list.append(current_op)
 
 
-        def process_obj_list(obj_list, display=True, prompt = 'OBJ RECORD'):
+        def process_obj_list(obj_list, display=True, prompt = 'OBJ RECORD', is_batch_proc=True):
             for obj in obj_list:
                 # TODO: take into account the ANALYSIS table
                 first_id = obj['first_data_id']
@@ -1474,7 +1470,14 @@ class Database(object):
             if display:
                 for idx, obj in enumerate(obj_list, start=1):
                     hdr1 = colorize('=' * 40 + f'[ {prompt} #{idx} | ', rgb=Color.FMKINFOGROUP)
-                    hdr2 = colorize(f"{obj['name']}", rgb=Color.FMKINFO)
+                    if is_batch_proc:
+                        seq_sz = obj['dmakers_seq_sz']
+                        if seq_sz > 2:
+                            hdr2 = colorize(f"{obj['generator']} / ... / {obj['last_operator']}", rgb=Color.FMKINFO)
+                        else:
+                            hdr2 = colorize(f"{obj['generator']} / {obj['last_operator']}", rgb=Color.FMKINFO)
+                    else:
+                        hdr2 = colorize(f"{obj['name']}", rgb=Color.FMKINFO)
                     hdr3 = colorize(" ]===", rgb=Color.FMKINFOGROUP)
                     print(hdr1 + hdr2 + hdr3)
                     prj = colorize(f" |_ Project: ", rgb=Color.FMKINFO)
@@ -1496,13 +1499,25 @@ class Database(object):
                     ldata1 = colorize(f" |_ Last DataID:  ", rgb=Color.FMKINFO)
                     ldata2 = colorize(f"{obj['last_data_id']}", rgb=Color.FMKSUBINFO)
                     print(ldata1 + ldata2)
-                    if 'first_operator_idx' in obj:
-                        f_op_idx = colorize(f" |_ First Operator Index: ", rgb=Color.FMKINFO)
-                        f_op_idx += colorize(f"{obj['first_operator_idx']}", rgb=Color.FMKSUBINFO)
-                        print(f_op_idx)
-                        l_op_idx = colorize(f" |_ Last Operator Index:  ", rgb=Color.FMKINFO)
-                        l_op_idx += colorize(f"{obj['last_operator_idx']}", rgb=Color.FMKSUBINFO)
-                        print(l_op_idx)
+                    if is_batch_proc:
+                        bp_info = colorize(f" |_ Batch Processing Info:\n", rgb=Color.FMKINFO)
+                        bp_info += colorize(f"    - generator: ", rgb=Color.FMKINFO)
+                        bp_info += colorize(f"{obj['generator']}\n", rgb=Color.FMKSUBINFO)
+                        bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
+                        bp_info += colorize(f"{obj['gen_input']}\n", rgb=Color.FMKSUBINFO)
+                        if seq_sz > 2:
+                            bp_info += colorize(f"    [...]\n", rgb=Color.FMKSUBINFO)
+                        bp_info += colorize(f"    - last operator: ", rgb=Color.FMKINFO)
+                        bp_info += colorize(f"{obj['last_operator']}\n", rgb=Color.FMKSUBINFO)
+                        bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
+                        bp_info += colorize(f"{obj['last_op_input']}", rgb=Color.FMKSUBINFO)
+                        print(bp_info)
+                        if 'l_op_starting_idx' in obj:
+                            op_idx = colorize(f"      |_ starting index: ", rgb=Color.FMKINFO)
+                            op_idx += colorize(f"{obj['l_op_starting_idx']}\n", rgb=Color.FMKSUBINFO)
+                            op_idx += colorize(f"      |_ final index:    ", rgb=Color.FMKINFO)
+                            op_idx += colorize(f"{obj['l_op_final_idx']}", rgb=Color.FMKSUBINFO)
+                            print(op_idx)
 
                     impact_list = obj['data_with_impact']
                     if impact_list:
@@ -1526,10 +1541,10 @@ class Database(object):
 
 
         if sc_records:
-            process_obj_list(scenario_list, display=display, prompt='SCENARIO RECORD')
+            process_obj_list(scenario_list, display=display, prompt='SCENARIO RECORD', is_batch_proc=False)
 
         if op_records:
-            process_obj_list(op_list, display=display, prompt='STATEFUL OPERATOR RECORD')
+            process_obj_list(op_list, display=display, prompt='BATCH PROCESSING RECORD', is_batch_proc=True)
 
 
         return scenario_list, op_list

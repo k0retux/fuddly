@@ -4248,20 +4248,27 @@ class FmkPlumbing(object):
         if unrecoverable_error:
             return None, True
 
-        data.set_history(l)
-        data.set_initial_dmaker(initial_generator_info)
-        if data.scenario_dependence is None:
-            if isinstance(dmaker_obj, (Operator, StatefulOperator)):
-                data.origin = dmaker_obj.op_type
-            if isinstance(dmaker_obj, StatefulOperator) and hasattr(dmaker_obj, 'idx'):
-                data.attrs.set_value('op_index', dmaker_obj.idx)
-
         if not self._is_data_valid(data):
             self.set_error("Data is empty (probable reason: used data maker is disabled and need "
                            "to be reset)",
                            code=Error.DataInvalid)
             return None, True
         else:
+            data.set_history(l)
+            data.set_initial_dmaker(initial_generator_info)
+            data.attrs.set_value('generator', initial_generator_info[0])
+            data.attrs.set_value('gen_input', str(initial_generator_info[2]))
+            # len(l) provide the correct length of a data makers sequence the
+            # first time the sequence is executed. Afterwards, it maybe wrong as
+            # the generator maybe disabled if follow any stateful operators
+            data.attrs.set_value('dmakers_seq_sz', len(l))
+            if data.scenario_dependence is None:
+                if isinstance(dmaker_obj, (Operator, StatefulOperator)):
+                    data.origin = dmaker_obj.op_type
+                    data.attrs.set_value('last_op_input', str(user_input))
+                if isinstance(dmaker_obj, StatefulOperator) and hasattr(dmaker_obj, 'idx'):
+                    data.attrs.set_value('last_op_idx', dmaker_obj.idx)
+
             return data, False
 
     @EnforceOrder(accepted_states=["S1", "S2"])
