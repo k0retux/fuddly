@@ -1293,14 +1293,14 @@ class Database(object):
             sc_records = self.execute_sql_statement(
                 "SELECT ID, ORIGIN, ATTRS, SENT_DATE, TARGET, PRJ_NAME FROM DATA "
                 "WHERE PRJ_NAME == ? AND ORIGIN LIKE 'SC_%' "
-                "ORDER BY PRJ_NAME ASC, TARGET ASC;",
+                "ORDER BY ID ASC, PRJ_NAME ASC, TARGET ASC;",
                 params=(prj_name,)
             )
         else:
             sc_records = self.execute_sql_statement(
                 "SELECT ID, ORIGIN, ATTRS, SENT_DATE, TARGET, PRJ_NAME FROM DATA "
                 "WHERE ORIGIN LIKE 'SC_%' "
-                "ORDER BY PRJ_NAME ASC, TARGET ASC;"
+                "ORDER BY ID ASC, PRJ_NAME ASC, TARGET ASC;"
             )
 
         return sc_records
@@ -1317,7 +1317,7 @@ class Database(object):
                 "FROM DATA "
                 "INNER JOIN DMAKERS ON DATA.ORIGIN = DMAKERS.TYPE "
                 "WHERE DATA.PRJ_NAME == ? AND DATA.ORIGIN != 'None'"
-                "ORDER BY DATA.PRJ_NAME ASC, DATA.TARGET ASC, DATA.ID ASC;",
+                "ORDER BY DATA.ID ASC, DATA.PRJ_NAME ASC, DATA.TARGET ASC;",
                 params=(prj_name,)
             )
         else:
@@ -1326,7 +1326,7 @@ class Database(object):
                 "FROM DATA "
                 "INNER JOIN DMAKERS ON DATA.ORIGIN = DMAKERS.TYPE "
                 "WHERE DATA.ORIGIN != 'None'"
-                "ORDER BY DATA.PRJ_NAME ASC, DATA.TARGET ASC, DATA.ID ASC;"
+                "ORDER BY DATA.ID ASC, DATA.PRJ_NAME ASC, DATA.TARGET ASC;"
             )
 
         return op_records
@@ -1359,6 +1359,8 @@ class Database(object):
                         or current_scenario['name'] != origin):
                     # last condition is to capture scenario that did not end explicitly
                     # (meaning it was interrupted and never reached a Final step)
+                    # TODO: if scenario was interrupted, reset, then reexecuted,
+                    #   we will keep first irrelevant entries
 
                     # valid only for the first data ID in a data makers sequence as the size
                     # decrease by one after the generator provide data to the stateful operator
