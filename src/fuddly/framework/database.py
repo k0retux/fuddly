@@ -1333,6 +1333,22 @@ class Database(object):
         return op_records
 
 
+    def get_user_impact_analysis(self):
+
+        user_analysis = {}
+        analysis_records = self.execute_sql_statement(
+            "SELECT DATA_ID, CONTENT, DATE, IMPACT FROM ANALYSIS "
+            "ORDER BY DATE DESC;"
+        )
+        if analysis_records:
+            for rec in analysis_records:
+                data_id, content, tstamp, impact = rec
+                if data_id not in user_analysis:
+                    user_analysis[data_id] = []
+                user_analysis[data_id].append((impact, content, tstamp))
+
+        return user_analysis
+
 
     def get_db_analysis(self, prj_name=None, fbk_src=None, fbk_status_formula='? < 0',
                         display=True, verbose=False,
@@ -1389,7 +1405,7 @@ class Database(object):
                         'prj': prj,
                         'start_date': sent_date,
                         'end_date': None,
-                        'data_with_impact': []
+                        'data_with_impact': None,
                     }
 
                 current_scenario['last_data_id'] = data_id
@@ -1476,7 +1492,7 @@ class Database(object):
                         'target': target,
                         'start_date': sent_date,
                         'end_date': None,
-                        'data_with_impact': [],
+                        'data_with_impact': None,
                     }
 
             if record_ongoing and previous_data_id - current_op['first_data_id'] + 2 > op_record_min_size:
@@ -1487,29 +1503,39 @@ class Database(object):
                 op_list.append(current_op)
 
 
-        def process_obj_list(obj_list, display=True, prompt = 'OBJ RECORD', is_batch_proc=True):
+        def process_obj_list(obj_list, user_analysis, display=True, prompt ='OBJ RECORD', is_batch_proc=True):
+
             for obj in obj_list:
-                # TODO: take into account the ANALYSIS table
                 first_id = obj['first_data_id']
                 last_id = obj['last_data_id']
 
                 if fbk_src:
                     fbk_records = self.execute_sql_statement(
-                        f"SELECT DATA_ID, CONTENT, STATUS, SOURCE FROM FEEDBACK "
+                        f"SELECT DATA_ID, CONTENT, STATUS, SOURCE, DATE FROM FEEDBACK "
                         f"WHERE DATA_ID >= ? AND DATA_ID <= ? AND {fbk_status_formula} AND SOURCE REGEXP ?;",
                         params=(first_id, last_id, fbk_src)
                     )
                 else:
                     fbk_records = self.execute_sql_statement(
-                        f"SELECT DATA_ID, CONTENT, STATUS, SOURCE FROM FEEDBACK "
+                        f"SELECT DATA_ID, CONTENT, STATUS, SOURCE, DATE FROM FEEDBACK "
                         f"WHERE DATA_ID >= ? AND DATA_ID <= ? AND {fbk_status_formula};",
                         params=(first_id, last_id)
                     )
 
                 if fbk_records:
+                    impact_per_data_id = {}
                     for rec in fbk_records:
-                        data_id, content, status, src = rec
-                        obj['data_with_impact'].append((data_id, content, status, src))
+                        data_id, content, status, src, date = rec
+
+                        if data_id not in impact_per_data_id:
+                            impact_per_data_id[data_id] = {'fbk': {}, 'user_analysis': None}
+                            if data_id in user_analysis:
+                                impact_per_data_id[data_id]['user_analysis'] = user_analysis[data_id]
+                        if src not in impact_per_data_id[data_id]['fbk']:
+                            impact_per_data_id[data_id]['fbk'][src] = []
+                        impact_per_data_id[data_id]['fbk'][src].append((content, status, date))
+
+                    obj['data_with_impact'] = impact_per_data_id
 
             if display:
                 for idx, obj in enumerate(obj_list, start=1):
@@ -1550,10 +1576,10 @@ class Database(object):
                         tg += colorize(f"{obj['target']}", rgb=Color.FMKSUBINFO)
                         print(tg)
                     start_date = colorize(f" |_ Start Date: ", rgb=Color.FMKINFO)
-                    start_date += colorize(f"{obj['start_date']}", rgb=Color.FMKSUBINFO)
+                    start_date += colorize(f"{obj['start_date']}", rgb=Color.DATE)
                     print(start_date)
                     end_date = colorize(f" |_ End Date:   ", rgb=Color.FMKINFO)
-                    end_date += colorize(f"{obj['end_date']}", rgb=Color.FMKSUBINFO)
+                    end_date += colorize(f"{obj['end_date']}", rgb=Color.DATE)
                     print(end_date)
                     fdata1 = colorize(f" |_ First DataID: ", rgb=Color.FMKINFO)
                     fdata2 = colorize(f"{obj['first_data_id']}", rgb=Color.FMKSUBINFO)
@@ -1595,32 +1621,48 @@ class Database(object):
 
                     print(bp_info)
 
-                    impact_list = obj['data_with_impact']
-                    if impact_list:
-                        impact1 = colorize(f" |_ ", rgb=Color.FMKINFO)
-                        impact1 += colorize(f"Impacting Data: ", rgb=Color.ERROR)
-                        print(impact1)
-                        for impact in impact_list:
-                            data_id, content, status, src = impact
-                            imp_data1 = colorize(f"    - ID #", rgb=Color.FMKINFO)
-                            imp_data1 += colorize(f"{data_id}", rgb=Color.FMKSUBINFO)
-                            tmp1 = colorize(f" | Status: ", rgb=Color.FMKINFO)
-                            tmp2 = colorize(f"{status}", rgb=Color.FMKSUBINFO)
-                            tmp3 = colorize(f" | From: ", rgb=Color.FMKINFO)
-                            tmp4 = colorize(f"{src}", rgb=Color.FMKSUBINFO)
-                            imp_data2 = tmp1 + tmp2 + tmp3 + tmp4
-                            print(imp_data1 + imp_data2)
-                            if verbose:
-                                print(colorize(f'      {str(content)}', rgb=Color.DATAINFO_ALT))
+                    impact_per_data_id = obj['data_with_impact']
+                    if impact_per_data_id:
+                        imp_data = colorize(f" |_ ", rgb=Color.FMKINFO)
+                        imp_data += colorize(f"Impacting Data: ", rgb=Color.ERROR)
+                        for data_id, ext_fbk in impact_per_data_id.items():
+                            imp_data += colorize(f"\n    - ID #", rgb=Color.FMKINFO)
+                            imp_data += colorize(f"{data_id}", rgb=Color.ERROR)
+                            if ext_fbk['user_analysis']:
+                                for impact, content, tstamp in ext_fbk['user_analysis']:
+                                    imp_data += colorize(f"\n      |_ User analysis carried out [", rgb=Color.FMKINFO)
+                                    imp_data += colorize(f"{tstamp}", rgb=Color.DATE_ALT)
+                                    imp_data += colorize(f"]: ", rgb=Color.FMKINFO)
+                                    status = 'Impact Confirmed' if impact else 'False Positive'
+                                    color = Color.ANALYSIS_CONFIRM if impact else Color.ANALYSIS_FALSEPOSITIVE
+                                    imp_data += colorize(f"{status}", rgb=color)
+                                    if verbose:
+                                        imp_data += colorize(f'\n         {str(content)}', rgb=Color.DATAINFO_ALT)
+                            for src, fbk in ext_fbk['fbk'].items():
+                                imp_data += colorize(f"\n      |_ Feedback from: ", rgb=Color.FMKINFO)
+                                imp_data += colorize(f"{src}", rgb=Color.FMKSUBINFO)
+
+                                for content, status, date in fbk:
+                                    imp_data += colorize(f"\n         - Status[", rgb=Color.FMKINFOSUBGROUP)
+                                    imp_data += colorize(f"{date}", rgb=Color.DATE_ALT)
+                                    imp_data += colorize(f"]: ", rgb=Color.FMKINFOSUBGROUP)
+                                    imp_data += colorize(f"{status}", rgb=Color.FMKSUBINFO)
+                                    if verbose:
+                                        imp_data += colorize(f'\n            {str(content)}', rgb=Color.DATAINFO_ALT)
+
+                        print(imp_data)
+
                     else:
                         print(colorize(f" |_ No Detected Impact", rgb=Color.FMKINFO))
 
 
+        user_analysis = self.get_user_impact_analysis()
+
         if sc_records:
-            process_obj_list(scenario_list, display=display, prompt='SCENARIO RECORD', is_batch_proc=False)
+            process_obj_list(scenario_list, user_analysis, display=display, prompt='SCENARIO RECORD', is_batch_proc=False)
 
         if op_records:
-            process_obj_list(op_list, display=display, prompt='BATCH PROCESSING RECORD', is_batch_proc=True)
+            process_obj_list(op_list, user_analysis, display=display, prompt='BATCH PROCESSING RECORD', is_batch_proc=True)
 
 
         return scenario_list, op_list

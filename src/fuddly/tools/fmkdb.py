@@ -138,8 +138,8 @@ group.add_argument('-a', '--add-analysis', nargs=2, metavar=('IMPACT', 'COMMENT'
                         provide information''')
 group.add_argument('--disprove-impact', nargs=2, metavar=('FIRST_ID', 'LAST_ID'), type=int,
                    help='''Disprove the impact of a group of data present in the outcomes of 
-                   '--data-with-impact-raw'. The group is determined by providing the smaller data ID 
-                   (FIRST_ID) and the bigger data ID (LAST_ID).''')
+                   '--data-with-impact-raw'. The group is determined by providing the first data ID 
+                   (FIRST_ID) and the last data ID (LAST_ID).''')
 
 def handle_confirmation(fmkdb):
     try:
