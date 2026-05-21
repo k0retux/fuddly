@@ -983,16 +983,18 @@ class Logger(object):
             "### Comments [{date:s}]:".format(date=current_date), rgb=Color.COMMENTS
         )
         self.log_fn(comment)
-        for data_id in self._last_data_IDs.values():
-            self.fmkDB.insert_comment(data_id, comment, now)
+        data_id_list = self._last_data_IDs.values()
+        data_id = max(data_id_list) if data_id_list else None
+        self.fmkDB.insert_comment(data_id, comment, now)
         self.print_console("\n")
 
     def log_error(self, err_msg):
         now = datetime.datetime.now()
         msg = "\n/!\\ ERROR: %s /!\\\n" % err_msg
         self.log_fn(msg, rgb=Color.ERROR)
-        for data_id in self._last_data_IDs.values():
-            self.fmkDB.insert_fmk_info(data_id, msg, now, error=True)
+        data_id_list = self._last_data_IDs.values()
+        data_id = max(data_id_list) if data_id_list else None
+        self.fmkDB.insert_fmk_info(data_id, msg, now, error=True)
 
     def print_console(
         self,

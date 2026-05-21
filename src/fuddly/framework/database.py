@@ -1285,6 +1285,17 @@ class Database(object):
         return prj_records
 
 
+    def get_comments(self, first_data_id, last_data_id):
+
+        comments = self.execute_sql_statement(
+            "SELECT DATA_ID, CONTENT, DATE FROM COMMENTS "
+            "WHERE ? <= DATA_ID and DATA_ID <= ? "
+            "ORDER BY DATA_ID ASC;",
+            params=(first_data_id, last_data_id)
+        )
+
+        return comments
+
     def get_scenario_records(self, prj_name=None):
 
         if self._db_version_inuse < 2:
@@ -1292,14 +1303,14 @@ class Database(object):
 
         if prj_name:
             sc_records = self.execute_sql_statement(
-                "SELECT ID, ORIGIN, ATTRS, SENT_DATE, TARGET, PRJ_NAME FROM DATA "
+                "SELECT ID, ORIGIN, ATTRS, SENT_DATE, ACK_DATE, TARGET, PRJ_NAME FROM DATA "
                 "WHERE PRJ_NAME == ? AND ORIGIN LIKE 'SC_%' "
                 "ORDER BY ID ASC, PRJ_NAME ASC, TARGET ASC;",
                 params=(prj_name,)
             )
         else:
             sc_records = self.execute_sql_statement(
-                "SELECT ID, ORIGIN, ATTRS, SENT_DATE, TARGET, PRJ_NAME FROM DATA "
+                "SELECT ID, ORIGIN, ATTRS, SENT_DATE, ACK_DATE, TARGET, PRJ_NAME FROM DATA "
                 "WHERE ORIGIN LIKE 'SC_%' "
                 "ORDER BY ID ASC, PRJ_NAME ASC, TARGET ASC;"
             )
@@ -1314,7 +1325,7 @@ class Database(object):
 
         if prj_name:
             op_records = self.execute_sql_statement(
-                "SELECT DATA.ID, DATA.ORIGIN, DATA.ATTRS, DATA.SENT_DATE, DATA.TARGET, DATA.PRJ_NAME "
+                "SELECT DATA.ID, DATA.ORIGIN, DATA.ATTRS, DATA.SENT_DATE, DATA.ACK_DATE, DATA.TARGET, DATA.PRJ_NAME "
                 "FROM DATA "
                 "INNER JOIN DMAKERS ON DATA.ORIGIN = DMAKERS.TYPE "
                 "WHERE DATA.PRJ_NAME == ? AND DATA.ORIGIN != 'None'"
@@ -1323,7 +1334,7 @@ class Database(object):
             )
         else:
             op_records = self.execute_sql_statement(
-                "SELECT DATA.ID, DATA.ORIGIN, DATA.ATTRS, DATA.SENT_DATE, DATA.TARGET, DATA.PRJ_NAME "
+                "SELECT DATA.ID, DATA.ORIGIN, DATA.ATTRS, DATA.SENT_DATE, DATA.ACK_DATE, DATA.TARGET, DATA.PRJ_NAME "
                 "FROM DATA "
                 "INNER JOIN DMAKERS ON DATA.ORIGIN = DMAKERS.TYPE "
                 "WHERE DATA.ORIGIN != 'None'"
@@ -1368,19 +1379,18 @@ class Database(object):
         sc_records = self.get_scenario_records(prj_name)
         if sc_records:
             scenario_list = []
+            data_without_ack = []
+            record_ongoing = False
             current_scenario = None
             for rec in sc_records:
-                data_id, origin, attrs, sent_date, target, prj = rec
+                data_id, origin, attrs, sent_date, ack_date, target, prj = rec
                 sc_start = self.first_data_in_scenario_re.match(attrs)
                 sc_end = self.last_data_in_scenario_re.match(attrs)
-                if (sc_start or current_scenario is None or current_scenario['name'] != origin):
-                    # last condition is to capture scenario that did not end explicitly
-                    # (meaning it was interrupted and never reached a Final step)
-                    # TODO: if scenario was interrupted, reset, then reexecuted,
-                    #   we will keep first irrelevant entries
-
+                if sc_start:
                     # valid only for the first data ID in a data makers sequence as the size
                     # decrease by one after the generator provide data to the stateful operator
+                    record_ongoing = True
+
                     parsed = self.dmaker_seq_sz_re.match(attrs)
                     dmakers_seq_sz = int(parsed.group(1)) if parsed else None
 
@@ -1406,24 +1416,30 @@ class Database(object):
                         'start_date': sent_date,
                         'end_date': None,
                         'data_with_impact': None,
+                        'data_without_ack': data_without_ack,
                     }
 
-                current_scenario['last_data_id'] = data_id
-                current_scenario['end_date'] = sent_date
+                if record_ongoing and ack_date is None:
+                    data_without_ack.append(data_id)
+
                 if sc_end:
+                    record_ongoing = False
+                    current_scenario['last_data_id'] = data_id
+                    current_scenario['end_date'] = sent_date
                     scenario_list.append(current_scenario)
                     current_scenario = None
 
         op_records = self.get_batch_processing_records(prj_name)
         if op_records:
             op_list = []
+            data_without_ack = []
             current_op = None
             previous_l_op_idx = None
             previous_data_id = None
             previous_sent_date = None
             record_ongoing = False
             for rec in op_records:
-                data_id, origin, attrs, sent_date, target, prj = rec
+                data_id, origin, attrs, sent_date, ack_date, target, prj = rec
                 parsed = self.stateful_last_sop_idx_re.match(attrs)
                 l_op_idx = parsed.group(1) if parsed else None
                 try:
@@ -1493,7 +1509,11 @@ class Database(object):
                         'start_date': sent_date,
                         'end_date': None,
                         'data_with_impact': None,
+                        'data_without_ack': data_without_ack,
                     }
+
+                if record_ongoing and ack_date is None:
+                    data_without_ack.append(data_id)
 
             if record_ongoing and previous_data_id - current_op['first_data_id'] + 2 > op_record_min_size:
                 record_ongoing = False
@@ -1581,12 +1601,24 @@ class Database(object):
                     end_date = colorize(f" |_ End Date:   ", rgb=Color.FMKINFO)
                     end_date += colorize(f"{obj['end_date']}", rgb=Color.DATE)
                     print(end_date)
-                    fdata1 = colorize(f" |_ First DataID: ", rgb=Color.FMKINFO)
-                    fdata2 = colorize(f"{obj['first_data_id']}", rgb=Color.FMKSUBINFO)
+                    fdata1 = colorize(f" |_ First Data ID: ", rgb=Color.FMKINFO)
+                    fdata2 = colorize(f"{obj['first_data_id']}", rgb=Color.DATAINFO)
                     print(fdata1 + fdata2)
-                    ldata1 = colorize(f" |_ Last DataID:  ", rgb=Color.FMKINFO)
-                    ldata2 = colorize(f"{obj['last_data_id']}", rgb=Color.FMKSUBINFO)
+                    ldata1 = colorize(f" |_ Last Data ID:  ", rgb=Color.FMKINFO)
+                    ldata2 = colorize(f"{obj['last_data_id']}", rgb=Color.DATAINFO)
                     print(ldata1 + ldata2)
+
+                    comments = self.get_comments(obj['first_data_id'], obj['last_data_id'])
+                    if comments:
+                        comments_str = colorize(f" |_ User Comments:", rgb=Color.FMKINFO)
+                        for com in comments:
+                            data_id, msg, date = com
+                            comments_str += colorize(f"\n    - Logged at [", rgb=Color.FMKINFO)
+                            comments_str += colorize(f"{date}", rgb=Color.DATE_ALT)
+                            comments_str += colorize(f"] and linked to data ID #{data_id}: ", rgb=Color.FMKINFO)
+                            comments_str += colorize(f"\n       {msg}", rgb=Color.FMKSUBINFO)
+                        print(comments_str)
+
                     bp_info = colorize(f" |_ Batch Processing Info:\n", rgb=Color.FMKINFO)
                     if is_batch_proc:
                         bp_info += colorize(f"    - generator: ", rgb=Color.FMKINFO)
@@ -1620,6 +1652,21 @@ class Database(object):
                             bp_info += colorize(f"{op_ui}", rgb=Color.FMKSUBINFO)
 
                     print(bp_info)
+
+                    data_without_ack = obj['data_without_ack']
+                    if data_without_ack:
+                        data_noack = colorize(f" |_ ", rgb=Color.FMKINFO)
+                        data_noack += colorize(f"Data ID without acknowledgment: ", rgb=Color.ERROR)
+                        id_list = ''
+                        for idx, data_id in enumerate(data_without_ack):
+                            if idx % 10 == 0:
+                                id_list += '\n      '
+                            id_list += f"{data_id}, "
+                        data_noack += colorize(id_list[:-2], rgb=Color.DATAINFO)
+                    else:
+                        data_noack = colorize(f" |_ All the data have been acknowledged", rgb=Color.FMKINFO)
+
+                    print(data_noack)
 
                     impact_per_data_id = obj['data_with_impact']
                     if impact_per_data_id:
