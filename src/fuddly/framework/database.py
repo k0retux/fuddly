@@ -1376,10 +1376,56 @@ class Database(object):
             print(colorize('*** ERROR: incompatible FmkDB ***', rgb=Color.ERROR))
             return None
 
+        def compute_timing_stats(tinfo):
+            ack_delay_avg = timedelta()
+            ack_delay_max = timedelta()
+            ackdmax_data_id = None
+            ack_delay_min = None
+            ackdmin_data_id = None
+            std_deviation = 0
+            for ack_date, sent_date, data_id in tinfo:
+                ack_delay = ack_date - sent_date
+                ack_delay_avg += ack_delay
+
+                ack_delay_max = max(ack_delay, ack_delay_max)
+                if ack_delay == ack_delay_max:
+                    ackdmax_data_id = data_id
+
+                if ack_delay_min == None:
+                    ack_delay_min = ack_delay
+                    ackdmin_data_id = data_id
+                else:
+                    ack_delay_min = min(ack_delay, ack_delay_min)
+                    if ack_delay == ack_delay_min:
+                        ackdmin_data_id = data_id
+
+            ack_delay_avg = ack_delay_avg / len(tinfo)
+
+            for ack_date, sent_date, data_id in tinfo:
+                ack_delay = ack_date - sent_date
+                d = ack_delay - ack_delay_avg if ack_delay > ack_delay_avg else ack_delay_avg - ack_delay
+                delta_to_avg = d.seconds + d.microseconds*(10**-6)
+                std_deviation += delta_to_avg**2
+
+            std_deviation = std_deviation / len(tinfo)
+            std_deviation = math.sqrt(std_deviation)
+
+            return (ack_delay_avg, std_deviation,
+                    (ack_delay_max, ackdmax_data_id),
+                    (ack_delay_min, ackdmin_data_id))
+
+        def finalize_batch_record():
+            current_op['last_data_id'] = previous_data_id
+            current_op['l_sop_final_idx'] = previous_l_op_idx
+            current_op['end_date'] = previous_sent_date
+            current_op['timing_stats'] = compute_timing_stats(timing_info)
+            op_list.append(current_op)
+
         sc_records = self.get_scenario_records(prj_name)
         if sc_records:
             scenario_list = []
-            data_without_ack = []
+            data_without_ack = None
+            timing_info = None
             record_ongoing = False
             current_scenario = None
             for rec in sc_records:
@@ -1390,6 +1436,9 @@ class Database(object):
                     # valid only for the first data ID in a data makers sequence as the size
                     # decrease by one after the generator provide data to the stateful operator
                     record_ongoing = True
+
+                    data_without_ack = []
+                    timing_info = []
 
                     parsed = self.dmaker_seq_sz_re.match(attrs)
                     dmakers_seq_sz = int(parsed.group(1)) if parsed else None
@@ -1417,27 +1466,35 @@ class Database(object):
                         'end_date': None,
                         'data_with_impact': None,
                         'data_without_ack': data_without_ack,
+                        'timing_stats': None,
                     }
 
-                if record_ongoing and ack_date is None:
-                    data_without_ack.append(data_id)
+                if record_ongoing:
+                    if ack_date is None:
+                        data_without_ack.append(data_id)
+                    else:
+                        timing_info.append((ack_date, sent_date, data_id))
 
                 if sc_end:
                     record_ongoing = False
                     current_scenario['last_data_id'] = data_id
                     current_scenario['end_date'] = sent_date
+                    current_scenario['timing_stats'] = compute_timing_stats(timing_info)
                     scenario_list.append(current_scenario)
                     current_scenario = None
 
         op_records = self.get_batch_processing_records(prj_name)
         if op_records:
             op_list = []
-            data_without_ack = []
             current_op = None
             previous_l_op_idx = None
             previous_data_id = None
             previous_sent_date = None
+
+            data_without_ack = None
+            timing_info = None
             record_ongoing = False
+
             for rec in op_records:
                 data_id, origin, attrs, sent_date, ack_date, target, prj = rec
                 parsed = self.stateful_last_sop_idx_re.match(attrs)
@@ -1450,10 +1507,11 @@ class Database(object):
                 if ((current_op is not None and (current_op['last_stateful_op'] != origin or current_op['target'] != target)) or
                         (previous_l_op_idx is not None and l_op_idx is not None and previous_l_op_idx != l_op_idx-1)):
                     if previous_data_id - current_op['first_data_id'] + 2 > op_record_min_size:
-                        current_op['last_data_id'] = previous_data_id
-                        current_op['l_sop_final_idx'] = previous_l_op_idx
-                        current_op['end_date'] = previous_sent_date
-                        op_list.append(current_op)
+                        finalize_batch_record()
+                        # current_op['last_data_id'] = previous_data_id
+                        # current_op['l_sop_final_idx'] = previous_l_op_idx
+                        # current_op['end_date'] = previous_sent_date
+                        # op_list.append(current_op)
                     else:
                         pass
 
@@ -1466,6 +1524,8 @@ class Database(object):
 
                 if current_op is None and l_op_idx is not None:
                     record_ongoing = True
+                    data_without_ack = []
+                    timing_info = []
                     parsed = self.batch_processing_info_re.match(attrs)
                     if parsed:
                         generator = parsed.group(1)
@@ -1510,17 +1570,22 @@ class Database(object):
                         'end_date': None,
                         'data_with_impact': None,
                         'data_without_ack': data_without_ack,
+                        'timing_stats': None,
                     }
 
-                if record_ongoing and ack_date is None:
-                    data_without_ack.append(data_id)
+                if record_ongoing:
+                    if ack_date is None:
+                        data_without_ack.append(data_id)
+                    else:
+                        timing_info.append((ack_date, sent_date, data_id))
 
             if record_ongoing and previous_data_id - current_op['first_data_id'] + 2 > op_record_min_size:
                 record_ongoing = False
-                current_op['last_data_id'] = previous_data_id
-                current_op['l_sop_final_idx'] = previous_l_op_idx
-                current_op['end_date'] = previous_sent_date
-                op_list.append(current_op)
+                finalize_batch_record()
+                # current_op['last_data_id'] = previous_data_id
+                # current_op['l_sop_final_idx'] = previous_l_op_idx
+                # current_op['end_date'] = previous_sent_date
+                # op_list.append(current_op)
 
 
         def process_obj_list(obj_list, user_analysis, display=True, prompt ='OBJ RECORD', is_batch_proc=True):
@@ -1667,6 +1732,26 @@ class Database(object):
                         data_noack = colorize(f" |_ All the data have been acknowledged", rgb=Color.FMKINFO)
 
                     print(data_noack)
+
+                    timing_stats = obj['timing_stats']
+                    if timing_stats:
+                        ack_delay_avg, std_deviation, ack_delay_max_obj, ack_delay_min_obj = timing_stats
+                        ack_delay_max, ackdmax_data_id = ack_delay_max_obj
+                        ack_delay_min, ackdmin_data_id = ack_delay_min_obj
+
+                        tstats = colorize(f" |_ Acknowledgement Delay:", rgb=Color.FMKINFO)
+                        tstats += colorize(f"\n    - Average: ", rgb=Color.FMKINFOSUBGROUP)
+                        tstats += colorize(f"{ack_delay_avg}", rgb=Color.DATE_ALT)
+                        tstats += colorize(f"\n    - Maximum: ", rgb=Color.FMKINFOSUBGROUP)
+                        tstats += colorize(f"{ack_delay_max}", rgb=Color.DATE_ALT)
+                        tstats += colorize(f" from Data ID #{ackdmax_data_id}", rgb=Color.DATAINFO)
+                        tstats += colorize(f"\n    - Minimum: ", rgb=Color.FMKINFOSUBGROUP)
+                        tstats += colorize(f"{ack_delay_min}", rgb=Color.DATE_ALT)
+                        tstats += colorize(f" from Data ID #{ackdmin_data_id}", rgb=Color.DATAINFO)
+                        tstats += colorize(f"\n    - Standard deviation: ", rgb=Color.FMKINFOSUBGROUP)
+                        tstats += colorize(f"{std_deviation}", rgb=Color.DATE_ALT)
+
+                        print(tstats)
 
                     impact_per_data_id = obj['data_with_impact']
                     if impact_per_data_id:
