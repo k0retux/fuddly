@@ -2163,8 +2163,12 @@ class FmkPlumbing(object):
             for tg in self.targets.values():
                 _set_fbk_mode(tg)
         else:
-            tg = self.targets[tg_id]
-            _set_fbk_mode(tg)
+            tg = self.targets.get(tg_id)
+            if tg is not None:
+                _set_fbk_mode(tg)
+            else:
+                self.set_error(f"The target ID is not recognized or the related target is not launched",
+                               code=Error.CommandError)
 
     @EnforceOrder(accepted_states=["S1", "S2"])
     def switch_feedback_mode(self, tg_id, do_record=False, do_show=True):
