@@ -1418,7 +1418,8 @@ class Database(object):
             current_op['last_data_id'] = previous_data_id
             current_op['l_sop_final_idx'] = previous_l_op_idx
             current_op['end_date'] = previous_sent_date
-            current_op['timing_stats'] = compute_timing_stats(timing_info)
+            if timing_info:
+                current_op['timing_stats'] = compute_timing_stats(timing_info)
             op_list.append(current_op)
 
         sc_records = self.get_scenario_records(prj_name)
@@ -1479,7 +1480,8 @@ class Database(object):
                     record_ongoing = False
                     current_scenario['last_data_id'] = data_id
                     current_scenario['end_date'] = sent_date
-                    current_scenario['timing_stats'] = compute_timing_stats(timing_info)
+                    if timing_info:
+                        current_scenario['timing_stats'] = compute_timing_stats(timing_info)
                     scenario_list.append(current_scenario)
                     current_scenario = None
 
