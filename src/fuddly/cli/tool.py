@@ -35,5 +35,9 @@ def start(args: argparse.Namespace) -> int:
     if pkg is None:
         print(f"{args.tool} is not a valid fuddly tool")
         return 1
-    mod = pkg.loader.load_module()
+    mod = importlib.util.module_from_spec(pkg)
+    if mod is None:
+        print(f"{args.tool} is not a valid fuddly tool")
+        return 1
+    pkg.loader.exec_module(mod)
     return mod.main()
