@@ -99,6 +99,11 @@ def main(argv: List[str] = None):
             action="store_true",
             help="limit the information displayed at startup.",
         )
+        group.add_argument(
+            "--tui",
+            action="store_true",
+            help="enable TUI",
+        )
 
     with subparsers.add_parser("ishell", help="launch fuddly within IPython") as p:
         parsers["ishell"] = p
@@ -120,6 +125,24 @@ def main(argv: List[str] = None):
             help="limit the information displayed at startup.",
         )
 
+    with subparsers.add_parser("tui", help="launch fuddly TUI") as p:
+        parsers["tui"] = p
+        group = p.add_argument_group("Miscellaneous Options")
+        group.add_argument(
+            "--main-fifo-ansi",
+            metavar="PATH",
+            help="Main communication FIFO (ANSI code compatible)",
+        )
+        group.add_argument(
+            "--main-fifo-bbcode",
+            metavar="PATH",
+            help="Main communication FIFO (BBcode compatible)",
+        )
+        group.add_argument(
+            "--status-fifo",
+            metavar="PATH",
+            help="path to a notification FIFO",
+        )
 
     with subparsers.add_parser("run", help="run a fuddly project script") as p:
         # XXX Should you be able to run script from outside the script dirs?

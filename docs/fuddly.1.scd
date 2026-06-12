@@ -18,6 +18,8 @@ options.
 
 *shell*
 	Run the fuddly shell
+*ishell*
+	Run fuddly within ipython shell
 *run*
 	Run a project script
 *new*
@@ -28,7 +30,8 @@ options.
 	Manage the fuddly workspace
 *show*
 	Display the README file of a specified Project
-
+*decode*
+    Decode the arguments leveraging the provided data model
 
 Each of these action have a section describing their syntax and they all support
 a *-h* and *--help* options to describe their use from the command line
@@ -158,6 +161,26 @@ a *-h* and *--help* options to describe their use from the command line
 
 	*project_name*
 		Name of the project whose README file is requested to be displayed.
+
+## DECODE
+
+*fuddly* decode [-h] [-v] [--no-color] [--atom ATOM_NAME | --scope SCOPE] [-d DATA | -f FILE_PATH] DATA_MODEL
+
+     *DATA_MODEL*
+         Data model name to be used for decoding.
+
+     *--atom*
+         Optional atom name to support the decoding.
+
+     *--scope*
+         Optional scope to support the decoding.
+
+     *-d*
+         Data to decode. Parameter to use if the data is provided on the command-line.
+
+     *-f*
+         File path from which data to decode shall be retrieved.
+         (Mutually exclusive with *-d*).
 
 
 # SEE ALSO

@@ -5,6 +5,8 @@ name = "pypi"
 
 [packages]
 fuddly = {file = ".", editable = true}
+rich = "*"
+textual = "*"
 
 [dev-packages]
 ddt = "*"

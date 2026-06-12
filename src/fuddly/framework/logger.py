@@ -55,6 +55,8 @@ class Logger(object):
     WRITE_API = 2
     PRETTY_PRINT_API = 3
     PRINT_CONSOLE_API = 4
+    STATUS_API = 10
+    MARKUP_API = 11
 
     def __init__(
         self,
@@ -208,6 +210,22 @@ class Logger(object):
                 )
                 self._log_entry_submitted_cond.notify()
 
+    def print_status(self, status_msg: str):
+        with self._sync_lock:
+            with self._log_entry_submitted_cond:
+                self._log_entry_list.append(
+                    (Logger.STATUS_API, status_msg)
+                )
+                self._log_entry_submitted_cond.notify()
+
+    def print_markup(self, markup_msg: str):
+        with self._sync_lock:
+            with self._log_entry_submitted_cond:
+                self._log_entry_list.append(
+                    (Logger.MARKUP_API, markup_msg)
+                )
+                self._log_entry_submitted_cond.notify()
+
     def set_external_display(self, disp):
         self._ext_disp = disp
 
@@ -220,9 +238,10 @@ class Logger(object):
 
         return content
 
-    def start(self):
+    def start(self, tui=False):
         self.__idx = 0
         self.__tmp = False
+        self._tui = tui
 
         self.reset_current_state()
         self._current_sent_date = None
@@ -314,9 +333,13 @@ class Logger(object):
         while not self._thread_initialized.is_set():
             self._thread_initialized.wait(0.1)
 
-        self.print_console(
-            "*** Logger is started ***\n", nl_before=False, rgb=Color.COMPONENT_START
-        )
+        if self._tui:
+            bbcode = Color.to_bbcode(Color.COMPONENT_START)
+            self.print_markup(f"[{bbcode}]*** Logger is started ***[/]\n")
+        else:
+            self.print_console(
+                "*** Logger is started ***\n", nl_before=False, rgb=Color.COMPONENT_START
+            )
 
     def _stop_log_handler(self):
         with self._sync_lock:
@@ -354,6 +377,16 @@ class Logger(object):
                             self._ext_disp.disp.print(params)
                         else:
                             sys.stdout.write(params)
+                    elif api == Logger.STATUS_API:
+                        if self._ext_disp.is_enabled:
+                            self._ext_disp.disp.print_status(params)
+                        else:
+                            pass
+                    elif api == Logger.MARKUP_API:
+                        if self._ext_disp.is_enabled:
+                            self._ext_disp.disp.print_markup(params)
+                        else:
+                            pass
                     elif api == Logger.PRETTY_PRINT_API:
                         data, fd, raw_limit, verbose, debug = params
                         if fd is None:

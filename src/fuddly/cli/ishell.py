@@ -18,8 +18,8 @@ def start(args: argparse.Namespace):
     external_display = args.external_display
     quiet = args.quiet
 
+    fmk = FmkPlumbing(external_term=external_display, fmkdb_path=fmkdb, quiet=quiet)
     try:
-        fmk = FmkPlumbing(external_term=external_display, fmkdb_path=fmkdb, quiet=quiet)
         fmk.start()
         header = colorize(FontStyle.BOLD + f'\n-=[ IPython ]=- (with Fuddly FmK {fuddly_version})\n',
                           rgb=Color.TITLE)

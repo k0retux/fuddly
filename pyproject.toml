@@ -28,6 +28,8 @@ dependencies = [
     "argcomplete",
     "pycups",
     "python-constraint2",
+    "rich",
+    "textual",
     "ipython"
 ]
 

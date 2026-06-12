@@ -85,9 +85,10 @@ def is_python_file(fname):
 
 
 class Printer(io.StringIO):
-    def __init__(self, fmk):
+    def __init__(self, fmk, tui=False):
         io.StringIO.__init__(self)
         self.fmk = fmk
+        self._tui = tui
 
     def start(self):
         pass
@@ -100,6 +101,18 @@ class Printer(io.StringIO):
             self.fmk.lg.write(data)
         else:
             sys.__stdout__.write(data)
+
+    def print_status(self, status_msg):
+        if self.fmk.lg:
+            self.fmk.lg.print_status(status_msg)
+        else:
+            pass
+
+    def print_markup(self, markup_msg):
+        if self.fmk.lg:
+            self.fmk.lg.print_markup(markup_msg)
+        else:
+            sys.__stdout__.write(markup_msg)
 
     def flush(self):
         if self.fmk.lg:
@@ -332,7 +345,7 @@ class FmkPlumbing(object):
     """
 
     def __init__(self, exit_on_error=False, debug_mode=False, quiet=False,
-                 external_term=False, fmkdb_path=None):
+                 external_term=False, tui=False, fmkdb_path=None):
 
         now = datetime.datetime.now().strftime("%Y_%m_%d_%H%M%S")
         logging.basicConfig(filename=os.path.join(gr.logs_folder, f'fuddly_root_logger_{now}.log'),
@@ -344,15 +357,19 @@ class FmkPlumbing(object):
         self._debug_mode = debug_mode
         self._exit_on_error = exit_on_error
         self._quiet = quiet
+        self._tui = tui
         self._fmkdb_path = fmkdb_path
-        self.external_display = ExternalDisplay()
-        if external_term:
+        self.external_display = ExternalDisplay(tui=self._tui)
+
+        if external_term or tui:
             self.external_display.start_term(title="Fuddly log", keepterm=True)
 
-        self.printer = Printer(self)
+        self.printer = Printer(self, tui=self._tui)
         self.print = self.printer.print
 
         self._reset_main_objects()
+
+        self.external_display.disp.print_status('[green bold]Fuddly initialization complete[/]')
 
     def __str__(self):
         return "Fuddly FmK"
@@ -1387,9 +1404,10 @@ class FmkPlumbing(object):
 
     def _start_fmk_plumbing(self):
         if not self._is_started():
+            ok = False
             signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-            self.lg.start()
+            self.lg.start(tui=self._tui)
 
             ok = self._load_data_model()
             if not ok:
@@ -1478,6 +1496,11 @@ class FmkPlumbing(object):
                 self.__current = []
                 self.__db_idx = 0
                 self.__data_bank = {}
+
+                if ok:
+                    self.lg.print_status(f'[green]Project [i]{self.prj.name}[/] launched[/]')
+                else:
+                    self.lg.print_status(f'[red]Error while loading the project {self.prj.name}[/]')
 
                 self._start()
 

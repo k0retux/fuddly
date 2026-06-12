@@ -22,6 +22,8 @@
 ################################################################################
 
 import sys
+import binascii
+import struct
 
 try:
     import xtermcolor
@@ -91,6 +93,12 @@ class Color(object):
     DEBUG_L1 = 0x66FF00
     DEBUG_L2 = 0xB1FF7D
     DEBUG_L3 = 0xECFA9D
+
+    @staticmethod
+    def to_bbcode(color: int):
+        b_int = struct.pack('>L', color)[1:]
+        bbcode = '#' + binascii.b2a_hex(b_int).decode('latin_1')
+        return bbcode
 
     @staticmethod
     def display():

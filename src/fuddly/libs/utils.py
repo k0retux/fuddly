@@ -41,11 +41,11 @@ class Term(object):
         self.keepterm = keepterm
 
     def start(self):
-        self.pipe_path = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))
-        if not os.path.exists(self.pipe_path):
-            os.mkfifo(self.pipe_path)
+        self.main_fifo_ansi = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))
+        if not os.path.exists(self.main_fifo_ansi):
+            os.mkfifo(self.main_fifo_ansi)
 
-        pipe_cmd = f"tail -f {self.pipe_path}"
+        pipe_cmd = f"tail -f {self.main_fifo_ansi}"
         self.cmd = shlex.split(
                 term.cmd.format(
                     title='"'+self.title+'"',
@@ -64,33 +64,91 @@ class Term(object):
             self._p.kill()
         self._p = None
         try:
-            os.remove(self.pipe_path)
+            os.remove(self.main_fifo_ansi)
         except FileNotFoundError:
             pass
 
     def print(self, s, newline=False):
+        self._print(s, self.main_fifo_ansi, newline=newline)
+
+    def _print(self, s, fifo: str, newline=False):
         if not isinstance(s, str):
             s = str(s)
         s += "\n" if newline else ""
         if self._p is None or self._p.poll() is not None:
             self._launch_term()
         try:
-            with open(self.pipe_path, "w") as input_desc:
+            with open(fifo, "w") as input_desc:
                 input_desc.write(s)
         except BrokenPipeError as err:
             print(f'\n*** [Warning] {err} intercepted, recreate the named pipe '
                   f'and relaunch the reader command ***')
             self.stop(force_kill=True)
             self.start()
-            self.print(s, newline=newline)
+            self._print(s, fifo, newline=newline)
 
     def print_nl(self, s):
         self.print(s, newline=True)
 
+    def print_status(self, s, newline=False):
+        pass
+
+    def print_markup(self, s, newline=False):
+        pass
+
+
+class RichTerm(Term):
+    # def __init__(self, title=None, keepterm=False):
+    #     super().__init__(title=title, keepterm=keepterm)
+
+    def start(self):
+        self.main_fifo_ansi = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))
+        if not os.path.exists(self.main_fifo_ansi):
+            os.mkfifo(self.main_fifo_ansi)
+
+        self.main_fifo_bbcode = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))
+        if not os.path.exists(self.main_fifo_bbcode):
+            os.mkfifo(self.main_fifo_bbcode)
+
+        self.status_fifo = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))
+        if not os.path.exists(self.status_fifo):
+            os.mkfifo(self.status_fifo)
+
+        pipe_cmd = (f"python -m fuddly.cli tui --main-fifo-ansi {self.main_fifo_ansi} "
+                    f"--main-fifo-bbcode {self.main_fifo_bbcode} --status-fifo {self.status_fifo}")
+
+        self.cmd = shlex.split(
+                term.cmd.format(
+                    title='"'+self.title+'"',
+                    hold=term.hold_arg if self.keepterm else "",
+                    cmd=pipe_cmd,
+                )
+            )
+        self._p = None
+
+    def stop(self, force_kill=False):
+        if ((force_kill and self._p is not None)
+                or (not self.keepterm and self._p is not None and self._p.poll() is None)):
+            self._p.kill()
+        self._p = None
+        try:
+            os.remove(self.main_fifo_ansi)
+            os.remove(self.main_fifo_bbcode)
+            os.remove(self.status_fifo)
+        except FileNotFoundError:
+            pass
+
+    def print_status(self, s, newline=False):
+        self._print(s, self.status_fifo, newline=newline)
+
+    def print_markup(self, s, newline=True):
+        self._print(s, self.main_fifo_bbcode, newline=newline)
+
 
 class ExternalDisplay(object):
-    def __init__(self):
+    def __init__(self, tui=False):
         self._disp = None
+        self._tui = tui
 
     @property
     def disp(self):
@@ -110,9 +168,13 @@ class ExternalDisplay(object):
             self._disp = None
 
     def start_term(self, title=None, keepterm=False):
-        self._disp = Term(title=title, keepterm=keepterm)
+        if self._tui:
+            self._disp = RichTerm(title=title, keepterm=keepterm)
+        else:
+            self._disp = Term(title=title, keepterm=keepterm)
         self._disp.start()
         self._disp.print("")
+        # self._disp.print_status('[blue]External display has started[/]')
 
 
 class Task(object):

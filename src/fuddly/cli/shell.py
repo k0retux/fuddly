@@ -6,8 +6,9 @@ def start(args: argparse.Namespace):
     fmkdb = args.fmkdb
     external_display = args.external_display
     quiet = args.quiet
+    tui = args.tui
 
-    fmk = FmkPlumbing(external_term=external_display, fmkdb_path=fmkdb, quiet=quiet)
+    fmk = FmkPlumbing(external_term=external_display, fmkdb_path=fmkdb, quiet=quiet, tui=tui)
     fmk.start()
 
     shell = FmkShell("Fuddly Shell", fmk)
