@@ -143,6 +143,11 @@ def main(argv: List[str] = None):
             metavar="PATH",
             help="path to a notification FIFO",
         )
+        group.add_argument(
+            "--cmd-fifo",
+            metavar="PATH",
+            help="Command FIFO",
+        )
 
     with subparsers.add_parser("run", help="run a fuddly project script") as p:
         # XXX Should you be able to run script from outside the script dirs?

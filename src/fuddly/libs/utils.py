@@ -71,13 +71,15 @@ class Term(object):
     def print(self, s, newline=False):
         self._print(s, self.main_fifo_ansi, newline=newline)
 
-    def _print(self, s, fifo: str, newline=False):
+    def _print(self, s, fifo: str|None = None, newline=False):
         if not isinstance(s, str):
             s = str(s)
         s += "\n" if newline else ""
         if self._p is None or self._p.poll() is not None:
             self._launch_term()
         try:
+            if fifo is None:
+                fifo = self.main_fifo_ansi
             with open(fifo, "w") as input_desc:
                 input_desc.write(s)
         except BrokenPipeError as err:
@@ -98,10 +100,15 @@ class Term(object):
 
 
 class RichTerm(Term):
-    # def __init__(self, title=None, keepterm=False):
-    #     super().__init__(title=title, keepterm=keepterm)
+    def __init__(self, title=None, keepterm=False):
+        super().__init__(title=title, keepterm=keepterm)
+        self.loggers_fifo = []
 
     def start(self):
+        self.cmd_fifo = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))
+        if not os.path.exists(self.cmd_fifo):
+            os.mkfifo(self.cmd_fifo)
+
         self.main_fifo_ansi = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))
         if not os.path.exists(self.main_fifo_ansi):
             os.mkfifo(self.main_fifo_ansi)
@@ -114,7 +121,8 @@ class RichTerm(Term):
         if not os.path.exists(self.status_fifo):
             os.mkfifo(self.status_fifo)
 
-        pipe_cmd = (f"python -m fuddly.cli tui --main-fifo-ansi {self.main_fifo_ansi} "
+        pipe_cmd = (f"python -m fuddly.cli tui --cmd-fifo {self.cmd_fifo} "
+                    f"--main-fifo-ansi {self.main_fifo_ansi} "
                     f"--main-fifo-bbcode {self.main_fifo_bbcode} --status-fifo {self.status_fifo}")
 
         self.cmd = shlex.split(
@@ -132,18 +140,34 @@ class RichTerm(Term):
             self._p.kill()
         self._p = None
         try:
+            os.remove(self.cmd_fifo)
             os.remove(self.main_fifo_ansi)
             os.remove(self.main_fifo_bbcode)
             os.remove(self.status_fifo)
+            for fifo in self.loggers_fifo:
+                os.remove(fifo)
         except FileNotFoundError:
             pass
 
     def print_status(self, s, newline=False):
         self._print(s, self.status_fifo, newline=newline)
 
-    def print_markup(self, s, newline=True):
+    def print_markup(self, s, newline=False):
         self._print(s, self.main_fifo_bbcode, newline=newline)
 
+    def print_on(self, fifo, s, newline=False):
+        self._print(s, fifo, newline=newline)
+
+    CMD_NEW_LOGGER = 1
+
+    def create_new_logger(self):
+        new_fifo = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))
+        if not os.path.exists(new_fifo):
+            os.mkfifo(new_fifo)
+        self.loggers_fifo.append(new_fifo)
+        self._print(f'{self.CMD_NEW_LOGGER}\x00{new_fifo}\x00', self.cmd_fifo, newline=True)
+
+        return new_fifo
 
 class ExternalDisplay(object):
     def __init__(self, tui=False):

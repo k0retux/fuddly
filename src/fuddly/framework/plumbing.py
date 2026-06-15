@@ -1445,7 +1445,12 @@ class FmkPlumbing(object):
                             raise ValueError
 
                 self.mon.wait_for_probe_initialization()
-                self.prj.start()
+
+                if self._tui:
+                    self.prj.start(tui_obj=self.external_display.disp)
+                else:
+                    self.prj.start()
+
                 if self.prj.fmkdb_enabled and not self.fmkDB.is_enabled():
                     self.enable_fmkdb()
                 elif not self.prj.fmkdb_enabled and self.fmkDB.is_enabled():
@@ -1502,6 +1507,14 @@ class FmkPlumbing(object):
                 else:
                     self.lg.print_status(f'[red]Error while loading the project {self.prj.name}[/]')
 
+                # if self._tui:
+                #     fifo1 = self.external_display.disp.create_new_logger()
+                #     self.lg.print_on(fifo1, 'Ceci est un test [green]depuis le Logger du projet[/]\n')
+                #     self.external_display.disp.print_on(fifo1, 'Ceci est un test [bold green]depuis FmkPlumbing[/]\n')
+                #
+                #     fifo2 = self.external_display.disp.create_new_logger()
+                #     self.lg.print_on(fifo2, 'Ceci est un [b]autre[/] test [blue]depuis[/] le Logger du projet\n')
+                #
                 self._start()
 
     def _stop_fmk_plumbing(self, before_reload=False):

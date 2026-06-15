@@ -76,6 +76,7 @@ class Project(object):
         """
 
         self.monitor = Monitor()
+        self.tui = False
         self._knowledge_source = InformationCollector()
         self._fbk_processing_enabled = enable_fbk_processing
         self._feedback_processing_thread = None
@@ -125,7 +126,7 @@ class Project(object):
     def reset_knowledge(self):
         self.knowledge_source.reset_information()
 
-    def register_feedback_handler(self, fbk_handler):
+    def register_feedback_handler(self, fbk_handler: FeedbackHandler):
         self._fbk_handlers.append(fbk_handler)
 
     def disable_feedback_handlers(self):
@@ -273,7 +274,19 @@ class Project(object):
         DataMaker.knowledge_source = self.knowledge_source
         ScenarioEnv.knowledge_source = self.knowledge_source
 
-    def start(self):
+    def _enable_tui(self):
+        for fh in self._fbk_handlers:
+            fh.tui = True
+            fh.set_tui_control_interface(self._tui_obj)
+
+    def start(self, tui_obj=None):
+        if tui_obj is not None:
+            self._tui = True
+            self._tui_obj = tui_obj
+            self._enable_tui()
+        else:
+            self._tui = False
+
         for fh in self._fbk_handlers:
             fh.fmkops = self._fmkops
             fh._start(self.dm)

@@ -55,8 +55,10 @@ class Logger(object):
     WRITE_API = 2
     PRETTY_PRINT_API = 3
     PRINT_CONSOLE_API = 4
+
     STATUS_API = 10
     MARKUP_API = 11
+    ANYFIFO_API = 12
 
     def __init__(
         self,
@@ -226,6 +228,14 @@ class Logger(object):
                 )
                 self._log_entry_submitted_cond.notify()
 
+    def print_on(self, fifo, data: str, newline=True):
+        with self._sync_lock:
+            with self._log_entry_submitted_cond:
+                self._log_entry_list.append(
+                    (Logger.ANYFIFO_API, (fifo, data, newline))
+                )
+                self._log_entry_submitted_cond.notify()
+
     def set_external_display(self, disp):
         self._ext_disp = disp
 
@@ -385,6 +395,11 @@ class Logger(object):
                     elif api == Logger.MARKUP_API:
                         if self._ext_disp.is_enabled:
                             self._ext_disp.disp.print_markup(params)
+                        else:
+                            pass
+                    elif api == Logger.ANYFIFO_API:
+                        if self._ext_disp.is_enabled:
+                            self._ext_disp.disp.print_on(*params)
                         else:
                             pass
                     elif api == Logger.PRETTY_PRINT_API:

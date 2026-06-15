@@ -78,8 +78,14 @@ class FeedbackHandler(object):
         self._s = None
         self.term = None
         self.fmkops = None
+        self.tui = False
+        self._tui_obj = None
+        self._fifo = None
 
         self.specific_init(**kwargs)
+
+    def set_tui_control_interface(self, tui_obj):
+        self._tui_obj = tui_obj
 
     def __str__(self):
         if self._new_window_title is None and self._name is None:
@@ -151,32 +157,44 @@ class FeedbackHandler(object):
 
     def _start(self, current_dm):
         self._s = ''
-        if self._new_window:
-            nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
-            self.term = Term(title=nm, keepterm=self._keep_term)
-            self.term.start()
+        if self._tui_obj:
+            self._fifo = self._tui_obj.create_new_logger()
+        else:
+            if self._new_window:
+                nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
+                self.term = Term(title=nm, keepterm=self._keep_term)
+                self.term.start()
 
         self.start(current_dm)
 
     def _stop(self, before_reload=False):
         self._s = None
-        if self._new_window and self.term is not None:
-            self.term.stop(force_kill=True if before_reload else False)
-            self.term = None
+        if self._tui_obj:
+            pass
+        else:
+            if self._new_window and self.term is not None:
+                self.term.stop(force_kill=True if before_reload else False)
+                self.term = None
 
         self.stop()
 
     def print(self, msg):
-        if self._new_window and self.term is not None:
-            self.term.print(msg)
+        if self._tui_obj:
+            self._tui_obj.print_on(self._fifo, msg)
         else:
-            print(msg)
+            if self._new_window and self.term is not None:
+                self.term.print(msg)
+            else:
+                print(msg)
 
     def print_nl(self, msg):
-        if self._new_window and self.term is not None:
-            self.term.print_nl(msg)
+        if self._tui_obj:
+            self._tui_obj.print_on(self._fifo, msg, newline=True)
         else:
-            print(msg)
+            if self._new_window and self.term is not None:
+                self.term.print_nl(msg)
+            else:
+                print(msg)
 
     def collect_data(self, s):
         self._s += s
@@ -225,6 +243,8 @@ class TestFbkHandler(FeedbackHandler):
         return 'Example of additional contextual information...'
 
     def extract_info_from_feedback(self, current_dm, source, timestamp, content, status):
+        self.print_nl('Processing Feedback...')
+
         if content is None:
             return None
         elif b'Linux' in content:
