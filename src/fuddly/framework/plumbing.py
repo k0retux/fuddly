@@ -369,7 +369,8 @@ class FmkPlumbing(object):
 
         self._reset_main_objects()
 
-        self.external_display.disp.print_status('[green bold]Fuddly initialization complete[/]')
+        if self._tui:
+            self.external_display.disp.print_status('[green bold]Fuddly initialization complete[/]')
 
     def __str__(self):
         return "Fuddly FmK"

@@ -160,12 +160,12 @@ class RichTerm(Term):
 
     CMD_NEW_LOGGER = 1
 
-    def create_new_logger(self):
+    def create_new_logger(self, title=''):
         new_fifo = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))
         if not os.path.exists(new_fifo):
             os.mkfifo(new_fifo)
         self.loggers_fifo.append(new_fifo)
-        self._print(f'{self.CMD_NEW_LOGGER}\x00{new_fifo}\x00', self.cmd_fifo, newline=True)
+        self._print(f'{self.CMD_NEW_LOGGER}\x00{title}\x00{new_fifo}\x00', self.cmd_fifo, newline=True)
 
         return new_fifo
 

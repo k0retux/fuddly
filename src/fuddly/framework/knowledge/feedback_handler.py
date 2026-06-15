@@ -158,7 +158,7 @@ class FeedbackHandler(object):
     def _start(self, current_dm):
         self._s = ''
         if self._tui_obj:
-            self._fifo = self._tui_obj.create_new_logger()
+            self._fifo = self._tui_obj.create_new_logger(title=str(self))
         else:
             if self._new_window:
                 nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title

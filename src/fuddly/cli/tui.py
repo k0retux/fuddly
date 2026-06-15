@@ -1,3 +1,6 @@
+from textual import events
+from textual.css.query import NoMatches
+
 import fuddly.cli.argparse_wrapper as argparse
 from fuddly.framework.plumbing import FmkPlumbing, FmkShell
 from fuddly.framework.global_resources import fuddly_version
@@ -47,6 +50,12 @@ if not os.path.isfile(tcss_fname):
     with open(tcss_fname, 'w') as f:
         f.write(fuddly_tui_tcss)
 
+class FuddlyLogger(RichLog):
+
+    def on_focus(self, event: events.Focus) -> None:
+        self.styles.border = ('solid', 'green')
+
+
 class FuddlyTUI(App):
     ANSICODE = 1
     BBCODE = 2
@@ -62,7 +71,7 @@ class FuddlyTUI(App):
         self._main_fifo_ansi = main_fifo_ansi
         self._main_fifo_bbcode = main_fifo_bbcode
         self._status_fifo = status_fifo
-        self._cmd_re = re.compile(r'(\d)\x00(.*?)\x00', flags=re.S)
+        self._cmd_re = re.compile(r'(\d)\x00(.*?)\x00(.*?)\x00', flags=re.S)
         self._loggers_fd = {}
 
     def on_mount(self) -> None:
@@ -119,29 +128,35 @@ class FuddlyTUI(App):
                             cmd_msgs = ''
                             data = 'INIT'
                             while data:
-                                data = os.read(fd, 8).decode()
-                                cmd_msgs += data
+                                try:
+                                    data = os.read(fd, 64).decode()
+                                except BlockingIOError:
+                                    data = ''
+                                else:
+                                    cmd_msgs += data
                             cmd_msg_list = cmd_msgs.split('\n')
                             for cmd_msg in cmd_msg_list:
                                 if cmd_msg:
                                     parsed = self._cmd_re.match(cmd_msg)
                                     if parsed:
                                         cmd = int(parsed.group(1))
-                                        fifo = parsed.group(2)
+                                        title = parsed.group(2)
+                                        fifo = parsed.group(3)
                                         if cmd == 1 and fifo:
                                             new_fd = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
                                             rlog_id = f'rlog_{len(self._loggers_fd)}'
-                                            self._loggers_fd[new_fd] = '#' + rlog_id
+                                            self._loggers_fd[new_fd] = ('#' + rlog_id, title)
                                             epobj.register(new_fd, select.EPOLLIN | select.EPOLLHUP)
-                                            if not self._right_panel:
-                                                self._right_panel = VerticalScroll(id="loggers")
-                                                await main_panel.mount(self._right_panel)
-                                                log.styles.width = '60%'
+                                            # if not self._right_panel:
+                                            #     self._right_panel = VerticalScroll(id="loggers")
+                                            #     await main_panel.mount(self._right_panel)
+                                            #     log.styles.width = '60%'
+                                            #
+                                            # rlog = FuddlyLogger(highlight=True, id=rlog_id, classes='box')
+                                            # rlog.border_title = title
+                                            # await self._right_panel.mount(rlog)
+                                            # rlog.scroll_visible()
 
-                                            rlog = RichLog(id=rlog_id, classes='box')
-                                            await self._right_panel.mount(rlog)
-                                            rlog.scroll_visible()
-                                            rlog.write(Text.from_markup('Ceci est un [b]TEST[/] nouveau'))
                                             text = Text.from_ansi(f'New fifo registered: {fifo}')
                                         else:
                                             text = Text.from_ansi(f'Command Error: cmd:{cmd}, fifo:{fifo}')
@@ -154,20 +169,45 @@ class FuddlyTUI(App):
                             text = ''
                             data = 'INIT'
                             while data:
-                                data = os.read(fd, 256).decode()
-                                text += data
-                            text = Text.from_markup(text)
+                                try:
+                                    data = os.read(fd, 256).decode()
+                                except BlockingIOError:
+                                    # await asyncio.sleep(0.05)
+                                    data = ''
+                                else:
+                                    text += data
+                            text = Text.from_ansi(text)
                             if text:
-                                rlog = self.query_one(self._loggers_fd[fd])
+                                w_id, title = self._loggers_fd[fd]
+
+                                if not self._right_panel:
+                                    self._right_panel = VerticalScroll(id="loggers")
+                                    await main_panel.mount(self._right_panel)
+                                    log.styles.width = '60%'
+
+                                try:
+                                    rlog = self.query_one(w_id)
+                                except NoMatches:
+                                    rlog = FuddlyLogger(highlight=True, id=w_id[1:], classes='box')
+                                    rlog.border_title = title
+                                    await self._right_panel.mount(rlog)
+
+                                # rlog = self.query_one(self._loggers_fd[fd])
+                                # rlog.scroll_visible()
                                 rlog.scroll_visible()
+                                rlog.styles.border = ('heavy', 'red')
                                 rlog.write(text)
 
                         elif fd == fd_status:
                             text = ''
                             data = 'INIT'
                             while data:
-                                data = os.read(fd, 8).decode()
-                                text += data
+                                try:
+                                    data = os.read(fd, 8).decode()
+                                except BlockingIOError:
+                                    data = ''
+                                else:
+                                    text += data
                             text = Text.from_markup(text)
                             if text:
                                 text.stylize('bold')
@@ -177,8 +217,13 @@ class FuddlyTUI(App):
                             text = ''
                             data = 'INIT'
                             while data:
-                                data = os.read(fd, 256).decode()
-                                text += data
+                                try:
+                                    data = os.read(fd, 256).decode()
+                                except BlockingIOError:
+                                    # await asyncio.sleep(0.05)
+                                    data = ''
+                                else:
+                                    text += data
 
                             if fd == fd_ansi:
                                 text = Text.from_ansi(text)
@@ -219,5 +264,5 @@ def start(args: argparse.Namespace):
     except:
         console.print_exception()
 
-    # time.sleep(100)
+    time.sleep(100)
     return
