@@ -53,8 +53,8 @@ project.add_knowledge(
 )
 
 project.register_feedback_handler(TestFbkHandler(name='my feedback handler'))
-project.register_feedback_handler(TestFbkHandler(name='uber handler'))
-project.register_feedback_handler(TestFbkHandler(name='winter is coming'))
+project.register_feedback_handler(TestFbkHandler(name='uber handler', markup_mode=True))
+project.register_feedback_handler(TestFbkHandler(name='winter is coming', markup_mode=True))
 
 ### PROJECT SCENARIOS DEFINITION ###
 

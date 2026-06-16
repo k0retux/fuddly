@@ -70,7 +70,8 @@ class FeedbackHandler(object):
     A feedback handler extract information from binary data.
     """
 
-    def __init__(self, name=None, new_window=False, new_window_title=None, keep_term=True, **kwargs):
+    def __init__(self, name=None, new_window=False, new_window_title=None,
+                 keep_term=True, markup_mode=False, **kwargs):
         """
         Args:
             new_window: If `True`, a new terminal emulator is created, enabling the decoder to use
@@ -84,8 +85,8 @@ class FeedbackHandler(object):
         self._s = None
         self.term = None
         self.fmkops = None
-        self.tui = False
         self._tui_obj = None
+        self._markup_mode = markup_mode
         self._fifo = None
 
         self.specific_init(**kwargs)
@@ -164,7 +165,7 @@ class FeedbackHandler(object):
     def _start(self, current_dm):
         self._s = ''
         if self._tui_obj:
-            self._fifo = self._tui_obj.new_log_panel(title=str(self))
+            self._fifo = self._tui_obj.new_log_panel(title=str(self), markup=self._markup_mode)
         else:
             if self._new_window:
                 nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
@@ -245,6 +246,10 @@ class TestFbkHandler(FeedbackHandler):
 
     def specific_init(self, **kwargs):
         self.idx = 0
+        self.color_fmkinfo = Color.to_bbcode(Color.FMKINFO)
+        self.color_fbk_hl = Color.to_bbcode(Color.FEEDBACK_HLIGHT)
+        self.color_error = Color.to_bbcode(Color.ERROR)
+        self.color_warning = Color.to_bbcode(Color.WARNING)
 
     def notify_data_sending(self, current_dm, data_list, timestamp, target):
         return 'Example of additional contextual information...'
@@ -252,12 +257,20 @@ class TestFbkHandler(FeedbackHandler):
     def extract_info_from_feedback(self, current_dm, source, timestamp, content, status):
         if random.choice([True, False]):
             rd = random.choice(range(4))
-            self.print_nl({
-                0: colorize('Processing Feedback...', rgb=Color.FMKINFO),
-                1: colorize('Feedback Processed!', rgb=Color.FEEDBACK_HLIGHT),
-                2: colorize('[ERROR] Feedback is erroneous', rgb=Color.ERROR),
-                3: colorize('[WARNING] Feedback delayed', rgb=Color.WARNING),
-            }[rd])
+            if self._markup_mode:
+                self.print_nl({
+                    0: f'[{self.color_fmkinfo}]Processing [b]Feedback...[/][/]',
+                    1: f'[{self.color_fbk_hl}]Feedback Processed![/]',
+                    2: f'[{self.color_error}][ERROR][/] [u]Feedback is erroneous[/]',
+                    3: f'[{self.color_warning}][WARNING][/] [blink]Feedback delayed[/]',
+                }[rd])
+            else:
+                self.print_nl({
+                    0: colorize('Processing Feedback...', rgb=Color.FMKINFO),
+                    1: colorize('Feedback Processed!', rgb=Color.FEEDBACK_HLIGHT),
+                    2: colorize('[ERROR] Feedback is erroneous', rgb=Color.ERROR),
+                    3: colorize('[WARNING] Feedback delayed', rgb=Color.WARNING),
+                }[rd])
         else:
             pass
 

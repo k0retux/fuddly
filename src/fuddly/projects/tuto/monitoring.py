@@ -4,7 +4,30 @@ from fuddly.framework.plumbing import FmkFeedback
 from fuddly.framework.global_resources import UI
 from fuddly.framework.comm_backends import Serial_Backend
 from fuddly.framework.monitor import (Probe, probe, ProbeStatus, blocking_probe, ProbePID, ProbeMem)
-from fuddly.libs.external_modules import serial_module
+from fuddly.libs.external_modules import serial_module, Color
+from fuddly.libs.utils import Task
+
+
+class MyTask(Task):
+
+    def setup(self):
+        self.previous_ts = None
+        self.cpt = 0
+        self.print_nl('[green]Task is [u]now[/] [b]setup[/]![/]')
+
+    def __call__(self, arg):
+
+        for source, status, timestamp, content in self.feedback_gate:
+            if self.previous_ts is None or self.previous_ts < timestamp:
+                self.previous_ts = timestamp
+            else:
+                continue
+
+            self.print_nl(f'[{Color.to_bbcode(Color.FMKINFO)}]>>>[/] [blue]timestamp:[/] {timestamp}\n'
+                          f'    [b i]feedback received:[/] {content[:40]}')
+
+mytask = MyTask(period=0.01, new_window=True, new_window_title='Task Example',
+                markup_mode=True)
 
 ### PROBE DEFINITION ###
 

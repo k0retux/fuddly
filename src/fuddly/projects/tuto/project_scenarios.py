@@ -3,6 +3,20 @@ from fuddly.framework.scenario_builder import ScenarioBuilder, FragmentationScen
 from fuddly.framework.scenario_bricks import ScenarioBrick, FRAG_POL
 
 
+class MySCTask(Task):
+
+    def setup(self):
+        self.previous_ts = None
+        self.cpt = 0
+        self.print_nl('[green]Task launched [b i]from Scenario![/][/]')
+
+    def __call__(self, arg):
+        self.cpt += 1
+        self.print_nl(f'[{Color.to_bbcode(Color.FMKINFO)}]>>>[/] [blue]counter:[/] {self.cpt}')
+
+mysctask = MySCTask(period=0.5, new_window=True, new_window_title='Task from Scenario',
+                    markup_mode=True)
+
 class BurstSBrick(ScenarioBrick):
 
     def build(self, user_context: UI, shape_id, **kwargs):
@@ -11,12 +25,14 @@ class BurstSBrick(ScenarioBrick):
             print(f'\n*** Callback After Feedback Retrieval [from: {str(current_step)}] ***')
             return True
 
-        s1 = Step(Data('step1'), fbk_timeout=2, burst_count=3)
+        init_step = NoDataStep(start_tasks=[mysctask])
+        s1 = Step(Data('step1'), fbk_timeout=5, burst_count=3)
         s2 = Step(Data('step2'))
         s3 = Step(Data('step3'))
         s4 = Step(Data('step4'))
-        final = NoDataStep(step_desc='Exit burst')
+        final = NoDataStep(step_desc='Exit burst', stop_tasks=[mysctask])
 
+        init_step.connect_to(s1)
         s1.connect_to(final, cbk_after_fbk=check_fbk)
         s1.connect_to(s2)
         s2.connect_to(final, cbk_after_fbk=check_fbk)
@@ -25,7 +41,7 @@ class BurstSBrick(ScenarioBrick):
         s3.connect_to(s4)
         s4.connect_to(final, cbk_after_fbk=check_fbk)
 
-        starting_step = s1
+        starting_step = init_step
         in_connectors = []
         out_connectors = [final]
 

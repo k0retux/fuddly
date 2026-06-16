@@ -276,7 +276,6 @@ class Project(object):
 
     def _enable_tui(self):
         for fh in self._fbk_handlers:
-            fh.tui = True
             fh.set_tui_control_interface(self._tui_obj)
 
     def start(self, tui_obj=None):

@@ -161,12 +161,13 @@ class RichTerm(Term):
     CMD_NEW_LOG_PANEL = 1
     CMD_RM_LOG_PANEL = 2
 
-    def new_log_panel(self, title=''):
+    def new_log_panel(self, title='', markup=False):
         new_fifo = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))
         if not os.path.exists(new_fifo):
             os.mkfifo(new_fifo)
         self.loggers_fifo.append(new_fifo)
-        self._print(f'{self.CMD_NEW_LOG_PANEL}\x00{new_fifo}\x00{title}\x00', self.cmd_fifo, newline=True)
+        mode = 'm' if markup else 'a'
+        self._print(f'{self.CMD_NEW_LOG_PANEL}\x00{new_fifo}\x00{mode}\x00{title}\x00', self.cmd_fifo, newline=True)
 
         return new_fifo
 
@@ -177,7 +178,7 @@ class RichTerm(Term):
             pass
         if fifo in self.loggers_fifo:
             self.loggers_fifo.remove(fifo)
-        self._print(f'{self.CMD_RM_LOG_PANEL}\x00{fifo}\x00\x00', self.cmd_fifo, newline=True)
+        self._print(f'{self.CMD_RM_LOG_PANEL}\x00{fifo}\x00\x00\x00', self.cmd_fifo, newline=True)
 
 
 class ExternalDisplay(object):
@@ -229,7 +230,11 @@ class Task(object):
     def cleanup(self):
         pass
 
-    def __init__(self, period=None, init_delay=0, new_window=False, new_window_title=None):
+    def __init__(self, period = None, init_delay= 0,
+                 new_window= False, new_window_title = None,
+                 name: str|None = None,
+                 markup_mode= True):
+        self._name = name
         self.period = period
         self.init_delay = init_delay
         self.fmkops = None
@@ -242,40 +247,64 @@ class Task(object):
         # the framework want it to stop.
         self.stop_event = None
 
+        self._markup_mode = markup_mode # only supported with TUI
         self._new_window = new_window
         self._new_window_title = new_window_title
 
-    def _setup(self):
-        if self._new_window:
-            nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
-            self.term = Term(title=nm, keepterm=True)
-            self.term.start()
+    def __str__(self):
+        if self._new_window_title is None and self._name is None:
+            pre_desc = f'{self.__class__.__name__}'
+        else:
+            name = self._new_window_title if self._name is None else self._name
+            pre_desc = f'{self.__class__.__name__}[{name}]'
+
+        if self.period is None:
+            desc = f'{pre_desc} - Oneshot Task'
+        else:
+            desc = f'{pre_desc} - Periodic Task (period={self.period}s)'
+
+        return desc
+
+
+    def _setup(self, tui_obj=None):
+        self._tui_obj = tui_obj
+        if self._tui_obj:
+            self._fifo = self._tui_obj.new_log_panel(title=str(self), markup=self._markup_mode)
+        else:
+            if self._new_window:
+                nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
+                self.term = Term(title=nm, keepterm=True)
+                self.term.start()
 
         self.setup()
 
     def _cleanup(self):
-        self.cleanup()
-        if self._new_window and self.term is not None:
-            self.term.stop()
-
-    def __str__(self):
-        if self.period is None:
-            desc = 'Oneshot Task'
+        if self._tui_obj:
+            self._tui_obj.remove_log_panel(self._fifo)
+            self._fifo = None
         else:
-            desc = 'Periodic Task (period={}s)'.format(self.period)
-        return desc
+            if self._new_window and self.term is not None:
+                self.term.stop()
+
+        self.cleanup()
 
     def print(self, msg):
-        if self._new_window:
-            self.term.print(msg)
+        if self._tui_obj:
+            self._tui_obj.print_on(self._fifo, msg)
         else:
-            print(msg)
+            if self._new_window:
+                self.term.print(msg)
+            else:
+                print(msg)
 
     def print_nl(self, msg):
-        if self._new_window:
-            self.term.print_nl(msg)
+        if self._tui_obj:
+            self._tui_obj.print_on(self._fifo, msg, newline=True)
         else:
-            print(msg)
+            if self._new_window:
+                self.term.print_nl(msg)
+            else:
+                print(msg)
 
 
 class Accumulator:
@@ -316,9 +345,7 @@ def find_file(filename, root_path):
 
 def retrieve_app_handler(filename):
     mimetype = subprocess.check_output(["xdg-mime", "query", "filetype", filename])[:-1]
-    desktop_file = subprocess.check_output(["xdg-mime", "query", "default", mimetype])[
-        :-1
-    ]
+    desktop_file = subprocess.check_output(["xdg-mime", "query", "default", mimetype])[:-1]
 
     file_path = find_file(desktop_file.decode(), root_path="~/.local/share/applications/")
     if file_path is None:

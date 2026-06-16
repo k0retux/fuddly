@@ -88,7 +88,7 @@ class FuddlyTUI(App):
         self._main_fifo_ansi = main_fifo_ansi
         self._main_fifo_bbcode = main_fifo_bbcode
         self._status_fifo = status_fifo
-        self._cmd_re = re.compile(r'(\d)\x00(.*?)\x00(.*?)\x00', flags=re.S)
+        self._cmd_re = re.compile(r'(\d)\x00(.*?)\x00(.*?)\x00(.*?)\x00', flags=re.S)
         self._loggers_fd = {}
         self._loggers_fifo = {}
 
@@ -114,12 +114,15 @@ class FuddlyTUI(App):
                 fifo = parsed.group(2)
                 if not fifo:
                     return
-                title = parsed.group(3)
+                mode = parsed.group(3)
+                title = parsed.group(4)
+
+                markup_mode = True if mode == 'm' else False
 
                 new_fd = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
                 rlog_id = fifo.split('/')[-1]
                 title = title.replace('[', r'\[')
-                self._loggers_fd[new_fd] = ('#' + rlog_id, title)
+                self._loggers_fd[new_fd] = ('#' + rlog_id, title, markup_mode)
                 self._loggers_fifo[rlog_id] = new_fd
                 epobj.register(new_fd, select.EPOLLIN | select.EPOLLHUP)
 
@@ -216,10 +219,14 @@ class FuddlyTUI(App):
                                     data = ''
                                 else:
                                     text += data
-                            text = Text.from_ansi(text)
-                            if text:
-                                w_id, title = self._loggers_fd[fd]
 
+                            w_id, title, markup_mode = self._loggers_fd[fd]
+                            if markup_mode:
+                                text = Text.from_markup(text)
+                            else:
+                                text = Text.from_ansi(text)
+
+                            if text:
                                 if not self._right_panel:
                                     self._right_panel = VerticalScroll(id="loggers")
                                     await self._main_panel.mount(self._right_panel)

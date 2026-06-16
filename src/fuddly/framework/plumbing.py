@@ -227,7 +227,10 @@ class EnforceOrder(object):
 
 
 class FmkTask(threading.Thread):
-    def __init__(self, name, func, arg, period=None, error_func=lambda x: x, cleanup_func=lambda: None):
+    def __init__(self, name, func, arg, period=None,
+                 error_func=lambda x: x,
+                 cleanup_func=lambda: None,
+                 tui_obj=None):
         threading.Thread.__init__(self)
         self.__name = name
         self.__func = func
@@ -236,12 +239,13 @@ class FmkTask(threading.Thread):
         self.__stop = threading.Event()
         self.__error_func = error_func
         self.__cleanup_func = cleanup_func
+        self.__tui_obj = tui_obj
         if isinstance(func, Task):
             func.stop_event = self.__stop
 
     def run(self):
         if isinstance(self.__func, Task):
-            self.__func._setup()
+            self.__func._setup(tui_obj=self.__tui_obj)
 
         if isinstance(self.__func, Task):
             time.sleep(self.__func.init_delay)
@@ -1398,7 +1402,9 @@ class FmkPlumbing(object):
 
         fmktask = FmkTask(task_ref, func=task_obj, arg=None, period=period,
                           error_func=self._handle_user_code_exception,
-                          cleanup_func=partial(self._unregister_task, task_ref))
+                          cleanup_func=partial(self._unregister_task, task_ref),
+                          tui_obj=self.external_display.disp)
+
         self._register_task(task_ref, fmktask)
         if self.is_ok():
             self.lg.log_fmk_info("A task has been registered (Task ID #{!s})".format(task_ref))
@@ -2608,7 +2614,8 @@ class FmkPlumbing(object):
                         if periodic_data is not None:
                             task = FmkTask(idx, func, periodic_data, period=period,
                                            error_func=self._handle_user_code_exception,
-                                           cleanup_func=partial(self._unregister_task, idx))
+                                           cleanup_func=partial(self._unregister_task, idx),
+                                           tui_obj=self.external_display.disp)
                             self._register_task(idx, task)
                             if self.is_ok():
                                 self.lg.log_fmk_info("A periodic data sending has been registered (Task ID #{!s})".format(idx))
