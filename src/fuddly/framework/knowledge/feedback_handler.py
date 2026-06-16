@@ -23,10 +23,16 @@
 
 import time
 import functools
+import random
+
+from textual.widgets import RichLog
+from xtermcolor import colorize
+
 from fuddly.framework.knowledge.information import Info
 from fuddly.info.generic import *
 from fuddly.libs import debug_facility as dbg
-from fuddly.libs.utils import Term
+from fuddly.libs.external_modules import Color
+from fuddly.libs.utils import Term, RichTerm
 
 if dbg.KNOW_DEBUG:
     DEBUG_PRINT = dbg.DEBUG_PRINT
@@ -84,7 +90,7 @@ class FeedbackHandler(object):
 
         self.specific_init(**kwargs)
 
-    def set_tui_control_interface(self, tui_obj):
+    def set_tui_control_interface(self, tui_obj: RichTerm):
         self._tui_obj = tui_obj
 
     def __str__(self):
@@ -158,7 +164,7 @@ class FeedbackHandler(object):
     def _start(self, current_dm):
         self._s = ''
         if self._tui_obj:
-            self._fifo = self._tui_obj.create_new_logger(title=str(self))
+            self._fifo = self._tui_obj.new_log_panel(title=str(self))
         else:
             if self._new_window:
                 nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
@@ -170,7 +176,8 @@ class FeedbackHandler(object):
     def _stop(self, before_reload=False):
         self._s = None
         if self._tui_obj:
-            pass
+            self._tui_obj.remove_log_panel(self._fifo)
+            self._fifo = None
         else:
             if self._new_window and self.term is not None:
                 self.term.stop(force_kill=True if before_reload else False)
@@ -243,7 +250,16 @@ class TestFbkHandler(FeedbackHandler):
         return 'Example of additional contextual information...'
 
     def extract_info_from_feedback(self, current_dm, source, timestamp, content, status):
-        self.print_nl('Processing Feedback...')
+        if random.choice([True, False]):
+            rd = random.choice(range(4))
+            self.print_nl({
+                0: colorize('Processing Feedback...', rgb=Color.FMKINFO),
+                1: colorize('Feedback Processed!', rgb=Color.FEEDBACK_HLIGHT),
+                2: colorize('[ERROR] Feedback is erroneous', rgb=Color.ERROR),
+                3: colorize('[WARNING] Feedback delayed', rgb=Color.WARNING),
+            }[rd])
+        else:
+            pass
 
         if content is None:
             return None

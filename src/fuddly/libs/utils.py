@@ -158,16 +158,27 @@ class RichTerm(Term):
     def print_on(self, fifo, s, newline=False):
         self._print(s, fifo, newline=newline)
 
-    CMD_NEW_LOGGER = 1
+    CMD_NEW_LOG_PANEL = 1
+    CMD_RM_LOG_PANEL = 2
 
-    def create_new_logger(self, title=''):
+    def new_log_panel(self, title=''):
         new_fifo = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))
         if not os.path.exists(new_fifo):
             os.mkfifo(new_fifo)
         self.loggers_fifo.append(new_fifo)
-        self._print(f'{self.CMD_NEW_LOGGER}\x00{title}\x00{new_fifo}\x00', self.cmd_fifo, newline=True)
+        self._print(f'{self.CMD_NEW_LOG_PANEL}\x00{new_fifo}\x00{title}\x00', self.cmd_fifo, newline=True)
 
         return new_fifo
+
+    def remove_log_panel(self, fifo):
+        try:
+            os.remove(fifo)
+        except FileNotFoundError:
+            pass
+        if fifo in self.loggers_fifo:
+            self.loggers_fifo.remove(fifo)
+        self._print(f'{self.CMD_RM_LOG_PANEL}\x00{fifo}\x00\x00', self.cmd_fifo, newline=True)
+
 
 class ExternalDisplay(object):
     def __init__(self, tui=False):

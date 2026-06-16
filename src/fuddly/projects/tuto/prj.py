@@ -52,7 +52,9 @@ project.add_knowledge(
     # Test.OnlyInvalidCases
 )
 
-project.register_feedback_handler(TestFbkHandler(name='myfbk_handler'))
+project.register_feedback_handler(TestFbkHandler(name='my feedback handler'))
+project.register_feedback_handler(TestFbkHandler(name='uber handler'))
+project.register_feedback_handler(TestFbkHandler(name='winter is coming'))
 
 ### PROJECT SCENARIOS DEFINITION ###
 

@@ -2,7 +2,6 @@ from textual import events
 from textual.css.query import NoMatches
 
 import fuddly.cli.argparse_wrapper as argparse
-from fuddly.framework.plumbing import FmkPlumbing, FmkShell
 from fuddly.framework.global_resources import fuddly_version
 
 import time
@@ -43,17 +42,35 @@ fuddly_tui_tcss = """
     height: 50%;
     border: solid green;
 }
+
+.hl_box {
+    height: 50%;
+    border: heavy red;
+}
 """
 
+tcss_selectors = ['#status', '.main_box', '.box', '.hl_box']
 tcss_fname = os.path.join(config_folder, FUDDLY_TUI_FNAME)
+write_tcss = False
 if not os.path.isfile(tcss_fname):
+    write_tcss = True
+else:
+    with open(tcss_fname, 'r') as f:
+        read_tcss = f.read()
+        for sel in tcss_selectors:
+            if sel not in read_tcss:
+                write_tcss = True
+                break
+if write_tcss:
     with open(tcss_fname, 'w') as f:
         f.write(fuddly_tui_tcss)
 
 class FuddlyLogger(RichLog):
 
     def on_focus(self, event: events.Focus) -> None:
-        self.styles.border = ('solid', 'green')
+        # self.styles.border = ('solid', 'green')
+        self.remove_class('hl_box')
+        self.add_class('box', update=True)
 
 
 class FuddlyTUI(App):
@@ -73,6 +90,7 @@ class FuddlyTUI(App):
         self._status_fifo = status_fifo
         self._cmd_re = re.compile(r'(\d)\x00(.*?)\x00(.*?)\x00', flags=re.S)
         self._loggers_fd = {}
+        self._loggers_fifo = {}
 
     def on_mount(self) -> None:
         self.run_worker(self.update_text())
@@ -87,10 +105,55 @@ class FuddlyTUI(App):
             )
         )
 
+    async def _process_command(self, cmd_msg, epobj):
+        parsed = self._cmd_re.match(cmd_msg)
+        if parsed:
+            cmd = int(parsed.group(1))
+            if cmd == 1:
+                # add log panel
+                fifo = parsed.group(2)
+                if not fifo:
+                    return
+                title = parsed.group(3)
+
+                new_fd = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
+                rlog_id = fifo.split('/')[-1]
+                title = title.replace('[', r'\[')
+                self._loggers_fd[new_fd] = ('#' + rlog_id, title)
+                self._loggers_fifo[rlog_id] = new_fd
+                epobj.register(new_fd, select.EPOLLIN | select.EPOLLHUP)
+
+                self.status_msg = Text.from_ansi(f'New fifo registered: {fifo}')
+
+            elif cmd == 2:
+                # remove log panel
+                fifo = parsed.group(2)
+
+                rlog_id = fifo.split('/')[-1]
+                fd = self._loggers_fifo.get(rlog_id)
+                if fd:
+                    epobj.unregister(fd)
+                    try:
+                        await self.query_one('#' + rlog_id).remove()
+                    except NoMatches:
+                        pass
+                    else:
+                        del self._loggers_fifo[rlog_id]
+                        del self._loggers_fd[fd]
+                        if self._right_panel and not self._loggers_fd:
+                            await self._right_panel.remove()
+                            self._main_log_area.styles.width = '100%'
+                            self._right_panel = None
+
+            else:
+                self.status_msg = Text.from_ansi(f'Command Parsing Error: {cmd_msg}')
+        else:
+            self.status_msg = Text.from_ansi('Error with new fifo')
+
     async def update_text(self) -> None:
-        log: RichLog = self.query_one("#left")
+        self._main_log_area: RichLog = self.query_one("#left")
         status: Static = self.query_one("#status")
-        main_panel = self.query_one("#main")
+        self._main_panel = self.query_one("#main")
         self._right_panel = None
         epobj = None
 
@@ -137,33 +200,10 @@ class FuddlyTUI(App):
                             cmd_msg_list = cmd_msgs.split('\n')
                             for cmd_msg in cmd_msg_list:
                                 if cmd_msg:
-                                    parsed = self._cmd_re.match(cmd_msg)
-                                    if parsed:
-                                        cmd = int(parsed.group(1))
-                                        title = parsed.group(2)
-                                        fifo = parsed.group(3)
-                                        if cmd == 1 and fifo:
-                                            new_fd = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
-                                            rlog_id = f'rlog_{len(self._loggers_fd)}'
-                                            self._loggers_fd[new_fd] = ('#' + rlog_id, title)
-                                            epobj.register(new_fd, select.EPOLLIN | select.EPOLLHUP)
-                                            # if not self._right_panel:
-                                            #     self._right_panel = VerticalScroll(id="loggers")
-                                            #     await main_panel.mount(self._right_panel)
-                                            #     log.styles.width = '60%'
-                                            #
-                                            # rlog = FuddlyLogger(highlight=True, id=rlog_id, classes='box')
-                                            # rlog.border_title = title
-                                            # await self._right_panel.mount(rlog)
-                                            # rlog.scroll_visible()
+                                    await self._process_command(cmd_msg, epobj)
+                                    self.status_msg.stylize('bold')
+                                    status.update(self.status_msg)
 
-                                            text = Text.from_ansi(f'New fifo registered: {fifo}')
-                                        else:
-                                            text = Text.from_ansi(f'Command Error: cmd:{cmd}, fifo:{fifo}')
-                                    else:
-                                        text = Text.from_ansi('Error with new fifo')
-                                    text.stylize('bold')
-                                    status.update(text)
                         elif fd in self._loggers_fd:
                             status.update(Text.from_ansi('Receive something in new fifo'))
                             text = ''
@@ -182,8 +222,8 @@ class FuddlyTUI(App):
 
                                 if not self._right_panel:
                                     self._right_panel = VerticalScroll(id="loggers")
-                                    await main_panel.mount(self._right_panel)
-                                    log.styles.width = '60%'
+                                    await self._main_panel.mount(self._right_panel)
+                                    self._main_log_area.styles.width = '60%'
 
                                 try:
                                     rlog = self.query_one(w_id)
@@ -192,10 +232,9 @@ class FuddlyTUI(App):
                                     rlog.border_title = title
                                     await self._right_panel.mount(rlog)
 
-                                # rlog = self.query_one(self._loggers_fd[fd])
-                                # rlog.scroll_visible()
+                                rlog.remove_class('box')
+                                rlog.add_class('hl_box', update=True)
                                 rlog.scroll_visible()
-                                rlog.styles.border = ('heavy', 'red')
                                 rlog.write(text)
 
                         elif fd == fd_status:
@@ -231,7 +270,7 @@ class FuddlyTUI(App):
                                 text = Text.from_markup(text)
 
                             if text:
-                                log.write(text)
+                                self._main_log_area.write(text)
                         else:
                             pass
 
@@ -240,12 +279,12 @@ class FuddlyTUI(App):
 
                     else:
                         error_msg = Text.from_markup(f'Unknown epoll() event: {evt}')
-                        log.write(error_msg)
+                        self._main_log_area.write(error_msg)
         finally:
             if epobj:
                 epobj.close()
             error_msg = Text.from_markup(f'Exit from EPOLL loop!')
-            log.write(error_msg)
+            self._main_log_area.write(error_msg)
 
 
 
@@ -264,5 +303,5 @@ def start(args: argparse.Namespace):
     except:
         console.print_exception()
 
-    time.sleep(100)
+    # time.sleep(100)
     return
