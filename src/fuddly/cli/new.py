@@ -65,7 +65,11 @@ def start(args: argparse.Namespace):
     clone = False
     # TODO should the template dir be in fuddly_folder so users can define their own templates?
     # origin is the __init__.py file of the module so taking "parent" gives us the module folder
-    src_dir = Path(util.find_spec("fuddly.cli").origin).parent.joinpath("templates")
+    spec = util.find_spec("fuddly.cli")
+    if spec is None:
+        print("Failed to get the spec of the 'fuddly.cli' module.")
+        return 1
+    src_dir = Path(spec.origin).parent.joinpath("templates")
     module_name = args.name
 
     if args.clone is not None and args.pyproject:
