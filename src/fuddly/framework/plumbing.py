@@ -766,7 +766,9 @@ class FmkPlumbing(object):
         self._stop_fmk_plumbing(before_reload=True)
 
         if tg_ids is not None:
-            self.load_targets(tg_ids)
+            ok = self.load_targets(tg_ids)
+            if not ok:
+                return False
 
         prj_params = self._import_project(prj_prefix, prj_name, prj_path, reload_prj=True)
         if prj_params is not None:
@@ -1959,11 +1961,14 @@ class FmkPlumbing(object):
 
         if tg_ids is not None:
             if isinstance(tg_ids, int):
-                self._load_targets([tg_ids])
+                ok = self._load_targets([tg_ids])
             else:
-                self._load_targets(tg_ids)
+                ok = self._load_targets(tg_ids)
         else:
-            self._load_targets([0])
+            ok = self._load_targets([0])
+
+        if not ok:
+            return False
 
         return self._launch()
 
