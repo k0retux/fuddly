@@ -1,6 +1,8 @@
 from textual import events
 from textual.css.query import NoMatches
+from typing import Iterable
 
+from fuddly.framework.plumbing import FmkPlumbing
 import fuddly.cli.argparse_wrapper as argparse
 from fuddly.framework.global_resources import fuddly_version
 
@@ -9,11 +11,12 @@ import asyncio
 import select
 import os
 import re
+from pathlib import Path
 
 from rich.console import Console
 from rich.traceback import install
 install()
-from textual.widgets import RichLog
+from textual.widgets import RichLog, TabbedContent, TabPane, DirectoryTree
 from textual.app import App
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Input, Static
@@ -26,30 +29,55 @@ FUDDLY_TUI_FNAME = 'fuddly_tui.tcss'
 
 fuddly_tui_tcss = """
 #status {
-    height: 5%;
+    height: 3;
     content-align: right middle;
     tint: blue 20%;
 }
 
 .main_box {
+    scrollbar-size: 1 1;
     box-sizing: border-box;
-    height: 100%;
+    height: 1fr;
     width: 100%;
     border: solid green;
 }
 
 .box {
+    scrollbar-size: 1 1;
     height: 50%;
     border: solid green;
 }
 
 .hl_box {
+    scrollbar-size: 1 1;
     height: 50%;
     border: heavy red;
 }
+
+#db_status {
+    height: 3;
+    border: solid blue 70%;
+    content-align: right middle;
+    tint: blue 20%;
+}
+
+#db_dir_tree {
+    scrollbar-size: 1 1;
+    border: solid blue 70%;
+    height: 1fr;
+    width: 25%;
+}
+
+#db_display {
+    scrollbar-size: 1 1;
+    border: solid blue 70%;
+    height: 1fr;
+    width: 75%;
+}
 """
 
-tcss_selectors = ['#status', '.main_box', '.box', '.hl_box']
+tcss_selectors = ['#status', '.main_box', '.box', '.hl_box',
+                  '#db_dir_tree', '#db_display', '#db_status']
 tcss_fname = os.path.join(config_folder, FUDDLY_TUI_FNAME)
 write_tcss = False
 if not os.path.isfile(tcss_fname):
@@ -72,6 +100,22 @@ class FuddlyLogger(RichLog):
         self.remove_class('hl_box')
         self.add_class('box', update=True)
 
+class FmkDBDirectoryTree(DirectoryTree):
+
+    def filter_paths(self, paths: Iterable[Path]) -> Iterable[Path]:
+        l = []
+        for p in paths:
+            if p.name.startswith('.'):
+                continue
+            if p.is_dir():
+                l.append(p)
+            elif p.is_file() and p.name.endswith('.db'):
+                l.append(p)
+            else:
+                pass
+
+        return l
+
 
 class FuddlyTUI(App):
     ANSICODE = 1
@@ -91,19 +135,84 @@ class FuddlyTUI(App):
         self._cmd_re = re.compile(r'(\d)\x00(.*?)\x00(.*?)\x00(.*?)\x00', flags=re.S)
         self._loggers_fd = {}
         self._loggers_fifo = {}
+        self.fmkdb = None
+
+        self._standalone_app = not self._cmd_fifo
 
     def on_mount(self) -> None:
-        self.run_worker(self.update_text())
+        if not self._standalone_app:
+            self.run_worker(self.update_text())
+
+    def on_directory_tree_file_selected(self, event):
+        path: Path = event.path
+        if not path.is_file():
+            return
+
+        self.file = path
+
+        db_disp: RichLog = self.query_one("#db_display")
+        db_status: Static = self.query_one("#db_status")
+
+        self.fmkdb = Database(fmkdb_path=self.file)
+        ok = self.fmkdb.start()
+        if not ok:
+            err_msg = f"[red]ERROR: invalid database![/] \[{self.file}]"
+            text = Text.from_markup(err_msg)
+
+            return
+
+        else:
+            text = Text.from_markup(f"[green]FmkDB selected[/]: {self.file}")
+
+        db_status.update(text)
+
+        raw_impact_analysis = False
+        fbk_src = None
+        fbk_status_formula = '? < 0'
+        min_rec_sz = 3
+        verbose = True
+        prj_name = None
+
+        ret = self.fmkdb.get_db_analysis(
+            prj_name=prj_name, fbk_src=fbk_src, fbk_status_formula=fbk_status_formula,
+            verbose=verbose,
+            op_record_min_size = min_rec_sz,
+            raw_analysis=raw_impact_analysis,
+            colorized=True)
+
+        self.fmkdb.stop()
+        self.fmkdb = None
+
+        if ret is None:
+            db_status.update(f"[red]ERROR: incompatible database for analysis![/] \[{self.file}]")
+        else:
+            _, _, sc_rec_str, op_rec_str = ret
+            db_disp.write(Text.from_ansi(sc_rec_str+'\n'))
+            db_disp.write(Text.from_ansi(op_rec_str+'\n'))
+
 
     def compose(self):
-        yield Vertical(
-            Static(Text.from_markup(f'[white]Wait for status...[/]'), id="status", classes='box',
-                         expand=True),
-            Horizontal(
-                RichLog(id="left", classes='main_box'),
-                id='main'
-            )
-        )
+        with TabbedContent():
+            if not self._standalone_app:
+                with TabPane('fuddly display', id='f_display'):
+                    yield Vertical(
+                        Static(Text.from_markup(f'[white]Wait for status...[/]'), id="status", classes='box',
+                                     expand=True),
+                        Horizontal(
+                            RichLog(id='left', classes='main_box'),
+                            id='main'
+                        )
+                    )
+            with TabPane('analyzer', id='f_analysis'):
+                yield Vertical(
+                    Static(Text.from_markup(f'FmkDB Analyzer'), id="db_status", classes='box',
+                           expand=True),
+                    Horizontal(
+                        FmkDBDirectoryTree(Path(os.path.expanduser('~')),
+                                           id='db_dir_tree'),
+                        RichLog(id='db_display'),
+                    )
+                )
 
     async def _process_command(self, cmd_msg, epobj):
         parsed = self._cmd_re.match(cmd_msg)
@@ -309,6 +418,8 @@ def start(args: argparse.Namespace):
         app.run()
     except:
         console.print_exception()
-
+    finally:
+        if app.fmkdb:
+            app.fmkdb.stop()
     # time.sleep(100)
     return

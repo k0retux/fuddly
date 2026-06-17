@@ -124,6 +124,11 @@ def main(argv: List[str] = None):
             action="store_true",
             help="limit the information displayed at startup.",
         )
+        group.add_argument(
+            "--tui",
+            action="store_true",
+            help="enable TUI",
+        )
 
     with subparsers.add_parser("tui", help="launch fuddly TUI") as p:
         parsers["tui"] = p

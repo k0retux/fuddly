@@ -1476,7 +1476,7 @@ class Database(object):
                     else:
                         timing_info.append((ack_date, sent_date, data_id))
 
-                if sc_end:
+                if sc_end and record_ongoing:
                     record_ongoing = False
                     current_scenario['last_data_id'] = data_id
                     current_scenario['end_date'] = sent_date
@@ -1624,182 +1624,198 @@ class Database(object):
 
                     obj['data_with_impact'] = impact_per_data_id
 
-            if display:
-                for idx, obj in enumerate(obj_list, start=1):
-                    hdr1 = colorize('=' * 45 + f'[ {prompt} #{idx} | ', rgb=Color.FMKINFOGROUP)
-                    seq_sz = obj['dmakers_seq_sz']
-                    op_seq = obj['op_seq']
-                    if seq_sz is not None:
-                        if is_batch_proc:
-                            last_sop_pos = obj['last_sop_pos']
-                            if seq_sz > 2:
-                                title = f"{obj['generator']} / "
-                                for i, op in enumerate(op_seq):
-                                    op_name, _ = op
-                                    title += f"{op_name} / "
-                                title = title[:-3]
-
-                                hdr2 = colorize(title, rgb=Color.FMKINFO)
-                            else:
-                                hdr2 = colorize(f"{obj['generator']} / {obj['last_stateful_op']}", rgb=Color.FMKINFO)
-                        else:
-                            title = f"{obj['name']} / "
+            # if display:
+            text = ''
+            for idx, obj in enumerate(obj_list, start=1):
+                hdr1 = colorize('=' * 45 + f'[ {prompt} #{idx} | ', rgb=Color.FMKINFOGROUP)
+                seq_sz = obj['dmakers_seq_sz']
+                op_seq = obj['op_seq']
+                if seq_sz is not None:
+                    if is_batch_proc:
+                        last_sop_pos = obj['last_sop_pos']
+                        if seq_sz > 2:
+                            title = f"{obj['generator']} / "
                             for i, op in enumerate(op_seq):
                                 op_name, _ = op
                                 title += f"{op_name} / "
                             title = title[:-3]
 
                             hdr2 = colorize(title, rgb=Color.FMKINFO)
-                    else:
-                        hdr2 = ''
-
-                    hdr3 = colorize(" ]===", rgb=Color.FMKINFOGROUP)
-                    print(hdr1 + hdr2 + hdr3)
-                    prj = colorize(f" |_ Project: ", rgb=Color.FMKINFO)
-                    prj += colorize(f"{obj['prj']}", rgb=Color.FMKSUBINFO)
-                    print(prj)
-                    if 'target' in obj:
-                        tg = colorize(f" |_ Target: ", rgb=Color.FMKINFO)
-                        tg += colorize(f"{obj['target']}", rgb=Color.FMKSUBINFO)
-                        print(tg)
-                    start_date = colorize(f" |_ Start Date: ", rgb=Color.FMKINFO)
-                    start_date += colorize(f"{obj['start_date']}", rgb=Color.DATE)
-                    print(start_date)
-                    end_date = colorize(f" |_ End Date:   ", rgb=Color.FMKINFO)
-                    end_date += colorize(f"{obj['end_date']}", rgb=Color.DATE)
-                    print(end_date)
-                    fdata1 = colorize(f" |_ First Data ID: ", rgb=Color.FMKINFO)
-                    fdata2 = colorize(f"{obj['first_data_id']}", rgb=Color.DATAINFO)
-                    print(fdata1 + fdata2)
-                    ldata1 = colorize(f" |_ Last Data ID:  ", rgb=Color.FMKINFO)
-                    ldata2 = colorize(f"{obj['last_data_id']}", rgb=Color.DATAINFO)
-                    print(ldata1 + ldata2)
-
-                    comments = self.get_comments(obj['first_data_id'], obj['last_data_id'])
-                    if comments:
-                        comments_str = colorize(f" |_ User Comments:", rgb=Color.FMKINFO)
-                        for com in comments:
-                            data_id, msg, date = com
-                            comments_str += colorize(f"\n    - Logged at [", rgb=Color.FMKINFO)
-                            comments_str += colorize(f"{date}", rgb=Color.DATE_ALT)
-                            comments_str += colorize(f"] and linked to data ID #{data_id}: ", rgb=Color.FMKINFO)
-                            comments_str += colorize(f"\n       {msg}", rgb=Color.FMKSUBINFO)
-                        print(comments_str)
-
-                    bp_info = colorize(f" |_ Batch Processing Info:\n", rgb=Color.FMKINFO)
-                    if is_batch_proc:
-                        bp_info += colorize(f"    - generator: ", rgb=Color.FMKINFO)
-                        bp_info += colorize(f"{obj['generator']}\n", rgb=Color.FMKSUBINFO)
-                        bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
-                        bp_info += colorize(f"{obj['gen_input']}", rgb=Color.FMKSUBINFO)
-
-                    else:
-                        bp_info += colorize(f"    - generator (scenario): ", rgb=Color.FMKINFO)
-                        bp_info += colorize(f"{obj['name']}\n", rgb=Color.FMKSUBINFO)
-                        bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
-                        bp_info += colorize(f"{obj['sc_input']}", rgb=Color.FMKSUBINFO)
-
-                    for pos, op in enumerate(op_seq, start=1):
-                        op_name, op_ui = op
-                        if is_batch_proc and pos == last_sop_pos:
-                            bp_info += colorize(f"\n    - operator #{pos} (last stateful): ", rgb=Color.FMKINFO)
-                            bp_info += colorize(f"{op_name}\n", rgb=Color.FMKSUBINFO)
-                            bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
-                            bp_info += colorize(f"{op_ui}", rgb=Color.FMKSUBINFO)
-                            if 'l_sop_starting_idx' in obj:
-                                bp_info += colorize(f"\n      |_ starting index: ", rgb=Color.FMKINFO)
-                                bp_info += colorize(f"{obj['l_sop_starting_idx']}\n", rgb=Color.FMKSUBINFO)
-                                bp_info += colorize(f"      |_ final index:    ", rgb=Color.FMKINFO)
-                                bp_info += colorize(f"{obj['l_sop_final_idx']}", rgb=Color.FMKSUBINFO)
-
                         else:
-                            bp_info += colorize(f"\n    - operator #{pos}: ", rgb=Color.FMKINFO)
-                            bp_info += colorize(f"{op_name}\n", rgb=Color.FMKSUBINFO)
-                            bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
-                            bp_info += colorize(f"{op_ui}", rgb=Color.FMKSUBINFO)
-
-                    print(bp_info)
-
-                    data_without_ack = obj['data_without_ack']
-                    if data_without_ack:
-                        data_noack = colorize(f" |_ ", rgb=Color.FMKINFO)
-                        data_noack += colorize(f"Data ID without acknowledgment: ", rgb=Color.ERROR)
-                        id_list = ''
-                        for idx, data_id in enumerate(data_without_ack):
-                            if idx % 10 == 0:
-                                id_list += '\n      '
-                            id_list += f"{data_id}, "
-                        data_noack += colorize(id_list[:-2], rgb=Color.DATAINFO)
+                            hdr2 = colorize(f"{obj['generator']} / {obj['last_stateful_op']}", rgb=Color.FMKINFO)
                     else:
-                        data_noack = colorize(f" |_ All the data have been acknowledged", rgb=Color.FMKINFO)
+                        title = f"{obj['name']} / "
+                        for i, op in enumerate(op_seq):
+                            op_name, _ = op
+                            title += f"{op_name} / "
+                        title = title[:-3]
 
-                    print(data_noack)
+                        hdr2 = colorize(title, rgb=Color.FMKINFO)
+                else:
+                    hdr2 = ''
 
-                    timing_stats = obj['timing_stats']
-                    if timing_stats:
-                        ack_delay_avg, std_deviation, ack_delay_max_obj, ack_delay_min_obj = timing_stats
-                        ack_delay_max, ackdmax_data_id = ack_delay_max_obj
-                        ack_delay_min, ackdmin_data_id = ack_delay_min_obj
+                hdr3 = colorize(" ]===\n", rgb=Color.FMKINFOGROUP)
+                # print(hdr1 + hdr2 + hdr3)
+                text += hdr1 + hdr2 + hdr3
+                prj = colorize(f" |_ Project: ", rgb=Color.FMKINFO)
+                prj += colorize(f"{obj['prj']}\n", rgb=Color.FMKSUBINFO)
+                # print(prj)
+                text += prj
+                if 'target' in obj:
+                    tg = colorize(f" |_ Target: ", rgb=Color.FMKINFO)
+                    tg += colorize(f"{obj['target']}\n", rgb=Color.FMKSUBINFO)
+                    # print(tg)
+                    text += tg
+                start_date = colorize(f" |_ Start Date: ", rgb=Color.FMKINFO)
+                start_date += colorize(f"{obj['start_date']}\n", rgb=Color.DATE)
+                # print(start_date)
+                text += start_date
+                end_date = colorize(f" |_ End Date:   ", rgb=Color.FMKINFO)
+                end_date += colorize(f"{obj['end_date']}\n", rgb=Color.DATE)
+                # print(end_date)
+                text += end_date
+                fdata1 = colorize(f" |_ First Data ID: ", rgb=Color.FMKINFO)
+                fdata2 = colorize(f"{obj['first_data_id']}\n", rgb=Color.DATAINFO)
+                # print(fdata1 + fdata2)
+                text += fdata1 + fdata2
+                ldata1 = colorize(f" |_ Last Data ID:  ", rgb=Color.FMKINFO)
+                ldata2 = colorize(f"{obj['last_data_id']}\n", rgb=Color.DATAINFO)
+                # print(ldata1 + ldata2)
+                text += ldata1 + ldata2
 
-                        tstats = colorize(f" |_ Acknowledgement Delay:", rgb=Color.FMKINFO)
-                        tstats += colorize(f"\n    - Average: ", rgb=Color.FMKINFOSUBGROUP)
-                        tstats += colorize(f"{ack_delay_avg}", rgb=Color.DATE_ALT)
-                        tstats += colorize(f"\n    - Maximum: ", rgb=Color.FMKINFOSUBGROUP)
-                        tstats += colorize(f"{ack_delay_max}", rgb=Color.DATE_ALT)
-                        tstats += colorize(f" from Data ID #{ackdmax_data_id}", rgb=Color.DATAINFO)
-                        tstats += colorize(f"\n    - Minimum: ", rgb=Color.FMKINFOSUBGROUP)
-                        tstats += colorize(f"{ack_delay_min}", rgb=Color.DATE_ALT)
-                        tstats += colorize(f" from Data ID #{ackdmin_data_id}", rgb=Color.DATAINFO)
-                        tstats += colorize(f"\n    - Standard deviation: ", rgb=Color.FMKINFOSUBGROUP)
-                        tstats += colorize(f"{std_deviation}", rgb=Color.DATE_ALT)
+                comments = self.get_comments(obj['first_data_id'], obj['last_data_id'])
+                if comments:
+                    comments_str = colorize(f" |_ User Comments:", rgb=Color.FMKINFO)
+                    for com in comments:
+                        data_id, msg, date = com
+                        comments_str += colorize(f"\n    - Logged at [", rgb=Color.FMKINFO)
+                        comments_str += colorize(f"{date}", rgb=Color.DATE_ALT)
+                        comments_str += colorize(f"] and linked to data ID #{data_id}: ", rgb=Color.FMKINFO)
+                        comments_str += colorize(f"\n       {msg}", rgb=Color.FMKSUBINFO)
+                    # print(comments_str)
+                    text += comments_str + '\n'
 
-                        print(tstats)
+                bp_info = colorize(f" |_ Batch Processing Info:\n", rgb=Color.FMKINFO)
+                if is_batch_proc:
+                    bp_info += colorize(f"    - generator: ", rgb=Color.FMKINFO)
+                    bp_info += colorize(f"{obj['generator']}\n", rgb=Color.FMKSUBINFO)
+                    bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
+                    bp_info += colorize(f"{obj['gen_input']}", rgb=Color.FMKSUBINFO)
 
-                    impact_per_data_id = obj['data_with_impact']
-                    if impact_per_data_id:
-                        imp_data = colorize(f" |_ ", rgb=Color.FMKINFO)
-                        imp_data += colorize(f"Impacting Data: ", rgb=Color.ERROR)
-                        for data_id, ext_fbk in impact_per_data_id.items():
-                            imp_data += colorize(f"\n    - ID #", rgb=Color.FMKINFO)
-                            imp_data += colorize(f"{data_id}", rgb=Color.ERROR)
-                            if ext_fbk['user_analysis']:
-                                for impact, content, tstamp in ext_fbk['user_analysis']:
-                                    imp_data += colorize(f"\n      |_ User analysis carried out [", rgb=Color.FMKINFO)
-                                    imp_data += colorize(f"{tstamp}", rgb=Color.DATE_ALT)
-                                    imp_data += colorize(f"]: ", rgb=Color.FMKINFO)
-                                    status = 'Impact Confirmed' if impact else 'False Positive'
-                                    color = Color.ANALYSIS_CONFIRM if impact else Color.ANALYSIS_FALSEPOSITIVE
-                                    imp_data += colorize(f"{status}", rgb=color)
-                                    if verbose:
-                                        imp_data += colorize(f'\n         {str(content)}', rgb=Color.DATAINFO_ALT)
-                            for src, fbk in ext_fbk['fbk'].items():
-                                imp_data += colorize(f"\n      |_ Feedback from: ", rgb=Color.FMKINFO)
-                                imp_data += colorize(f"{src}", rgb=Color.FMKSUBINFO)
+                else:
+                    bp_info += colorize(f"    - generator (scenario): ", rgb=Color.FMKINFO)
+                    bp_info += colorize(f"{obj['name']}\n", rgb=Color.FMKSUBINFO)
+                    bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
+                    bp_info += colorize(f"{obj['sc_input']}", rgb=Color.FMKSUBINFO)
 
-                                for content, status, date in fbk:
-                                    imp_data += colorize(f"\n         - Status[", rgb=Color.FMKINFOSUBGROUP)
-                                    imp_data += colorize(f"{date}", rgb=Color.DATE_ALT)
-                                    imp_data += colorize(f"]: ", rgb=Color.FMKINFOSUBGROUP)
-                                    imp_data += colorize(f"{status}", rgb=Color.FMKSUBINFO)
-                                    if verbose:
-                                        imp_data += colorize(f'\n            {str(content)}', rgb=Color.DATAINFO_ALT)
-
-                        print(imp_data)
+                for pos, op in enumerate(op_seq, start=1):
+                    op_name, op_ui = op
+                    if is_batch_proc and pos == last_sop_pos:
+                        bp_info += colorize(f"\n    - operator #{pos} (last stateful): ", rgb=Color.FMKINFO)
+                        bp_info += colorize(f"{op_name}\n", rgb=Color.FMKSUBINFO)
+                        bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
+                        bp_info += colorize(f"{op_ui}", rgb=Color.FMKSUBINFO)
+                        if 'l_sop_starting_idx' in obj:
+                            bp_info += colorize(f"\n      |_ starting index: ", rgb=Color.FMKINFO)
+                            bp_info += colorize(f"{obj['l_sop_starting_idx']}\n", rgb=Color.FMKSUBINFO)
+                            bp_info += colorize(f"      |_ final index:    ", rgb=Color.FMKINFO)
+                            bp_info += colorize(f"{obj['l_sop_final_idx']}", rgb=Color.FMKSUBINFO)
 
                     else:
-                        print(colorize(f" |_ No Detected Impact", rgb=Color.FMKINFO))
+                        bp_info += colorize(f"\n    - operator #{pos}: ", rgb=Color.FMKINFO)
+                        bp_info += colorize(f"{op_name}\n", rgb=Color.FMKSUBINFO)
+                        bp_info += colorize(f"      |_ inputs: ", rgb=Color.FMKINFO)
+                        bp_info += colorize(f"{op_ui}", rgb=Color.FMKSUBINFO)
 
+                # print(bp_info)
+                text += bp_info + '\n'
+
+                data_without_ack = obj['data_without_ack']
+                if data_without_ack:
+                    data_noack = colorize(f" |_ ", rgb=Color.FMKINFO)
+                    data_noack += colorize(f"Data ID without acknowledgment: ", rgb=Color.ERROR)
+                    id_list = ''
+                    for idx, data_id in enumerate(data_without_ack):
+                        if idx % 10 == 0:
+                            id_list += '\n      '
+                        id_list += f"{data_id}, "
+                    data_noack += colorize(id_list[:-2], rgb=Color.DATAINFO)
+                else:
+                    data_noack = colorize(f" |_ All the data have been acknowledged", rgb=Color.FMKINFO)
+
+                # print(data_noack)
+                text += data_noack + '\n'
+
+                timing_stats = obj['timing_stats']
+                if timing_stats:
+                    ack_delay_avg, std_deviation, ack_delay_max_obj, ack_delay_min_obj = timing_stats
+                    ack_delay_max, ackdmax_data_id = ack_delay_max_obj
+                    ack_delay_min, ackdmin_data_id = ack_delay_min_obj
+
+                    tstats = colorize(f" |_ Acknowledgement Delay:", rgb=Color.FMKINFO)
+                    tstats += colorize(f"\n    - Average: ", rgb=Color.FMKINFOSUBGROUP)
+                    tstats += colorize(f"{ack_delay_avg}", rgb=Color.DATE_ALT)
+                    tstats += colorize(f"\n    - Maximum: ", rgb=Color.FMKINFOSUBGROUP)
+                    tstats += colorize(f"{ack_delay_max}", rgb=Color.DATE_ALT)
+                    tstats += colorize(f" from Data ID #{ackdmax_data_id}", rgb=Color.DATAINFO)
+                    tstats += colorize(f"\n    - Minimum: ", rgb=Color.FMKINFOSUBGROUP)
+                    tstats += colorize(f"{ack_delay_min}", rgb=Color.DATE_ALT)
+                    tstats += colorize(f" from Data ID #{ackdmin_data_id}", rgb=Color.DATAINFO)
+                    tstats += colorize(f"\n    - Standard deviation: ", rgb=Color.FMKINFOSUBGROUP)
+                    tstats += colorize(f"{std_deviation}\n", rgb=Color.DATE_ALT)
+
+                    # print(tstats)
+                    text += tstats
+
+                impact_per_data_id = obj['data_with_impact']
+                if impact_per_data_id:
+                    imp_data = colorize(f" |_ ", rgb=Color.FMKINFO)
+                    imp_data += colorize(f"Impacting Data: ", rgb=Color.ERROR)
+                    for data_id, ext_fbk in impact_per_data_id.items():
+                        imp_data += colorize(f"\n    - ID #", rgb=Color.FMKINFO)
+                        imp_data += colorize(f"{data_id}", rgb=Color.ERROR)
+                        if ext_fbk['user_analysis']:
+                            for impact, content, tstamp in ext_fbk['user_analysis']:
+                                imp_data += colorize(f"\n      |_ User analysis carried out [", rgb=Color.FMKINFO)
+                                imp_data += colorize(f"{tstamp}", rgb=Color.DATE_ALT)
+                                imp_data += colorize(f"]: ", rgb=Color.FMKINFO)
+                                status = 'Impact Confirmed' if impact else 'False Positive'
+                                color = Color.ANALYSIS_CONFIRM if impact else Color.ANALYSIS_FALSEPOSITIVE
+                                imp_data += colorize(f"{status}", rgb=color)
+                                if verbose:
+                                    imp_data += colorize(f'\n         {str(content)}', rgb=Color.DATAINFO_ALT)
+                        for src, fbk in ext_fbk['fbk'].items():
+                            imp_data += colorize(f"\n      |_ Feedback from: ", rgb=Color.FMKINFO)
+                            imp_data += colorize(f"{src}", rgb=Color.FMKSUBINFO)
+
+                            for content, status, date in fbk:
+                                imp_data += colorize(f"\n         - Status[", rgb=Color.FMKINFOSUBGROUP)
+                                imp_data += colorize(f"{date}", rgb=Color.DATE_ALT)
+                                imp_data += colorize(f"]: ", rgb=Color.FMKINFOSUBGROUP)
+                                imp_data += colorize(f"{status}", rgb=Color.FMKSUBINFO)
+                                if verbose:
+                                    imp_data += colorize(f'\n            {str(content)}', rgb=Color.DATAINFO_ALT)
+
+                    # print(imp_data)
+                    text += imp_data + '\n'
+
+                else:
+                    # print(colorize(f" |_ No Detected Impact", rgb=Color.FMKINFO))
+                    text += colorize(f" |_ No Detected Impact\n", rgb=Color.FMKINFO)
+
+            return text
 
         user_analysis = self.get_user_impact_analysis()
 
+        sc_records_str = ''
         if sc_records:
-            process_obj_list(scenario_list, user_analysis, display=display, prompt='SCENARIO RECORD', is_batch_proc=False)
+            sc_records_str = process_obj_list(scenario_list, user_analysis, prompt='SCENARIO RECORD', is_batch_proc=False)
 
+        op_records_str = ''
         if op_records:
-            process_obj_list(op_list, user_analysis, display=display, prompt='BATCH PROCESSING RECORD', is_batch_proc=True)
+            op_records_str = process_obj_list(op_list, user_analysis, prompt='BATCH PROCESSING RECORD', is_batch_proc=True)
 
-
-        return scenario_list, op_list
+        return scenario_list, op_list, sc_records_str, op_records_str
 
 
     def get_data_with_impact(self, prj_name=None, fbk_src=None, fbk_status_formula='? < 0',

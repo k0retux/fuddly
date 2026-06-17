@@ -343,11 +343,18 @@ def main():
                                    colorized=colorized)
 
     elif db_analysis:
-        fmkdb.get_db_analysis(prj_name=prj_name, fbk_src=fbk_src, fbk_status_formula=fbk_status_formula,
-                              verbose=verbose,
-                              op_record_min_size = min_rec_sz,
-                              raw_analysis=raw_impact_analysis,
-                              colorized=colorized)
+        ret = fmkdb.get_db_analysis(
+            prj_name=prj_name, fbk_src=fbk_src, fbk_status_formula=fbk_status_formula,
+            verbose=verbose,
+            op_record_min_size = min_rec_sz,
+            raw_analysis=raw_impact_analysis,
+            colorized=colorized)
+
+        if ret is not None:
+            _, _, sc_rec_str, op_rec_str = ret
+
+            print(sc_rec_str)
+            print(op_rec_str)
 
     elif data_without_fbk:
         fmkdb.get_data_without_fbk(prj_name=prj_name, fbk_src=fbk_src, colorized=colorized)
