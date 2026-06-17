@@ -202,7 +202,6 @@ def main(argv: List[str] = None):
             "--dest",
             metavar="PATH",
             type=argparse.PathType(
-                dash_ok=False,
                 type="dir"
             ),
             help="directory to create the object in.",
@@ -318,7 +317,6 @@ def main(argv: List[str] = None):
             dest='file_path',
             metavar="FILE_PATH",
             type=argparse.PathType(
-                dash_ok=False,
                 type="file"
             ),
             help="optional file path from which data to decode shall be retrieved",
