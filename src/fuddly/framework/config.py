@@ -1,8 +1,4 @@
-##############################################################################
-#
-#  Copyright 2017 Matthieu Daumas <matthieu@daumas.me>
-#
-##############################################################################
+################################################################################
 #
 #  This file is part of fuddly.
 #
@@ -19,37 +15,22 @@
 #  You should have received a copy of the GNU General Public License
 #  along with fuddly. If not, see <http://www.gnu.org/licenses/>
 #
-##############################################################################
+################################################################################
 
-# TODO: dump the whole code
-# TODO: rewrite a proper module without configparser, nor "textual" backend
-# TODO: write a backend to write config objects to files
-# TODO: document it
-#
-# Features:
-# - configparser-enabled (sic)
-# - transparent access to the config keys
-# - inline documentation of the config keys
-# - recursive pattern/mergeable configs
-#
-
-import io
 import os
 import re
 import sys
-
 import configparser
 
+from collections.abc import Iterator
 from fuddly.framework.global_resources import config_folder
 
-reserved = {'config_name', 'parser', 'help', 'write', 'global', '_config_changed'}
-verbose = False
 
-
-class default:
+class Default:
     def __init__(self):
         self.configs = {}
 
+    # TODO when all known default configs have been updated, this can be removed
     __unindent = re.compile(r'^;;\s\s*', re.MULTILINE)
 
     def _unindent(self, multiline):
@@ -59,7 +40,7 @@ class default:
         self.configs[name] = self._unindent(doc)
 
 
-default = default()
+default = Default()
 
 default.add("FmkPlumbing", """
 [global]
@@ -70,32 +51,32 @@ fuzz.delay = 0
 fuzz.burst = 1
 continuous_monitoring_mode = True
 
-;;  [misc.doc]
-;;  self: (default values used when the framework resets)
-;;  fuzz.delay: Default value (> 0) for fuzz_delay
-;;  fuzz.burst: Default value (>= 1) for fuzz_burst
+[misc.doc]
+self: (default values used when the framework resets)
+fuzz.delay: Default value (> 0) for fuzz_delay
+fuzz.burst: Default value (>= 1) for fuzz_burst
 
 [targets]
 empty_tg.verbose = False
 
-;;  [targets.doc]
-;;  self: configuration related to targets
-;;  empty_tg.verbose: Enable verbose mode (if True) on the default EmptyTarget()
+[targets.doc]
+self: configuration related to targets
+empty_tg.verbose: Enable verbose mode (if True) on the default EmptyTarget()
 
 [terminal]
 external_term = False
 cmd = x-terminal-emulator -p tabtitle={title} -e {cmd}
 hold_arg = --hold
 
-;;  [terminal.doc]
-;;  self: Configuration applicable to the external terminal
-;;  external_term: Use an external terminal
-;;  cmd: Command to call the terminal.
-          It will be used as a python format string.
-          {title} will be replaces by the terminal title,
-          {hold} will be replaced with hold_arg if the terminal is to be kept open
-          {cmd} is the command that will be executed in the terminal
-;;  hold_arg: Options to keep the terminal open after the commands exits
+[terminal.doc]
+self: Configuration applicable to the external terminal
+external_term: Use an external terminal
+cmd: Command to call the terminal.
+      It will be used as a python format string.
+      {title} will be replaces by the terminal title,
+      {hold} will be replaced with hold_arg if the terminal is to be kept open
+      {cmd} is the command that will be executed in the terminal
+hold_arg: Options to keep the terminal open after the commands exits
 
 """)
 
@@ -112,31 +93,31 @@ offline_doc = True
 inline_doc = False
 dmaker_short_desc = False
 
-;;  [completion.doc]
-;;  offline_doc: When set to True, documentation for Generators and Operators are
-                  are displayed (while being completed by the shell) on the external terminal
-                  if it is enabled (either via with the config parameter 'external_term' set
-                  to True in 'FmkPlumbing.ini', or by launching the fuddly shell with the
-                  option '--external-display').
-                  Besides, description of their parameters are also displayed on the external
-                  terminal while being completed by the shell.
-;;  inline_doc: When set to True, documentation for Generators and Operators are
-                 displayed inline, as well as description of their parameters when parameters
-                 are being completed by the shell.
-;;  dmaker_short_desc: When set to True, only a short description of data makers (Generators
+[completion.doc]
+offline_doc: When set to True, documentation for Generators and Operators are
+              are displayed (while being completed by the shell) on the external terminal
+              if it is enabled (either via with the config parameter 'external_term' set
+              to True in 'FmkPlumbing.ini', or by launching the fuddly shell with the
+              option '--external-display').
+              Besides, description of their parameters are also displayed on the external
+              terminal while being completed by the shell.
+inline_doc: When set to True, documentation for Generators and Operators are
+             displayed inline, as well as description of their parameters when parameters
+             are being completed by the shell.
+dmaker_short_desc: When set to True, only a short description of data makers (Generators
                         and Operators) will be displayed. Otherwise, full documentation
-                        including parameters will be displayed. 
+                        including parameters will be displayed.
 
 [config]
 middle = 40
 indent.width = 4
 indent.level = 0
 
-;;  [config.doc]
-;;  self: Configuration applicable to the 'config' command
-;;  middle: Set the column where the helpers are defined.
-;;  indent.width: Set the indentation width used to display the helpers.
-;;  indent.level: Set the initial level of indentation width
+[config.doc]
+self: Configuration applicable to the 'config' command
+middle: Set the column where the helpers are defined.
+indent.width: Set the indentation width used to display the helpers.
+indent.level: Set the initial level of indentation width
                     used to display the helpers.
 
 [send_loop]
@@ -145,27 +126,27 @@ aligned_options.batch_mode = False
 aligned_options.hide_cursor = True
 aligned_options.prompt_height = 3
 
-;;  [send_loop.doc]
-;;  self: Configuration applicable to the 'send_loop' command.
-;;
-;;  aligned: Enable aligned display while sending data payloads.
-;;  aligned_options.batch_mode: Enable fitting multiple payloads onscreen
-                     (when using 'send_loop -1 <generator>').
-;;  aligned_options.hide_cursor: Attempt to reduce blinking by hiding cursor.
-;;  aligned_options.prompt_height: Estimation of prompt's height.
+[send_loop.doc]
+self: Configuration applicable to the 'send_loop' command.
+
+aligned: Enable aligned display while sending data payloads.
+aligned_options.batch_mode: Enable fitting multiple payloads onscreen
+                 (when using 'send_loop -1 <generator>').
+aligned_options.hide_cursor: Attempt to reduce blinking by hiding cursor.
+aligned_options.prompt_height: Estimation of prompt's height.
 
 [send]
 reset_dmakers = False
 
-;;  [send.doc]
-;;  self: Configuration applicable to the 'send' command and all derivatives
-          (excluding the loop versions).
-;;
-;;  reset_dmakers: [OBSOLETE] When this property is False, the data makers (Generator and Operators) involved
-      in the send* commands will keep their state, except if new parameters
-      are provided to them. In this case, all the data makers in the command will be reset.
-      When this property is set to True, the data makers involved in the send* commands will be
-      systematically reset before being used.  
+[send.doc]
+self: Configuration applicable to the 'send' command and all derivatives
+      (excluding the loop versions).
+
+reset_dmakers: [OBSOLETE] When this property is False, the data makers (Generator and Operators) involved
+  in the send* commands will keep their state, except if new parameters
+  are provided to them. In this case, all the data makers in the command will be reset.
+  When this property is set to True, the data makers involved in the send* commands will be
+  systematically reset before being used.
 
 
 """)
@@ -178,17 +159,18 @@ config_name = Database
 before_data_id = 5
 after_data_id = 60
 
-;;  [async_data.doc]
-;;  self: Configuration applicable to ASYNC DATA.
-;;
-;;  before_data_id: an async_data (without any associated data_id) will be considered to be related
-      to a data sent afterwards if the number of seconds that separates it from that data is less
-      than the amount specified in this parameter.
-;;  after_data_id: if after the last registered data by the framework, an async data is sent after
-      more than the amount of seconds specified in this parameter, it won't be considered to be
-      related to this last registered data.
+[async_data.doc]
+self: Configuration applicable to ASYNC DATA.
+
+before_data_id: an async_data (without any associated data_id) will be considered to be related
+  to a data sent afterwards if the number of seconds that separates it from that data is less
+  than the amount specified in this parameter.
+after_data_id: if after the last registered data by the framework, an async data is sent after
+  more than the amount of seconds specified in this parameter, it won't be considered to be
+  related to this last registered data.
 
 """)
+
 
 def update_config(from_whom, old_config):
     error_msg = (f"\n[WARNING] Old version detected for '{old_config.config_name}.ini' (renamed)."
@@ -201,481 +183,249 @@ def update_config(from_whom, old_config):
         new_config.write(cfile)
     return new_config, error_msg
 
-def check_type(name, attr, value):
-    original = value
 
-    try:
-        attr = str(attr)
-    except Exception as e:
-        raise AttributeError("unable to cast key's value " +
-                             "'{}' into a string".format(name) + ': ' + str(e))
-
-    try:
-        value = str(value)
-    except Exception as e:
-        raise AttributeError((
-            "unable to cast '{}' " + "for key '{}' into a string").format(
-                value, name) + ': ' + str(e))
-
-    test, value = try_bool(attr, value, name)
-    if test is not None:
-        return value
-
-    test, value = try_int(attr, value, name)
-    if test is not None:
-        return value
-
-    test, value = try_float(attr, value, name)
-    if test is not None:
-        return value
-
-    return original
-
-
-def try_bool(attr, value, name):
+def check_type(name: str, value: str):
     booleans = ["True", "False"]
-    if attr in booleans:
-        test = (attr == "True")
-    else:
-        test = None
-    if test is not None:
-        if value in booleans:
-            return (test, (value == "True"))
-        else:
-            raise AttributeError("key '{}' expects a boolean".format(name))
-
-    return (test, value)
-
-
-def try_int(attr, value, name):
     try:
-        test = int(attr)
-    except BaseException:
-        test = None
-    if test is not None:
-        try:
-            return (test, int(value))
-        except BaseException:
-            raise AttributeError("key '{}' expects an integer".format(name))
+        base = {
+            "0b": 2,
+            "0o": 8,
+            "0x": 16,
+        }[value[0:2]]
+    except KeyError:
+        base = 10
 
-    return (test, value)
+    # booleans
+    if value in booleans:
+        return value == "True"
 
-
-def try_float(attr, value, name):
+    # integers
     try:
-        test = float(attr)
-    except BaseException:
-        test = None
-    if test is not None:
-        try:
-            return (test, float(value))
-        except BaseException:
-            raise AttributeError("key '{}' expects a float".format(name))
-
-    return (test, value)
-
-
-def config_write(that, stream=sys.stdout):
-
-    that_dict = object.__getattribute__(that, '__dict__')
-    subconfigs = []
-    for item in that_dict.items():
-        if isinstance(item[1], config):
-            subconfigs.append(item)
-
-    for name, subconfig in subconfigs:
-        setattr(that, name, subconfig)
-
-    return that.parser.write(stream)
-
-
-def sectionize(that, parent):
-    if parent is not None:
-        that.config_name = parent
-
-    try:
-        name = str(that.config_name)
-    except BaseException:
-        name = that.config_name
-
-    parser = configparser.ConfigParser()
-    resection = re.compile(r'^([^.]*)\.?(.*)')
-    for section in that.parser.sections():
-        match = resection.match(section)
-        if not match:
-            raise RuntimeError("unable to match '{}'".format(section) +
-                               ' section name')
-
-        if len(match.group(2)) > 0:
-            target = name + '.' + match.group(2)
-        else:
-            target = name
-
-        if not parser.has_section(target):
-            parser.add_section(target)
-
-        if match.group(1) == 'global':
-            for option in that.parser.options(section):
-                value = that.parser.get(section, option)
-                parser.set(target, option, value)
-        else:
-            for option in that.parser.options(section):
-                value = that.parser.get(section, option)
-                parser.set(target, match.group(1) + '.' + option, value)
-
-    return parser
-
-
-def get_help_format(line, doc, level, indent, middle):
-    if doc is None or len(doc) < 1:
-        doc = '\n'
-
-    try:
-        line = str(line)
+        return int(value, base=base)
     except BaseException:
         pass
 
-    msg = ''
-    space = ' '
-    lines = line.splitlines(True)
-    for line in lines:
-        line = level * indent * space + line
-        msg += line
-
-        fst = True
-        docs = doc.splitlines(True)
-        for doc in docs:
-            if fst:
-                size = middle - len(line)
-                msg += size * space + doc
-                fst = False
-            else:
-                msg += middle * space + doc
-
-            if not ('\n' in doc):
-                msg += '\n'
-    return msg
-
-
-def get_help_attr(that, name, level=0, indent=4, middle=40):
-    if name in reserved:
-        return get_help_format(name + ': <reserved>',
-                               '(implementation details, reserved)', level,
-                               indent, middle)
-
-    dot_section = re.compile(r'^[^.]+\.[^.]+$')
-    if dot_section.match(name) and that.parser.has_section(name):
-        return get_help_format(name + ': <reserved>',
-                               '(special section, reserved)', level, indent,
-                               middle)
-
-    if that.parser.has_section(name):
-        try:
-            doc = that.parser.get(name + '.doc', 'that')
-        except BaseException:
-            doc = None
-
-        msg = '\n'
-        msg += get_help_format(name + ':', doc, level, indent, middle)
-        return (msg + get_help(
-            getattr(that, name), None, level + 1, indent, middle))
-
+    # floats
     try:
-        doc = that.parser.get('global.doc', name)
+        return float(value)
     except BaseException:
-        doc = None
+        pass
 
-    try:
+    return value
+
+
+class SectionProxyWrapper(configparser.SectionProxy):
+    def __getattr__(self, key: str):
+        if not self.parser._initialised:
+            return super().__getattribute__(key)
         try:
-            value = str(that.parser.get('global', name))
-        except BaseException:
-            value = that.parser.get('global', name)
-    except BaseException:
-        kdict = object.__getattribute__(that, '__dict__')
-        keys = [key for key in kdict]
-        if name in keys and isinstance(kdict[name], config_dot_proxy):
-            msg = name + ': (subkeys)\n'
-            keys = [key for key in keys if key.startswith(name + '.')]
-            for key in sorted(keys):
-                msg += get_help_attr(that, key, level + 1, indent, middle)
-            return msg
-        else:
-            value = '<undefined>'
+            return self.__getitem__(key)
+        except KeyError:
+            return super().__getattribute__(key)
 
-    return get_help_format(name + ': ' + value, doc, level, indent, middle)
+    def __getitem__(self, key: str) -> object:
+        if not self.parser._initialised:
+            return super().__getitem__(key)
+        return check_type(key, configparser.SectionProxy.__getitem__(self, key))
 
+    def __setattr__(self, key: str, val: object):
+        if not self.parser._initialised:
+            return super().__setattr__(key, val)
+        return self.__setitem__(key, val)
 
-def get_help(that, name=None, level=0, indent=4, middle=40):
-    if name is not None:
-        return get_help_attr(that, name, level, indent, middle)
+    def __setitem__(self, key: str, val: object):
+        if self.parser._initialised:
+            self.parser._config_changed = True
+        return super().__setitem__(key, str(val))
 
-    msg = ''
-    resection = re.compile(r'^[^.]*$')
-    for section in that.parser.sections():
-        if section == 'global':
-            for option in that.parser.options(section):
-                if option in reserved:
-                    continue
-                else:
-                    msg += get_help_attr(that, option, level, indent, middle)
-        elif resection.match(section):
-            msg += get_help_attr(that, section, level, indent, middle)
-        else:
+    def fmt_option(self, name, level=0, indent=4, middle=40) -> str:
+        "Format the output for printing the docs of this section/option"
+        if self.name.endswith(".doc"):
+            return ""
+        tab = " " * indent * level  # Level should either 0 or 1
+        val = self[name]
+        line_start = f"{tab}{name}: {val}"
+        description = ""
+        try:
+            description = f"{self.parser[self.name + ".doc"][name]}".replace("\n", "\n" + " " * middle)
+        except Exception:
+            # Ignore missing docs
             pass
+        pad = " " * (middle-(len(line_start)))
+        return line_start + pad + description + "\n"
 
-    return msg
+    def help(self, option: str | None, level=0, indent=4, middle=40) -> str:
+        "Show help for this specific section, or an options in it"
+        try:
+            # Need to go through the parser to get the doc for the section
+            doc_section = self.parser[self.name + ".doc"]
+        except KeyError:
+            return ""
+        if option is not None:
+            if option in self:
+                return self.fmt_option(option, 0, indent, middle)
+            else:
+                # Sub options handling
+                sub_opts = list(filter(lambda o: o.startswith(option), doc_section))
+                if len(sub_opts) == 0:
+                    return f"{option}: <undefined>\n"
 
-
-def config_setattr(that, name, value):
-    try:
-        attr = object.__getattribute__(that, name)
-    except BaseException:
-        attr = None
-
-    if not isinstance(value, config):
-        if isinstance(value, config_dot_proxy):
-            raise RuntimeError("'{}' (config_dot_proxy)".format(name) +
-                               " can not be used as value.")
-
-        if attr is not None:
-            value = check_type(name, attr, value)
-
-        if '.' in name:
-            prefixes = name.split('.')
-            for i in range(1, len(prefixes)):
-                prefix = '.'.join(prefixes[:-1 * i])
-                proxy = config_dot_proxy(that, prefix)
-                object.__setattr__(that, prefix, proxy)
-
-        strvalue = str(value)
-        that.parser.set('global', name, strvalue)
-        object.__setattr__(that, '_config_changed', True)
-        return object.__setattr__(that, name, value)
-
-    if attr is None:
-        flat_parser = sectionize(value, name)
-        for section in flat_parser.sections():
-            if not that.parser.has_section(section):
-                that.parser.add_section(section)
-
-            for option in flat_parser.options(section):
-                if option in reserved:
-                    continue
-                subvalue = flat_parser.get(section, option)
-                that.parser.set(section, option, subvalue)
-
-        return object.__setattr__(that, name, value)
-
-    if not isinstance(attr, config):
-        raise AttributeError("unable to replace key '{}'".format(name) +
-                             " by a section")
-
-    attr_parser = sectionize(attr, name)
-    for section in attr_parser.sections():
-        if not that.parser.has_section(section):
-            continue
-
-        for option in attr_parser.options(section):
-            if option in reserved:
-                continue
-
-            that.parser.remove_option(section, option)
-
-        if len(that.parser.options(section)) < 1:
-            that.parser.remove_section(section)
-
-    object.__setattr__(that, name, None)
-    return setattr(that, name, value)
-
-
-def config_getattribute(that, name):
-    if name == 'help':
-
-        def get_help_proxy(name=None, level=0, indent=4, middle=40):
-            msg = get_help(that, name, level, indent, middle)
-            try:
-                return str(msg)
-            except BaseException:
+                msg = f"{option}: (partial match)\n"
+                level = 1
+                for o in sub_opts:
+                    if o == "self":
+                        continue
+                    msg += self.fmt_option(o, level, indent, middle)
                 return msg
 
-        return get_help_proxy
+        msg = ''
+        # If in the global section, don't show the section name, and don't indent
+        if self.name != "global":
+            msg += f"{self.name}:\n"
+            level = 1
 
-    if name == 'write':
+        if self.name + ".doc" not in self.parser:
+            return ""
 
-        def write_proxy(stream=sys.stdout):
-            return config_write(that, stream)
-
-        return write_proxy
-
-    try:
-        attr = object.__getattribute__(that, name)
-        try:
-            attr = check_type(name, attr, attr)
-        except BaseException:
-            pass
-    except BaseException:
-        attr = None
-
-    if attr is None or '__' in name[:2] or '_config__' in name[:9]:
-        msg = "'config' instance for '{}' has no key nor section '{}'"
-        if not name == 'config_name':
-            raise AttributeError(msg.format(that.config_name, name))
-        else:
-            raise AttributeError(msg.format('error', name))
-
-    return attr
+        for opt in doc_section:
+            if opt == "self":
+                continue
+            msg += self.fmt_option(opt, level, indent, middle)
+        return msg
 
 
-class config_dot_proxy(object):
-    def __init__(self, config, prefix):
-        object.__setattr__(self, 'parent', config)
-        object.__setattr__(self, 'prefix', prefix)
+class ConfigParser(configparser.ConfigParser):
+    def __init__(self,
+                 parent: object,
+                 path=['.'],
+                 ext=['.ini', '.conf', '.cfg'],
+                 auto_update=True,
+                 *args,
+                 **kwargs):
 
-    def __getattribute__(self, name):
-        parent = object.__getattribute__(self, 'parent')
-        prefix = object.__getattribute__(self, 'prefix')
-        try:
-            return getattr(parent, prefix + '.' + name)
-        except BaseException:
-            return config_dot_proxy(self, name)
+        # Need to call the real setter to not get into a recursion loop
+        object.__setattr__(self, "_initialised", False)
+        super().__init__(*args, **kwargs)
 
-    def __setattr__(self, name, value):
-        parent = object.__getattribute__(self, 'parent')
-        prefix = object.__getattribute__(self, 'prefix')
-        return setattr(parent, prefix + '.' + name, value)
-
-
-class config(object):
-
-    def __init__(self, parent, path=['.'], ext=['.ini', '.conf', '.cfg']):
-
-        object.__setattr__(self, 'parser', configparser.ConfigParser())
+        loaded = False
         loaded_from_default = False
 
         if isinstance(parent, str):
             name = parent
         else:
-            try:
-                name = parent.__class__.__name__
-            except BaseException:
-                name = parent.__name__  # (no parent.__class__.__name__)
+            name = parent.__class__.__name__
 
-        loaded = False
+        self.name = name
+
+        updated = False
+
+        # Load the default config, value from the conf file will override them
+        if name in default.configs.keys():
+            self.read_string(default.configs[name], 'default_' + name)
+            self._config_changed = True
+        else:
+            # We don't have a default so we can't auto update
+            auto_update = False
+
+        # Try all files in {path} with all the extensions {ext}
+        config_files = []
         for pdir in path:
-            if not os.path.isdir(pdir):
-                continue
             for pext in ext:
-                filename = os.path.join(pdir, name + pext)
-                if not os.path.isfile(filename):
-                    continue
+                config_files.append(os.path.join(pdir, name + pext))
 
-                try:
-                    if verbose:
-                        sys.stderr.write('Loading {}...\n'.format(filename))
-                    with open(filename, 'r') as cfile:
-                        self.parser.read_file(cfile, source=filename)
-                    loaded = True
-                except BaseException as e:
-                    if verbose:
-                        sys.stderr.write('Warning: Unable to load {}: '.format(
-                            filename) + str(e) + '\n')
-                    continue
+        loaded_files = self.read(config_files)
+        if len(loaded_files) != 0:
+            self._config_changed = False
+        else:
+            sys.stderr.write(f'Warning: Unable to load any of {config_files}\n')
 
-        if loaded or name in default.configs:
-            if not loaded:
-                if verbose:
-                    sys.stderr.write(
-                        'Loading default config for {}...\n'.format(name))
-                self.parser.read_string(default.configs[name],
-                                        'default_' + name)
-                loaded = True
-                loaded_from_default = True
-
-            if not self.parser.has_section('global'):
-                raise AttributeError(
-                    ("default config '{}' has no '{}' section").format(
-                        name, 'global'))
-
-            try:
-                self.parser.get('global', 'config_name')
-            except BaseException:
-                raise AttributeError(
-                    ("default config '{}' has no '{}' key").format(
-                        name, 'config_name'))
-
-            resection = re.compile(r'^([^.]*)(\..*)?')
-            for section in self.parser.sections():
-
-                match = resection.match(section)
-                if not match:
-                    raise RuntimeError(
-                        ("unable to match '{}' section name").format(section))
-
-                if not section == 'global':
-                    if match.group(2) and len(match.group(2)) == 0:
-                        setattr(self, section, config(section))
-                    else:
-                        try:
-                            subconfig = object.__getattribute__(
-                                self, match.group(1))
-                        except BaseException:
-                            setattr(self,
-                                    match.group(1), config(match.group(1)))
-                            subconfig = object.__getattribute__(
-                                self, match.group(1))
-
-                        try:
-                            subconfig.parser.add_section(
-                                'global' + match.group(2))
-                        except BaseException:
-                            pass
-
-                for option in self.parser.options(section):
-                    value = self.parser.get(section, option)
-                    if section == 'global':
-                        if self.parser.has_section(option):
-                            raise AttributeError(
-                                ("default config '{}' " +
-                                 "has global '{}' which " +
-                                 "overrides '{}' section").format(
-                                     name, option, option))
-                        setattr(self, option, value)
-                    else:
-                        if match.group(2) and len(match.group(2)) > 0:
-                            subconfig = object.__getattribute__(
-                                self, match.group(1))
-                            subconfig.parser.set('global' + match.group(2),
-                                                 option, value)
-                        else:
-                            subconfig = object.__getattribute__(self, section)
-                            setattr(subconfig, option, value)
+        if not loaded and name in default.configs:
+            if verbose:
+                sys.stderr.write(f"Loading default config for {name}...\n")
+            self.read_string(default.configs[name], 'default_' + name)
+            loaded = True
+            loaded_from_default = True
 
         if not loaded and verbose:
-            sys.stderr.write("Creating a new config for {}...\n".format(name))
+            sys.stderr.write(f"Creating a new config for {name}...\n")
 
-        if not self.parser.has_section('global'):
-            self.parser.add_section('global')
+        if not self.has_section("global"):
+            self.add_section("global")
 
+        if "config_name" not in self["global"]:
+            self["config_name"] = 'global'
+
+        self._config_changed = loaded_from_default
+        self._initialised = True
+        if auto_update:
+            defconf = configparser.ConfigParser()
+            defconf.read_string(default.configs[name], 'default_' + name)
+            updated = self.clean(defconf)
+        self._config_changed = self._config_changed or updated
+        if auto_update and self._config_changed:
+            new_fn = loaded_files[0] + '.old'
+            os.rename(loaded_files[0], new_fn)
+            self.save(fullpath=loaded_files[0])
+
+    def __getattr__(self, name: str) -> SectionProxyWrapper:
+        # The global section exposes it's options directly instead of going
+        # though a section
+        if not self._initialised:
+            return object.__getattribute__(self, name)
         try:
-            object.__getattribute__(self, 'config_name')
-        except BaseException:
-            self.config_name = 'global'
+            if super().has_option("global", name):
+                return super().get("global", name)
+            elif super().has_section(name):
+                return self[name]
+        except KeyError:
+            return super().__getattribute__(name)
 
-        if loaded_from_default:
-            object.__setattr__(self, '_config_changed', True)
+    # Using the parent class' original getitem method but downcast the
+    # SectionProxy to our wrapper
+    def __getitem__(self, name: str) -> object:
+        s = super().__getitem__(name)
+        object.__setattr__(s, "__class__", SectionProxyWrapper)
+        return s
+
+    def __setattr__(self, name: str, value: object):
+        # If we are done initializing our class, a set should be adding to the
+        # underlying parser instead of defining new attributes
+        if not self._initialised:
+            return super().__setattr__(name, value)
+        if super().has_option("global", name):
+            return super().set("global", name, value)
         else:
-            object.__setattr__(self, '_config_changed', False)
+            return super().__setattr__(name, value)
 
-    def save(self, path):
+    def no_docs(self) -> Iterator[str]:
+        "Return an iterator of over the sections, without the *.doc and the DEFAULT section"
+        return filter(lambda s: not s.endswith(".doc") and s != "DEFAULT", configparser.ConfigParser.__iter__(self))
+
+    def help(self, args: list[str] = [], level=0, indent=4, middle=40) -> str:
+        "Returns the doc string for name with the specified indentation"
+        if len(args) == 0:
+            msg = ""
+            for s in self.no_docs():
+                msg += self[s].help(None, level, indent, middle) + "\n"
+            return msg[:-1]  # Remove the last line feed
+        else:
+            if args[0] in self["global"]:
+                section = "global"
+                option = args[0]
+            else:
+                section = args[0]
+                option = args[1] if len(args) == 2 else None
+            return self[section].help(option, level, indent, middle)
+
+    def save(self, path: str = "", fullpath: str = None):
+        "Write the config to disk"
         if self._config_changed:
-            filename = os.path.join(path, self.config_name + ".ini")
+            if fullpath is not None:
+                filename = fullpath
+            else:
+                filename = os.path.join(path, self.config_name + ".ini")
             with open(filename, "w") as cfile:
                 self.write(cfile)
 
-    def __getattribute__(self, name):
-        config_get = config_getattribute
-        return config_get(self, name)
-
-    def __setattr__(self, name, value):
-        config_set = config_setattr
-        return config_set(self, name, value)
+# Alias to stay backwards compatible
+config = ConfigParser

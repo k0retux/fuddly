@@ -54,7 +54,7 @@ from pprint import pprint
 from fuddly.libs.importer import fuddly_importer_hook
 fuddly_importer_hook.setup()
 
-from fuddly.framework.config import config, config_dot_proxy, update_config
+from fuddly.framework.config import config, update_config, SectionProxyWrapper
 from fuddly.framework.cosmetics import aligned_stdout
 from fuddly.framework.database import FeedbackGate
 from fuddly.framework.data import Data, DataProcess
@@ -669,8 +669,8 @@ class FmkPlumbing(object):
         self.cleanup_all_dmakers(reset_existing_seed)
         # Warning: fuzz delay is not set to 0 by default in order to have a time frame
         # where SIGINT is accepted from user
-        delay = self.config.misc.fuzz.delay if self.prj.default_sending_delay is None else self.prj.default_sending_delay
-        burst = self.config.misc.fuzz.burst if self.prj.default_burst_value is None else self.prj.default_burst_value
+        delay = self.config.misc["fuzz.delay"] if self.prj.default_sending_delay is None else self.prj.default_sending_delay
+        burst = self.config.misc["fuzz.burst"] if self.prj.default_burst_value is None else self.prj.default_burst_value
         self.set_delay_between_two_actions(delay)
         self.set_sending_burst_counter(burst)
 
@@ -1312,12 +1312,13 @@ class FmkPlumbing(object):
         # Targets
         try:
             targets = module.targets
-            targets.insert(0, EmptyTarget(verbose=self.config.targets.empty_tg.verbose))
+            # the field has a . in it, so we use the dict syntax to access the options
+            targets.insert(0, EmptyTarget(verbose=self.config.targets["empty_tg.verbose"]))
         except AttributeError:
-            tg = EmptyTarget(verbose=self.config.targets.empty_tg.verbose)
+            tg = EmptyTarget(verbose=self.config.targets["empty_tg.verbose"])
             tg.set_project(prj)
             targets = [tg]
-        
+
         new_targets = []
         for obj in targets:
             if isinstance(obj, (tuple, list)):
@@ -5343,69 +5344,29 @@ class FmkShell(cmd.Cmd):
         return False
 
     def complete_config(self, text, line, bgidx, endix, target=None):
-        init = False
-        if target is None:
-            init = True
-
+        # Removing text from line, making completion inside the line work™
+        line = line[:bgidx]
         args = line.split()
-        if args[-1] == text:
-            args.pop()
-        if init:
-            if len(args) == 1:
-                comp = [k for k in self.available_configs.keys()]
-                if text != "":
-                    comp = [i for i in comp if i.startswith(text)]
-                return comp
+        comp = []
 
-            try:
-                if text != "":
-                    return self.complete_config(
-                        text,
-                        " ".join(["config"] + args[2:] + [text]),
-                        0,
-                        0,
-                        self.available_configs[args[1]],
-                    )
-                else:
-                    return self.complete_config(
-                        "",
-                        " ".join(["config"] + args[2:]),
-                        0,
-                        0,
-                        self.available_configs[args[1]],
-                    )
-            except KeyError:
-                pass
+        if len(args) > 1:
+            target = self.available_configs[args[1]]
 
-            return []
+        match len(args):
+            case 1:
+                comp = self.available_configs.keys()
+            case 2:
+                comp = filter(
+                    lambda i: i != "config_name" and i != "global",
+                    list(target["global"]) + list(target.no_docs()) 
+                )
+            case 3:
+                comp = target[args[2]]
 
-        if len(args) == 1 and isinstance(target, config):
-            comp = target.parser.options("global") + target.parser.sections()
-            if text != "":
-                comp = [i for i in comp if i.startswith(text)]
-            comp = [
-                i.replace(".", " ")
-                for i in comp
-                if (i[-4:] != ".doc" and i != "config_name" and i != "global")
-            ]
-            return comp
-        if len(args) > 1 and args[1] == "shell":
-            return self.complete_config(
-                text, " ".join(args[1:] + [text]), 0, 0, self.config
-            )
-        if len(args) > 1 and target.parser.has_section(args[1]):
-            return self.complete_config(
-                    text,
-                    " ".join(args[1:] + [text]),
-                    0,
-                    0,
-                    getattr(target, args[1]))
-        comp = target.parser.options("global")
-        comp = [i for i in comp if i.startswith(args[-1] + ".")]
-        comp = [i[len(args[-1]) + 1 :] for i in comp
-                if (i[-4:] != ".doc" and i != "config_name" and i != "global")]
         if text != "":
             comp = [i for i in comp if i.startswith(text)]
+        # Adding a space makes completion nicer
+        comp = [x + " " for x in comp]
         return comp
 
     def do_config(self, line, target=None):
@@ -5414,99 +5375,105 @@ class FmkShell(cmd.Cmd):
         Usage:
          - config
                List all configuration options available.
-         - config [name [subname...]]
-               Get value associated with <name>.
-         - config [name [subname...]] value
-               Set value associated with <name>.
+         - config [name [section [option] | option]]
+               Get the documentation for the while <section> or <option>.
+         - config [name [section [option] | option]] value
+               Set value associated with <option> from <section> to <value>.
         """
         self.__error = True
 
-        level = self.config.config.indent.level
-        indent = self.config.config.indent.width
+        level = self.config.config["indent.level"]
+        indent = self.config.config["indent.width"]
         middle = self.config.config.middle
 
         args = line.split()
-        if target is None:
-            if len(args) == 0:
-                self.print("Available configurations:")
-                for target in self.available_configs:
-                    self.print(" - {}".format(target))
-                self.print('\n\t > Type "config <name>" to display documentation.')
-                self.__error = False
-                return False
-            else:
-                try:
-                    target = self.available_configs[args[0]]
-                    self._tmp_do_config_initial_target = target
-                    self.__error = False
-                    return self.do_config(" ".join(args[1:]), target)
-                except KeyError as e:
-                    self.print('Unknown config "{}": '.format(args[0]) + str(e))
-                return False
-
         if len(args) == 0:
-            self.print(target.help(None, level, indent, middle))
-            self.__error = False
-            return False
-        elif len(args) == 1:
-            self.print(target.help(args[0], level, indent, middle))
+            self.print("Available configurations:")
+            for target in self.available_configs:
+                self.print(f" - {target}")
+            self.print("\n\t > Usage: config [name [section [option [value]]]]")
             self.__error = False
             return False
 
-        section = args[0]
         try:
-            attr = getattr(target, section)
-        except:
-            self.__error_msg = "'{}' is not a valid config key".format(section)
+            target = self.available_configs[args[0]]
+        except KeyError:
+            self.__error = False
+            self.print(f'Unknown config "{args[0]}"\n')
+            self.do_config("")
+            self.__error = False
             return False
 
-        if isinstance(attr, config):
-            self.__error = False
-            return self.do_config(" ".join(args[1:]), attr)
-
-        if len(args) == 2:
-            if isinstance(attr, config_dot_proxy):
+        # Remove config type from args
+        args = args[1:]
+        match len(args):
+            # Get docs for a whole config file
+            case 0:
+                try:
+                    self.print(target.help([], level, indent, middle))
+                except KeyError as e:
+                    # Should never happen since a test was done when fetching the target
+                    self.print(f'Error getting docs for config "{target.name}": ' + str(e))
+                    return False
                 self.__error = False
-                key = ".".join(args)
-                self.print(target.help(key, level, indent, middle))
+                return False
+
+            # Get doc for a section of a config file
+            case 1:
+                try:
+                    self.print(target.help(args, level, indent, middle))
+                except KeyError:
+                    if len(args) == 1:
+                        self.print(f'Unknown section "{args[0]}" in config "{target.name}"')
+                    return False
                 self.__error = False
                 return False
 
-            try:
-                setattr(target, args[0], args[1])
-            except AttributeError as e:
-                self.__error_msg = "config: " + str(e)
+            # Get the docs for a specific option in a section of a config file
+            # or
+            # Set value in the global section
+            case 2:
+                section = args[0]
+                option = args[1]
+
+                try:
+                    # If the value retrieved is not a Section, that means we are setting a value
+                    if args[0] in target["global"]:
+                        section = "global"
+                        option = args[0]
+                        value = args[1]
+                        target[section][option] = value
+                        self.__error = False
+                    else:
+                        self.print(target.help(args, level, indent, middle))
+                        self.__error = False
+                except KeyError:
+                    self.__error_msg = f'Unknown option "{option}" in section "{section}" in config "{target.name}"'
+
+            # Set value in a section
+            case 3:
+                section = args[0]
+                option = args[1]
+                value = args[2]
+
+                try:
+                    target[section][option] = value
+                except KeyError:
+                    self.__error_msg = f"'{option}' is not a valid config key"
+                    return False
+                except Exception as e:
+                    self.__error_msg = "config: " + str(e)
+                    return False
+
+                self.print(target.help(args[:-1], level, indent, middle))
+                self.__error = False
                 return False
-            else:
-                object.__setattr__(self._tmp_do_config_initial_target,
-                                   '_config_changed', True)
 
-            self.print(target.help(args[0], level, indent, middle))
-            self.__error = False
-            return False
+            case _:
+                self.do_config("")
+                self.__error = True
+                self.__error_msg = "Error: to many arguments"
 
-        if isinstance(attr, config_dot_proxy):
-            key = ".".join(args[:-1])
-            try:
-                attr = getattr(target, key)
-            except:
-                self.__error_msg = "'{}' is not a valid config key".format(key)
-                return False
-
-            try:
-                setattr(target, key, args[-1])
-            except AttributeError as e:
-                self.__error_msg = "config: " + str(e)
-                return False
-            else:
-                object.__setattr__(self._tmp_do_config_initial_target,
-                                   '_config_changed', True)
-
-            self.print(target.help(key, level, indent, middle))
-            self.__error = False
-            return False
-
-        self.__error_msg = "'{}' do not have subkeys".format(args[0])
         return False
 
     def do_exec_dm_tests(self, line):
