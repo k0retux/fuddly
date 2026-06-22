@@ -23,7 +23,7 @@ install()
 from textual.widgets import RichLog, TabbedContent, TabPane, DirectoryTree
 from textual.app import App
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import Input, Static
+from textual.widgets import Input, Static, Button
 from rich.text import Text
 
 from fuddly.framework.global_resources import *
@@ -188,26 +188,24 @@ class FuddlyTUI(App):
         if not self._standalone_app:
             self.run_worker(self.update_text())
 
-    def on_directory_tree_file_selected(self, event):
-        path: Path = event.path
-        if not path.is_file():
-            return
 
-        self.file = path
-
+    def _launch_fmkdb_analysis(self, fmkdb_path=None):
         db_disp: RichLog = self.query_one("#db_display")
         db_status: Static = self.query_one("#db_status")
 
-        self.fmkdb = Database(fmkdb_path=self.file)
+        self.fmkdb = Database(fmkdb_path=fmkdb_path)
         ok = self.fmkdb.start()
         if not ok:
-            err_msg = f"[red]ERROR: invalid database![/] \\[{self.file}]"
+            err_msg = f"[red]ERROR: invalid database![/] \\[{fmkdb_path}]"
             text = Text.from_markup(err_msg)
 
             return
 
         else:
-            text = Text.from_markup(f"[green]FmkDB selected[/]: {self.file}")
+            if fmkdb_path is None:
+                text = Text.from_markup(f"[green]Current FmkDB selected[/]")
+            else:
+                text = Text.from_markup(f"[green]FmkDB selected[/]: {fmkdb_path}")
 
         db_status.update(text)
 
@@ -229,11 +227,24 @@ class FuddlyTUI(App):
         self.fmkdb = None
 
         if ret is None:
-            db_status.update(f"[red]ERROR: incompatible database for analysis![/] \\[{self.file}]")
+            db_status.update(f"[red]ERROR: incompatible database for analysis![/] \\[{fmkdb_path}]")
         else:
+            db_disp.clear()
             _, _, sc_rec_str, op_rec_str = ret
             db_disp.write(Text.from_ansi(sc_rec_str+'\n'))
             db_disp.write(Text.from_ansi(op_rec_str+'\n'))
+
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == 'current_fmkdb':
+            self._launch_fmkdb_analysis()
+
+    def on_directory_tree_file_selected(self, event):
+        path: Path = event.path
+        if not path.is_file():
+            return
+
+        self._launch_fmkdb_analysis(path)
 
 
     def compose(self):
@@ -256,8 +267,11 @@ class FuddlyTUI(App):
                     Static(Text.from_markup(f'FmkDB Analyzer'), id="db_status", classes='box',
                            expand=True),
                     Horizontal(
-                        FmkDBDirectoryTree(Path(os.path.expanduser('~')),
-                                           id='db_dir_tree'),
+                        Vertical(
+                            Button('Current FmkDB', id='current_fmkdb'),
+                            FmkDBDirectoryTree(Path(os.path.expanduser('~')),
+                                               id='db_dir_tree'),
+                        ),
                         RichLog(id='db_display'),
                     )
                 )
