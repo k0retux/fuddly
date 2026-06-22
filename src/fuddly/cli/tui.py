@@ -94,25 +94,29 @@ fuddly_tui_tcss = """
     tint: blue 20%;
 }
 
+#current_fmkdb {
+    width: 1fr;
+}
+
 #db_dir_tree {
     scrollbar-size: 1 1;
     border: solid blue 70%;
     height: 1fr;
-    width: 25%;
+    width: 1fr;
 }
 
 #db_display {
     scrollbar-size: 1 1;
     border: solid blue 70%;
     height: 1fr;
-    width: 75%;
+    width: 4fr;
 }
 """
 
 tcss_selectors = [
     '#status', '#main_panel_area', '#main_rlog_area', '#help_zone',
     '#main_rlog', '.box', '.hl_box', '.help_visible_mode', '.help_hidden_mode',
-    '#db_dir_tree', '#db_display', '#db_status']
+    '#db_dir_tree', '#db_display', '#db_status', '#current_fmkdb']
 tcss_fname = os.path.join(config_folder, FUDDLY_TUI_FNAME)
 write_tcss = False
 if not os.path.isfile(tcss_fname):
