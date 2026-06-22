@@ -1,10 +1,14 @@
+from argcomplete.scripts import python_argcomplete_check_easy_install_script
 from textual import events
 from textual.css.query import NoMatches
 from typing import Iterable
 
+from xdg.Locale import update
+
 from fuddly.framework.plumbing import FmkPlumbing
 import fuddly.cli.argparse_wrapper as argparse
 from fuddly.framework.global_resources import fuddly_version
+from fuddly.libs.utils import RichTerm
 
 import time
 import asyncio
@@ -34,10 +38,39 @@ fuddly_tui_tcss = """
     tint: blue 20%;
 }
 
-.main_box {
-    scrollbar-size: 1 1;
+#main_panel_area {
     box-sizing: border-box;
     height: 1fr;
+    width: 100%;
+}
+
+#main_rlog_area {
+    box-sizing: border-box;
+    height: 1fr;
+    width: 100%;
+}
+
+#help_zone {
+    scrollbar-size: 1 1;
+    box-sizing: border-box;
+    width: 100%;
+    border: solid blue;
+}
+
+.help_hidden_mode {
+    height: 0%;
+}
+
+.help_visible_mode {
+    height: 1fr;
+}
+
+#main_rlog {
+    scrollbar-size: 1 1;
+    box-sizing: border-box;
+    text-wrap: wrap;
+    text-overflow: fold;
+    height: 4fr;
     width: 100%;
     border: solid green;
 }
@@ -76,8 +109,10 @@ fuddly_tui_tcss = """
 }
 """
 
-tcss_selectors = ['#status', '.main_box', '.box', '.hl_box',
-                  '#db_dir_tree', '#db_display', '#db_status']
+tcss_selectors = [
+    '#status', '#main_panel_area', '#main_rlog_area', '#help_zone',
+    '#main_rlog', '.box', '.hl_box', '.help_visible_mode', '.help_hidden_mode',
+    '#db_dir_tree', '#db_display', '#db_status']
 tcss_fname = os.path.join(config_folder, FUDDLY_TUI_FNAME)
 write_tcss = False
 if not os.path.isfile(tcss_fname):
@@ -107,7 +142,7 @@ class FmkDBDirectoryTree(DirectoryTree):
         for p in paths:
             if p.name.startswith('.'):
                 continue
-            if p.is_dir():
+            elif p.is_dir():
                 l.append(p)
             elif p.is_file() and p.name.endswith('.db'):
                 l.append(p)
@@ -126,15 +161,25 @@ class FuddlyTUI(App):
     # """
 
 
-    def __init__(self, cmd_fifo, main_fifo_ansi, main_fifo_bbcode, status_fifo):
+    def __init__(self, cmd_fifo, main_fifo_ansi, main_fifo_bbcode, status_fifo, help_fifo):
         super().__init__()
         self._cmd_fifo = cmd_fifo
         self._main_fifo_ansi = main_fifo_ansi
         self._main_fifo_bbcode = main_fifo_bbcode
         self._status_fifo = status_fifo
+        self._help_fifo = help_fifo
         self._cmd_re = re.compile(r'(\d)\x00(.*?)\x00(.*?)\x00(.*?)\x00', flags=re.S)
         self._loggers_fd = {}
         self._loggers_fifo = {}
+        self._status_msg = Text.from_ansi('')
+        self._help_markup_mode = False
+
+        self._main_panel = None
+        self._main_rlog = None
+        self._right_panel = None
+        self._help_zone = None
+        # self._help_zone_hidden = True
+
         self.fmkdb = None
 
         self._standalone_app = not self._cmd_fifo
@@ -156,7 +201,7 @@ class FuddlyTUI(App):
         self.fmkdb = Database(fmkdb_path=self.file)
         ok = self.fmkdb.start()
         if not ok:
-            err_msg = f"[red]ERROR: invalid database![/] \[{self.file}]"
+            err_msg = f"[red]ERROR: invalid database![/] \\[{self.file}]"
             text = Text.from_markup(err_msg)
 
             return
@@ -184,7 +229,7 @@ class FuddlyTUI(App):
         self.fmkdb = None
 
         if ret is None:
-            db_status.update(f"[red]ERROR: incompatible database for analysis![/] \[{self.file}]")
+            db_status.update(f"[red]ERROR: incompatible database for analysis![/] \\[{self.file}]")
         else:
             _, _, sc_rec_str, op_rec_str = ret
             db_disp.write(Text.from_ansi(sc_rec_str+'\n'))
@@ -194,16 +239,19 @@ class FuddlyTUI(App):
     def compose(self):
         with TabbedContent():
             if not self._standalone_app:
-                with TabPane('fuddly display', id='f_display'):
+                with TabPane('dashboard', id='f_dashboard'):
                     yield Vertical(
                         Static(Text.from_markup(f'[white]Wait for status...[/]'), id="status", classes='box',
                                      expand=True),
                         Horizontal(
-                            RichLog(id='left', classes='main_box'),
-                            id='main'
+                            Vertical(
+                                RichLog(id='main_rlog', wrap=True),
+                                id="main_rlog_area"
+                            ),
+                            id='main_panel_area'
                         )
                     )
-            with TabPane('analyzer', id='f_analysis'):
+            with TabPane('analyzer', id='f_analyzer'):
                 yield Vertical(
                     Static(Text.from_markup(f'FmkDB Analyzer'), id="db_status", classes='box',
                            expand=True),
@@ -218,7 +266,7 @@ class FuddlyTUI(App):
         parsed = self._cmd_re.match(cmd_msg)
         if parsed:
             cmd = int(parsed.group(1))
-            if cmd == 1:
+            if cmd == RichTerm.CMD_NEW_LOG_PANEL:
                 # add log panel
                 fifo = parsed.group(2)
                 if not fifo:
@@ -235,9 +283,9 @@ class FuddlyTUI(App):
                 self._loggers_fifo[rlog_id] = new_fd
                 epobj.register(new_fd, select.EPOLLIN | select.EPOLLHUP)
 
-                self.status_msg = Text.from_ansi(f'New fifo registered: {fifo}')
+                self._status_msg = Text.from_ansi(f'New fifo registered: {fifo}')
 
-            elif cmd == 2:
+            elif cmd == RichTerm.CMD_RM_LOG_PANEL:
                 # remove log panel
                 fifo = parsed.group(2)
 
@@ -254,19 +302,37 @@ class FuddlyTUI(App):
                         del self._loggers_fd[fd]
                         if self._right_panel and not self._loggers_fd:
                             await self._right_panel.remove()
-                            self._main_log_area.styles.width = '100%'
+                            self._main_rlog_area.styles.width = '100%'
                             self._right_panel = None
 
+            elif cmd == RichTerm.CMD_HELP_MODE:
+                mode = parsed.group(2)
+
+                if mode == 'm': # markup mode
+                    self._help_markup_mode = True
+                else:
+                    self._help_markup_mode = False
+
+            elif cmd == RichTerm.CMD_HELP_HIDE:
+                if self._help_zone:
+                    self._help_zone.remove()
+                    self._help_zone = None
+                    # self._help_zone.remove_class('help_visible_mode')
+                    # self._help_zone.add_class('help_hidden_mode', update=True)
+                    # self._help_zone_hidden = True
+
             else:
-                self.status_msg = Text.from_ansi(f'Command Parsing Error: {cmd_msg}')
+                self._status_msg = Text.from_ansi(f'Unknown Command: {cmd}')
         else:
-            self.status_msg = Text.from_ansi('Error with new fifo')
+            self._status_msg = Text.from_ansi(f'Command Parsing Error: {cmd_msg}')
 
     async def update_text(self) -> None:
-        self._main_log_area: RichLog = self.query_one("#left")
-        status: Static = self.query_one("#status")
-        self._main_panel = self.query_one("#main")
-        self._right_panel = None
+        self._main_rlog: RichLog = self.query_one("#main_rlog")
+        self._status_wdg: Static = self.query_one("#status")
+        self._status_msg.stylize('bold')
+        self._main_panel = self.query_one("#main_panel_area")
+        self._main_panel_area = self.query_one("#main_panel_area")
+        self._main_rlog_area = self.query_one("#main_rlog_area")
         epobj = None
 
         try:
@@ -291,8 +357,14 @@ class FuddlyTUI(App):
                 epobj.register(fd_status, select.EPOLLIN | select.EPOLLHUP)
             else:
                 fd_status = None
+            if self._help_fifo:
+                fd_help = os.open(self._help_fifo, os.O_RDONLY | os.O_NONBLOCK)
+                epobj.register(fd_help, select.EPOLLIN | select.EPOLLHUP)
+            else:
+                fd_help = None
 
-            if fd_ansi is None and fd_bbcode is None and fd_status is None and fd_cmd is None:
+            if (fd_ansi is None and fd_bbcode is None and fd_status is None
+                    and fd_cmd is None and fd_help is None):
                 return
 
             while True:
@@ -313,11 +385,9 @@ class FuddlyTUI(App):
                             for cmd_msg in cmd_msg_list:
                                 if cmd_msg:
                                     await self._process_command(cmd_msg, epobj)
-                                    self.status_msg.stylize('bold')
-                                    status.update(self.status_msg)
+                                    self._status_wdg.update(self._status_msg)
 
                         elif fd in self._loggers_fd:
-                            status.update(Text.from_ansi('Receive something in new fifo'))
                             text = ''
                             data = 'INIT'
                             while data:
@@ -330,6 +400,7 @@ class FuddlyTUI(App):
                                     text += data
 
                             w_id, title, markup_mode = self._loggers_fd[fd]
+                            self._status_wdg.update(Text.from_markup(f'[green]Receive data from:[/] [b i]{title}[/]'))
                             if markup_mode:
                                 text = Text.from_markup(text)
                             else:
@@ -339,7 +410,7 @@ class FuddlyTUI(App):
                                 if not self._right_panel:
                                     self._right_panel = VerticalScroll(id="loggers")
                                     await self._main_panel.mount(self._right_panel)
-                                    self._main_log_area.styles.width = '60%'
+                                    self._main_rlog_area.styles.width = '60%'
 
                                 try:
                                     rlog = self.query_one(w_id)
@@ -366,7 +437,37 @@ class FuddlyTUI(App):
                             text = Text.from_markup(text)
                             if text:
                                 text.stylize('bold')
-                                status.update(text)
+                                self._status_wdg.update(text)
+
+                        elif fd == fd_help:
+                            text = ''
+                            data = 'INIT'
+                            while data:
+                                try:
+                                    data = os.read(fd, 8).decode()
+                                except BlockingIOError:
+                                    data = ''
+                                else:
+                                    text += data
+
+                            if not self._help_zone:
+                                self._help_zone = RichLog(id='help_zone', classes='help_visible_mode')
+                                self._help_zone.border_title = 'help'
+                                await self._main_rlog_area.mount(self._help_zone, before=self._main_rlog)
+                            #     self._help_zone_hidden = False
+                            #
+                            # if self._help_zone_hidden:
+                            #     self._help_zone.remove_class('help_hidden_mode', update=True)
+                            #     self._help_zone.add_class('help_visible_mode', update=True)
+                            #     self._help_zone_hidden = False
+
+                            if self._help_markup_mode:
+                                text = Text.from_markup(text)
+                            else:
+                                text = Text.from_ansi(text)
+
+                            if text:
+                                self._help_zone.write(text)
 
                         elif fd in (fd_ansi, fd_bbcode):
                             text = ''
@@ -386,7 +487,7 @@ class FuddlyTUI(App):
                                 text = Text.from_markup(text)
 
                             if text:
-                                self._main_log_area.write(text)
+                                self._main_rlog.write(text)
                         else:
                             pass
 
@@ -395,12 +496,12 @@ class FuddlyTUI(App):
 
                     else:
                         error_msg = Text.from_markup(f'Unknown epoll() event: {evt}')
-                        self._main_log_area.write(error_msg)
+                        self._main_rlog.write(error_msg)
         finally:
             if epobj:
                 epobj.close()
             error_msg = Text.from_markup(f'Exit from EPOLL loop!')
-            self._main_log_area.write(error_msg)
+            self._main_rlog.write(error_msg)
 
 
 
@@ -410,10 +511,12 @@ def start(args: argparse.Namespace):
     main_fifo_bbcode = args.main_fifo_bbcode
     status_fifo = args.status_fifo
     cmd_fifo = args.cmd_fifo
+    help_fifo = args.help_fifo
 
     console = Console(record=True, width=200)
 
-    app = FuddlyTUI(cmd_fifo, main_fifo_ansi, main_fifo_bbcode, status_fifo)
+    app = FuddlyTUI(cmd_fifo, main_fifo_ansi, main_fifo_bbcode,
+                    status_fifo, help_fifo)
     try:
         app.run()
     except:

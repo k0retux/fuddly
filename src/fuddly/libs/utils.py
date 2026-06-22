@@ -92,6 +92,9 @@ class Term(object):
     def print_nl(self, s):
         self.print(s, newline=True)
 
+    def print_help(self, s, newline=True):
+        self._print(s, self.main_fifo_ansi, newline=newline)
+
     def print_status(self, s, newline=False):
         pass
 
@@ -100,6 +103,13 @@ class Term(object):
 
 
 class RichTerm(Term):
+
+    CMD_NEW_LOG_PANEL = 1
+    CMD_RM_LOG_PANEL = 2
+
+    CMD_HELP_MODE = 5
+    CMD_HELP_HIDE = 6
+
     def __init__(self, title=None, keepterm=False):
         super().__init__(title=title, keepterm=keepterm)
         self.loggers_fifo = []
@@ -121,9 +131,14 @@ class RichTerm(Term):
         if not os.path.exists(self.status_fifo):
             os.mkfifo(self.status_fifo)
 
+        self.help_fifo = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))
+        if not os.path.exists(self.help_fifo):
+            os.mkfifo(self.help_fifo)
+
         pipe_cmd = (f"python -m fuddly.cli tui --cmd-fifo {self.cmd_fifo} "
-                    f"--main-fifo-ansi {self.main_fifo_ansi} "
-                    f"--main-fifo-bbcode {self.main_fifo_bbcode} --status-fifo {self.status_fifo}")
+                    f"--main-fifo-ansi {self.main_fifo_ansi} --main-fifo-bbcode {self.main_fifo_bbcode} "
+                    f"--status-fifo {self.status_fifo} "
+                    f"--help-fifo {self.help_fifo}")
 
         self.cmd = shlex.split(
                 term.cmd.format(
@@ -144,10 +159,14 @@ class RichTerm(Term):
             os.remove(self.main_fifo_ansi)
             os.remove(self.main_fifo_bbcode)
             os.remove(self.status_fifo)
+            os.remove(self.help_fifo)
             for fifo in self.loggers_fifo:
                 os.remove(fifo)
         except FileNotFoundError:
             pass
+
+    def print_on(self, fifo, s, newline=False):
+        self._print(s, fifo, newline=newline)
 
     def print_status(self, s, newline=False):
         self._print(s, self.status_fifo, newline=newline)
@@ -155,11 +174,15 @@ class RichTerm(Term):
     def print_markup(self, s, newline=False):
         self._print(s, self.main_fifo_bbcode, newline=newline)
 
-    def print_on(self, fifo, s, newline=False):
-        self._print(s, fifo, newline=newline)
+    def print_help(self, s, newline=True):
+        self._print(s, self.help_fifo, newline=newline)
 
-    CMD_NEW_LOG_PANEL = 1
-    CMD_RM_LOG_PANEL = 2
+    def set_help_mode(self, markup=False):
+        mode = 'm' if markup else 'a'
+        self._print(f'{self.CMD_HELP_MODE}\x00{mode}\x00\x00\x00', self.cmd_fifo, newline=True)
+
+    def hide_help_panel(self):
+        self._print(f'{self.CMD_HELP_HIDE}\x00\x00\x00\x00', self.cmd_fifo, newline=True)
 
     def new_log_panel(self, title='', markup=False):
         new_fifo = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))

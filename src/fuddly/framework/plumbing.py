@@ -4859,6 +4859,8 @@ class FmkShell(cmd.Cmd):
         self.__error_fmk = ""
 
         self.printer.wait_for_sync()
+        if self.fz._tui:
+            self.fz.external_display.disp.hide_help_panel()
 
         return stop
 
@@ -4925,7 +4927,7 @@ class FmkShell(cmd.Cmd):
                 self.comp_step += 1
 
         # if self.fz.external_display.is_enabled:
-        #     self.fz.external_display.disp.print_nl(
+        #     self.fz.external_display.disp.display_help(
         #         f'\n'
         #         f'***DBG: comp_step: {self.comp_step}, current_arg: {self.current_arg}\n'
         #         f' | text: {repr(text)}, line: {repr(line)}, begidx: {begidx}, endidx: {endidx}\n')
@@ -4954,11 +4956,11 @@ class FmkShell(cmd.Cmd):
     def _complete_helper_target(self, text):
         ret = list(filter(lambda x: x.startswith(text), list(self.targets.keys())))
         if self.fz.external_display.is_enabled:
-            self.fz.external_display.disp.print_nl('\n')
+            self.fz.external_display.disp.print_help('\n')
             for tg_id in ret:
                 tg = self.targets.get(tg_id)
                 if tg is not None:
-                    self.fz.external_display.disp.print_nl(
+                    self.fz.external_display.disp.print_help(
                         self.fz._make_target_desc(int(tg_id), tg)
                     )
         return ret
@@ -4987,7 +4989,7 @@ class FmkShell(cmd.Cmd):
                     if self._inline_doc:
                         print(self.fz._make_str(param, obj, prefix1='', prefix2='', prefix3='  | '))
                     if self._offline_doc and self.fz.external_display.is_enabled:
-                        self.fz.external_display.disp.print_nl(
+                        self.fz.external_display.disp.print_help(
                             self.fz._make_str(param, obj, prefix1='', prefix2='', prefix3='  | ')
                         )
         elif (self.comp_step >= start_completion_index+2
@@ -5012,7 +5014,7 @@ class FmkShell(cmd.Cmd):
                     if self._inline_doc:
                         print(self.fz._make_str(param, obj, prefix1='', prefix2='', prefix3='  | '))
                     if self._offline_doc and self.fz.external_display.is_enabled:
-                        self.fz.external_display.disp.print_nl(
+                        self.fz.external_display.disp.print_help(
                             self.fz._make_str(param, obj, prefix1='', prefix2='', prefix3='  | ')
                         )
         else:
@@ -5044,7 +5046,7 @@ class FmkShell(cmd.Cmd):
                     if self._inline_doc:
                         print(self.fz._make_str(param, obj, prefix1='', prefix2='', prefix3='  | '))
                     if self._offline_doc and self.fz.external_display.is_enabled:
-                        self.fz.external_display.disp.print_nl(
+                        self.fz.external_display.disp.print_help(
                             self.fz._make_str(param, obj, prefix1='', prefix2='', prefix3='  | ')
                         )
         else:
@@ -5070,7 +5072,7 @@ class FmkShell(cmd.Cmd):
         if self._inline_doc:
             print(desc)
         if self._offline_doc and self.fz.external_display.is_enabled:
-            self.fz.external_display.disp.print_nl(desc)
+            self.fz.external_display.disp.print_help(desc)
 
     def _reload_project_data(self):
         self._reset_completion_engine()
