@@ -297,6 +297,7 @@ class Project(object):
                                                                 name='fuddly feedback processing')
             self._feedback_processing_thread.start()
 
+        return True
 
     def stop(self, before_reload=False):
         if self._fbk_processing_enabled:
@@ -307,6 +308,8 @@ class Project(object):
 
         for fh in self._fbk_handlers:
             fh._stop(before_reload=before_reload)
+
+        return True
 
     def set_fs_path(self, prj_path):
         self._prj_fs_path = prj_path

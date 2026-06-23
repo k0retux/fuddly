@@ -40,7 +40,7 @@ class P1(Probe):
     def main(self, dm, target, logger):
         self.cpt += 1
 
-        return ProbeStatus(self.cpt, info='This is a Linux OS!')
+        return ProbeStatus(self.cpt, info=f'This is a Linux OS! {self.cpt}')
 
 
 @probe(project)

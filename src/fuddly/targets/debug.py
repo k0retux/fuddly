@@ -323,7 +323,8 @@ class TestTarget(Target):
                     tg._shared_queue.put((data.to_bytes(), str(self)))
             else:
                 self._logger.collect_feedback(content=self._handle_fbk(data),
-                                              status_code=random.randint(-3, 3))
+                                              status_code=random.randint(-3, 3),
+                                              fbk_src=self)
 
             self._last_ack_date = datetime.datetime.now() + datetime.timedelta(microseconds=random.randint(20, 40))
 

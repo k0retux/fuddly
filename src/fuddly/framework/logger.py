@@ -641,7 +641,8 @@ class Logger(object):
             fbk_src: [optional] source object of the feedback
         """
         now = datetime.datetime.now()
-        fbk_src = get_caller_object() if fbk_src is None else fbk_src
+        # TODO: get_caller_object() temporary blocks continuous_monitoring run within a thread
+        # fbk_src = get_caller_object() if fbk_src is None else fbk_src
 
         with self._tg_fbk_lck:
             self._tg_fbk.append(

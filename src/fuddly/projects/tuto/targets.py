@@ -60,6 +60,7 @@ targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
            rawnetsrv_tg,
            (TestTarget(fbk_samples=['CRC error', 'OK']),
             mytask),
+           # mytask, (P2, 2)),
            TestTarget()]
 
 if serial_module:

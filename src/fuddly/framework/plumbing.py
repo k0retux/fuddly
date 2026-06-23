@@ -27,6 +27,7 @@ import os
 import traceback
 import random
 import collections
+from typing import Callable
 
 import copy
 import re
@@ -41,6 +42,9 @@ import signal
 
 from pathlib import Path
 from os.path import dirname, basename
+from rich.console import Console
+from rich.traceback import install
+install()
 
 from functools import wraps, partial
 from typing import Sequence
@@ -228,7 +232,7 @@ class EnforceOrder(object):
 
 class FmkTask(threading.Thread):
     def __init__(self, name, func, arg, period=None,
-                 error_func=lambda x: x,
+                 error_func: Callable[[str], None] = lambda x: None,
                  cleanup_func=lambda: None,
                  tui_obj=None):
         threading.Thread.__init__(self)
@@ -237,6 +241,8 @@ class FmkTask(threading.Thread):
         self.__arg = arg
         self.__period = period
         self.__stop = threading.Event()
+        self.__pause = threading.Event()
+        self.__pause_state = threading.Event()
         self.__error_func = error_func
         self.__cleanup_func = cleanup_func
         self.__tui_obj = tui_obj
@@ -246,11 +252,18 @@ class FmkTask(threading.Thread):
     def run(self):
         if isinstance(self.__func, Task):
             self.__func._setup(tui_obj=self.__tui_obj)
-
-        if isinstance(self.__func, Task):
             time.sleep(self.__func.init_delay)
 
         while not self.__stop.is_set():
+            if self.__pause.is_set():
+                if not self.__pause_state.is_set():
+                    self.__pause_state.set()
+                self.__pause.wait(0.1)
+                continue
+
+            if not self.__pause.is_set():
+                self.__pause_state.clear()
+
             try:
                 # print("\n*** Function '{!s}' executed by Task '{!s}' ***".format(self.__func, self.__name))
                 if isinstance(self.__func, list):
@@ -263,18 +276,32 @@ class FmkTask(threading.Thread):
             except:
                 self.__error_func("Task '{!s}' has crashed!".format(self.__name))
                 break
+
             if self.__period is not None:
                 self.__stop.wait(max(self.__period, 0.0001))
             else:
-                self.__cleanup_func()
                 break
 
         if isinstance(self.__func, Task):
             self.__func._cleanup()
+        else:
+            self.__cleanup_func()
 
     def stop(self):
         self.__stop.set()
+        if self.is_paused():
+            self.__pause.clear()
 
+    def pause(self, timeout=None):
+        if not self.is_paused():
+            self.__pause.set()
+            self.__pause_state.wait(timeout)
+
+    def unpause(self):
+        self.__pause.clear()
+
+    def is_paused(self):
+        return self.__pause_state.is_set()
 
 def _populate_projects(search_path, prefix="", projects=None):
     if projects is None:
@@ -371,10 +398,11 @@ class FmkPlumbing(object):
         self.printer = Printer(self, tui=self._tui)
         self.print = self.printer.print
 
-        self._reset_main_objects()
+        self.console = Console(record=True, width=200)
+        self.rprint_exception = self.console.print_exception
+        self.rprint = self.console.print
 
-        if self._tui:
-            self.external_display.disp.print_status('[green bold]Fuddly initialization complete[/]')
+        self._reset_main_objects()
 
     def __str__(self):
         return "Fuddly FmK"
@@ -419,9 +447,8 @@ class FmkPlumbing(object):
         self._task_list = {}
         self._task_list_lock = threading.Lock()
 
-        self._hc_timeout = {}  # health-check tiemout, further initialized as a dict (tg -> hc_timeout)
+        self._hc_timeout = {}  # health check timeout, further initialized as a dict (tg -> hc_timeout)
         self._hc_timeout_max = None
-        # self._hc_timeout_increment = 0.01
 
         self._fbk_timeout_max = 0
         self._fbk_timeout_default = 0.005
@@ -453,6 +480,51 @@ class FmkPlumbing(object):
         self.last_data_id = None
         self.next_data_id = None
 
+        self._continuous_monitoring_mode = False  # config parameter
+        self.__continuous_monitoring_enabled = False
+        self.__monitoring_task = None
+
+    CMON_TASK_REF = 'continuous_monitoring'
+
+    @property
+    def continuous_monitoring_enabled(self):
+        return self.__continuous_monitoring_enabled
+
+    @continuous_monitoring_enabled.setter
+    def continuous_monitoring_enabled(self, value):
+        # TODO: it is correctly serialized with self.process_data_and_send() and self.launch_director()
+        #  but not with self.send_data_and_log().
+        #  Forbid execution of self.send_data_and_log() in case continuous monitoring is enabled
+
+        if not self._continuous_monitoring_mode:
+            return
+
+        if value:
+            if self.__monitoring_task is None:
+                self.__monitoring_task = FmkTask(self.CMON_TASK_REF,
+                                                 func=self._continuous_feedback_collecting, arg=None, period=0.1,
+                                                 error_func=self._handle_fmk_exception,
+                                                 cleanup_func=partial(self._unregister_task, self.CMON_TASK_REF),
+                                                 tui_obj=self.external_display.disp)
+                self._register_task(self.CMON_TASK_REF, self.__monitoring_task)
+            else:
+                self.__monitoring_task.unpause()
+
+            self.__continuous_monitoring_enabled = True
+            self.external_display.disp.print_status('Continuous monitoring enabled')
+
+        else:
+            if self.__monitoring_task is not None:
+                self.__monitoring_task.pause()
+            self.__continuous_monitoring_enabled = False
+            self.external_display.disp.print_status('Continuous monitoring disabled')
+
+    def _continuous_feedback_collecting(self, param):
+        user_interrupt, go_on = self._collect_residual_feedback(force_mode=True,
+                                                                skip_if_fbk_received=True,
+                                                                skip_tg_readiness_waiting=True,
+                                                                reason='Continuous monitoring')
+
     @EnforceOrder(initial_func=True)
     def start(self):
         self.printer.start()
@@ -460,6 +532,13 @@ class FmkPlumbing(object):
         self.check_clone_re = re.compile(r'(.*)#(\w{1,30})')
 
         self.config = config(self, path=[config_folder])
+
+        try:
+            self._continuous_monitoring_mode = self.config.misc.continuous_monitoring_mode and self._tui
+        except AttributeError:
+            self.config, error_msg = update_config(from_whom=self, old_config=self.config)
+            self.print(colorize(error_msg, rgb=Color.WARNING))
+            self._continuous_monitoring_mode = self.config.misc.continuous_monitoring_mode and self._tui
 
         error_msg = None
         try:
@@ -524,6 +603,8 @@ class FmkPlumbing(object):
             if error_msg:
                 self.print(colorize(error_msg, rgb=Color.WARNING))
 
+        if self._tui:
+            self.external_display.disp.print_status('[green bold]Fuddly initialization complete[/]')
 
     def switch_term(self):
         if not self.external_display.is_enabled:
@@ -613,10 +694,12 @@ class FmkPlumbing(object):
             self.lg.log_error("Exception in user code detected! Outcomes " \
                               "of this log entry has to be considered with caution.\n" \
                               "    (_ cause: '%s' _)" % msg)
-        self.print("Exception in user code:")
-        self.print("-" * 60)
-        traceback.print_exc(file=self.printer)
-        self.print("-" * 60)
+        # self.print("Exception in user code:")
+        # self.print("-" * 60)
+        # traceback.print_exc(file=self.printer)
+        # self.print("-" * 60)
+        self.rprint('[red]Exception in user code![/]')
+        self.rprint_exception()
 
     def _handle_fmk_exception(self, cause=""):
         self.set_error(cause, code=Error.UserCodeError)
@@ -624,10 +707,13 @@ class FmkPlumbing(object):
             self.lg.log_error("Not handled exception detected! Outcomes " \
                                 "of this log entry has to be considered with caution.\n" \
                                 "    (_ cause: '%s' _)" % cause)
-        self.print("Call trace:")
-        self.print("-" * 60)
-        traceback.print_exc(file=self.printer)
-        self.print("-" * 60)
+        # self.print("Call trace:")
+        # self.print("-" * 60)
+        # traceback.print_exc(file=self.printer)
+        # self.print("-" * 60)
+        self.rprint('[red]Exception in framework![/]')
+        self.rprint_exception()
+
 
     def _is_data_valid(self, data):
         def is_valid(d):
@@ -1413,7 +1499,6 @@ class FmkPlumbing(object):
 
     def _start_fmk_plumbing(self):
         if not self._is_started():
-            ok = False
             signal.signal(signal.SIGINT, signal.SIG_IGN)
 
             self.lg.start(tui=self._tui)
@@ -1423,6 +1508,7 @@ class FmkPlumbing(object):
                 self.set_error("Project cannot be launched because of data model loading error")
                 return
 
+            prj_started = False
             ok = {}
             try:
                 for tg_id, tg in self.targets.items():
@@ -1455,10 +1541,14 @@ class FmkPlumbing(object):
 
                 self.mon.wait_for_probe_initialization()
 
-                if self._tui:
-                    self.prj.start(tui_obj=self.external_display.disp)
-                else:
-                    self.prj.start()
+                try:
+                    if self._tui:
+                        prj_started = self.prj.start(tui_obj=self.external_display.disp)
+                    else:
+                        prj_started = self.prj.start()
+                except Exception as e:
+                    self.set_error(f'The project {self.prj.name} did not start correctly')
+                    self.rprint_exception()
 
                 if self.prj.fmkdb_enabled and not self.fmkDB.is_enabled():
                     self.enable_fmkdb()
@@ -1511,19 +1601,11 @@ class FmkPlumbing(object):
                 self.__db_idx = 0
                 self.__data_bank = {}
 
-                if ok:
+                if prj_started:
                     self.lg.print_status(f'[green]Project [i]{self.prj.name}[/] launched[/]')
                 else:
                     self.lg.print_status(f'[red]Error while loading the project {self.prj.name}[/]')
 
-                # if self._tui:
-                #     fifo1 = self.external_display.disp.create_new_logger()
-                #     self.lg.print_on(fifo1, 'Ceci est un test [green]depuis le Logger du projet[/]\n')
-                #     self.external_display.disp.print_on(fifo1, 'Ceci est un test [bold green]depuis FmkPlumbing[/]\n')
-                #
-                #     fifo2 = self.external_display.disp.create_new_logger()
-                #     self.lg.print_on(fifo2, 'Ceci est un [b]autre[/] test [blue]depuis[/] le Logger du projet\n')
-                #
                 self._start()
 
     def _stop_fmk_plumbing(self, before_reload=False):
@@ -1575,7 +1657,6 @@ class FmkPlumbing(object):
 
             self.lg.stop()
             self.prj.stop(before_reload=before_reload)
-
             self._stop()
 
             signal.signal(signal.SIGINT, sig_int_handler)
@@ -1972,6 +2053,14 @@ class FmkPlumbing(object):
 
         return self._launch()
 
+    @EnforceOrder(accepted_states=["S2"])
+    def start_continuous_monitoring(self):
+        self.continuous_monitoring_enabled = True
+
+    @EnforceOrder(accepted_states=["S2"])
+    def stop_continuous_monitoring(self):
+        self.continuous_monitoring_enabled = True
+
     @EnforceOrder(accepted_states=["20_load_prj", "25_load_dm", "S1", "S2"], final_state="25_load_dm")
     def load_project(self, prj=None, name=None):
         if name is not None:
@@ -2356,7 +2445,18 @@ class FmkPlumbing(object):
         if self._collect_residual_feedback(force_mode=True, timeout=timeout)[0]:
             raise UserInterruption
 
-    def _collect_residual_feedback(self, force_mode=False, timeout=0, skip_if_fbk_received=False):
+    def _collect_residual_feedback(self, force_mode=False, timeout: int | float= 0,
+                                   skip_if_fbk_received=False, skip_tg_readiness_waiting=False,
+                                   reason=None):
+        """
+        :param force_mode:
+        :param timeout:
+        :param skip_if_fbk_received: if True, we avoid waiting too long while waiting for target readiness,
+                meaning that we return as soon as we received feedback from the target (even if the target feedback
+                mode is )
+        :return:
+        """
+
         # If feedback_timeout = 0 then we don't consider residual feedback.
         # We try to avoid unnecessary latency in this case, as well as
         # to avoid retrieving some feedback that could be a trigger for sending the next data
@@ -2383,21 +2483,21 @@ class FmkPlumbing(object):
                     self._recovered_tgs = None
                     collected = True
 
-            if collected:
+            if collected and not skip_tg_readiness_waiting:
                 # We have to make sure the targets are ready for sending data after
                 # collecting feedback.
                 ftimeout = None if timeout == 0 else timeout
-                ret = self.wait_for_target_readiness(forced_feedback_timeout=ftimeout, skip_if_fbk_received=skip_if_fbk_received)
+                ret = self.wait_for_target_readiness(forced_feedback_timeout=ftimeout,
+                                                     skip_if_fbk_received=skip_if_fbk_received)
                 user_interrupt = ret == -2
                 tg_ready = ret >= 0
 
             log_no_error = self.log_target_residual_feedback()
-
             for tg in targets_to_retrieve_fbk.values():
                 tg.cleanup()
 
-        self.monitor_probes(prefix="Probe Status Before Sending Data")
-
+        desc = "Probe Status Before Sending Data" if reason is None else reason
+        self.monitor_probes(prefix=desc)
         go_on = tg_ready and log_no_error
 
         return user_interrupt, go_on
@@ -2700,8 +2800,11 @@ class FmkPlumbing(object):
                                "Task ignored.".format(id), code=Error.UserCodeError)
 
     def _cleanup_tasks(self):
-        for id in self._task_list:
-            self._task_list[id].stop()
+        task_list = copy.copy(self._task_list)
+        for id, tsk in task_list.items():
+            tsk.stop()
+            if id == self.CMON_TASK_REF:
+                self.__monitoring_task = None
         self._task_list = {}
 
     @EnforceOrder(accepted_states=["S2"])
@@ -2767,6 +2870,8 @@ class FmkPlumbing(object):
         else:
             pass
 
+        self.continuous_monitoring_enabled = False
+
         if data_desc is not None:
             if id_from_fmkdb is not None:
                 assert isinstance(data_desc, DataProcess)
@@ -2823,7 +2928,7 @@ class FmkPlumbing(object):
                 if not go_on:
                     break
 
-
+        self.continuous_monitoring_enabled = True
         return sent_data
 
     @EnforceOrder(accepted_states=["S2"])
@@ -3274,7 +3379,8 @@ class FmkPlumbing(object):
         return err_detected
 
     @EnforceOrder(accepted_states=["S2"])
-    def wait_for_target_readiness(self, forced_feedback_timeout=None, skip_if_fbk_received=False):
+    def wait_for_target_readiness(self, forced_feedback_timeout=None, skip_if_fbk_received=False,
+                                  sigint_update=True):
         """
 
         Args:
@@ -3286,7 +3392,8 @@ class FmkPlumbing(object):
 
         if self.__tg_enabled:
             t0 = datetime.datetime.now() if self._last_sending_date is None else self._last_sending_date
-            signal.signal(signal.SIGINT, sig_int_handler)
+            if sigint_update:
+                signal.signal(signal.SIGINT, sig_int_handler)
             ret = 0
             if self._burst_countdown > 1:
                 fbk_timeout = 0
@@ -3366,7 +3473,8 @@ class FmkPlumbing(object):
                     tg.cleanup()
             finally:
                 self._last_sending_date = None
-                signal.signal(signal.SIGINT, signal.SIG_IGN)
+                if sigint_update:
+                    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
             return ret
 
@@ -3681,6 +3789,8 @@ class FmkPlumbing(object):
 
         fmk_feedback = FmkFeedback()
 
+        self.continuous_monitoring_enabled = False
+
         exit_director = False
         while not exit_director:
             try:
@@ -3852,6 +3962,8 @@ class FmkPlumbing(object):
             return False
 
         self._reset_fmk_internals(reset_existing_seed=(not use_existing_seed))
+
+        self.continuous_monitoring_enabled = True
 
         return True
 
@@ -4720,7 +4832,7 @@ class FmkPlumbing(object):
 
 
 class FmkShell(cmd.Cmd):
-    def __init__(self, title, fmk_plumbing, completekey="tab"):
+    def __init__(self, title, fmk_plumbing: FmkPlumbing, completekey="tab"):
         cmd.Cmd.__init__(self, completekey, stdin=None, stdout=None)
         self.fz = fmk_plumbing
         self.printer = fmk_plumbing.printer
@@ -5463,7 +5575,27 @@ class FmkShell(cmd.Cmd):
 
         self._reload_project_data()
 
+        self.fz.start_continuous_monitoring()
+
         self.__error = False
+        return False
+
+    def do_start_continuous_monitoring(self, line):
+        """
+        Start the continuous monitoring task
+        |_ syntax: start_continuous_monitoring
+        """
+        self.fz.start_continuous_monitoring()
+
+        return False
+
+    def do_stop_continuous_monitoring(self, line):
+        """
+        Stop the continuous monitoring task
+        |_ syntax: stop_continuous_monitoring
+        """
+        self.fz.stop_continuous_monitoring()
+
         return False
 
     def complete_run_project(self, text, line, begidx, endidx):

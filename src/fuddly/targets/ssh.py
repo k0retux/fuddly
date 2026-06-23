@@ -139,26 +139,26 @@ class SSHTarget(Target):
             self._last_ack_date = datetime.datetime.now()
             self._fbk_received = True
         except BackendError as err:
-            self._logger.collect_feedback(content='{}'.format(err), status_code=err.status)
+            self._logger.collect_feedback(content='{}'.format(err), status_code=err.status, fbk_src=self)
             return
 
         if self.read_stdout:
             try:
                 data = self.ssh_backend.read_stdout(self.chan_desc)
                 if data:
-                    self._logger.collect_feedback(content=data, status_code=0, subref='stdout')
+                    self._logger.collect_feedback(content=data, status_code=0, subref='stdout', fbk_src=self)
             except BackendError as err:
                 self._logger.collect_feedback(content='{}'.format(err), status_code=err.status,
-                                              subref='stdout')
+                                              subref='stdout', fbk_src=self)
 
         if self.read_stderr:
             try:
                 data = self.ssh_backend.read_stderr(self.chan_desc)
                 if data:
-                    self._logger.collect_feedback(content=data, status_code=0, subref='stderr')
+                    self._logger.collect_feedback(content=data, status_code=0, subref='stderr', fbk_src=self)
             except BackendError as err:
                 self._logger.collect_feedback(content='{}'.format(err), status_code=err.status,
-                                              subref='stderr')
+                                              subref='stderr', fbk_src=self)
 
     def is_feedback_received(self): # useless currently as no-threaded send_data
         return self._fbk_received

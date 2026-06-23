@@ -68,6 +68,7 @@ config_name = FmkPlumbing
 [misc]
 fuzz.delay = 0
 fuzz.burst = 1
+continuous_monitoring_mode = True
 
 ;;  [misc.doc]
 ;;  self: (default values used when the framework resets)
