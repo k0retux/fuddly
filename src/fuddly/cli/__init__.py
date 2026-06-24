@@ -144,6 +144,11 @@ def main(argv: List[str] = None):
             help="Main communication FIFO (BBcode compatible)",
         )
         group.add_argument(
+            "--basic-fifo",
+            metavar="PATH",
+            help="Basic communication FIFO",
+        )
+        group.add_argument(
             "--status-fifo",
             metavar="PATH",
             help="path to a notification FIFO",

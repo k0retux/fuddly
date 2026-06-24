@@ -68,9 +68,6 @@ class Term(object):
         except FileNotFoundError:
             pass
 
-    def print(self, s, newline=False):
-        self._print(s, self.main_fifo_ansi, newline=newline)
-
     def _print(self, s, fifo: str|None = None, newline=False):
         if not isinstance(s, str):
             s = str(s)
@@ -89,8 +86,13 @@ class Term(object):
             self.start()
             self._print(s, fifo, newline=newline)
 
+    def print(self, s, newline=False):
+        self._print(s, self.main_fifo_ansi, newline=newline)
+
     def print_nl(self, s):
         self.print(s, newline=True)
+
+    print_basic = print
 
     def print_help(self, s, newline=True):
         self._print(s, self.main_fifo_ansi, newline=newline)
@@ -110,6 +112,9 @@ class RichTerm(Term):
     CMD_HELP_MODE = 5
     CMD_HELP_HIDE = 6
 
+    CMD_BASIC_OUTPUT_MODE = 7
+    CMD_BASIC_OUTPUT_HIDE = 8
+
     def __init__(self, title=None, keepterm=False):
         super().__init__(title=title, keepterm=keepterm)
         self.loggers_fifo = []
@@ -127,6 +132,10 @@ class RichTerm(Term):
         if not os.path.exists(self.main_fifo_bbcode):
             os.mkfifo(self.main_fifo_bbcode)
 
+        self.basic_fifo = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))
+        if not os.path.exists(self.basic_fifo):
+            os.mkfifo(self.basic_fifo)
+
         self.status_fifo = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))
         if not os.path.exists(self.status_fifo):
             os.mkfifo(self.status_fifo)
@@ -137,6 +146,7 @@ class RichTerm(Term):
 
         pipe_cmd = (f"python -m fuddly.cli tui --cmd-fifo {self.cmd_fifo} "
                     f"--main-fifo-ansi {self.main_fifo_ansi} --main-fifo-bbcode {self.main_fifo_bbcode} "
+                    f"--basic-fifo {self.basic_fifo} "
                     f"--status-fifo {self.status_fifo} "
                     f"--help-fifo {self.help_fifo}")
 
@@ -158,6 +168,7 @@ class RichTerm(Term):
             os.remove(self.cmd_fifo)
             os.remove(self.main_fifo_ansi)
             os.remove(self.main_fifo_bbcode)
+            os.remove(self.basic_fifo)
             os.remove(self.status_fifo)
             os.remove(self.help_fifo)
             for fifo in self.loggers_fifo:
@@ -168,11 +179,14 @@ class RichTerm(Term):
     def print_on(self, fifo, s, newline=False):
         self._print(s, fifo, newline=newline)
 
-    def print_status(self, s, newline=False):
-        self._print(s, self.status_fifo, newline=newline)
-
     def print_markup(self, s, newline=False):
         self._print(s, self.main_fifo_bbcode, newline=newline)
+
+    def print_basic(self, s, newline=True):
+        self._print(s, self.basic_fifo, newline=newline)
+
+    def print_status(self, s, newline=False):
+        self._print(s, self.status_fifo, newline=newline)
 
     def print_help(self, s, newline=True):
         self._print(s, self.help_fifo, newline=newline)
@@ -183,6 +197,13 @@ class RichTerm(Term):
 
     def hide_help_panel(self):
         self._print(f'{self.CMD_HELP_HIDE}\x00\x00\x00\x00', self.cmd_fifo, newline=True)
+
+    def set_basic_output_mode(self, markup=False):
+        mode = 'm' if markup else 'a'
+        self._print(f'{self.CMD_BASIC_OUTPUT_MODE}\x00{mode}\x00\x00\x00', self.cmd_fifo, newline=True)
+
+    def hide_basic_output_panel(self):
+        self._print(f'{self.CMD_BASIC_OUTPUT_HIDE}\x00\x00\x00\x00', self.cmd_fifo, newline=True)
 
     def new_log_panel(self, title='', markup=False):
         new_fifo = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))

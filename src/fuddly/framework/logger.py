@@ -59,6 +59,7 @@ class Logger(object):
     STATUS_API = 10
     MARKUP_API = 11
     ANYFIFO_API = 12
+    BASIC_OUTPUT_API = 13
 
     def __init__(
         self,
@@ -225,6 +226,14 @@ class Logger(object):
             with self._log_entry_submitted_cond:
                 self._log_entry_list.append(
                     (Logger.MARKUP_API, markup_msg)
+                )
+                self._log_entry_submitted_cond.notify()
+
+    def print_basic(self, msg: str):
+        with self._sync_lock:
+            with self._log_entry_submitted_cond:
+                self._log_entry_list.append(
+                    (Logger.BASIC_OUTPUT_API, msg)
                 )
                 self._log_entry_submitted_cond.notify()
 
@@ -395,6 +404,11 @@ class Logger(object):
                     elif api == Logger.MARKUP_API:
                         if self._ext_disp.is_enabled:
                             self._ext_disp.disp.print_markup(params)
+                        else:
+                            pass
+                    elif api == Logger.BASIC_OUTPUT_API:
+                        if self._ext_disp.is_enabled:
+                            self._ext_disp.disp.print_basic(params)
                         else:
                             pass
                     elif api == Logger.ANYFIFO_API:

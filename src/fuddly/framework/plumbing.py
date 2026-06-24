@@ -129,8 +129,13 @@ class Printer(io.StringIO):
             self.fmk.lg.wait_for_sync()
 
     def print(self, msg):
-        self.write(msg + "\n")
-        self.flush()
+        if self.fmk.lg:
+            self.fmk.lg.print_basic(msg)
+        else:
+            sys.__stdout__.write(msg + "\n")
+
+        # self.write(msg + "\n")
+        # self.flush()
 
 
 class ExportableFMKOps(object):
@@ -504,7 +509,9 @@ class FmkPlumbing(object):
                 self.__monitoring_task = FmkTask(self.CMON_TASK_REF,
                                                  func=self._continuous_feedback_collecting, arg=None, period=0.1,
                                                  error_func=self._handle_fmk_exception,
-                                                 cleanup_func=partial(self._unregister_task, self.CMON_TASK_REF),
+                                                 cleanup_func=partial(self._unregister_task,
+                                                                      self.CMON_TASK_REF,
+                                                                      ign_error=True),
                                                  tui_obj=self.external_display.disp)
                 self._register_task(self.CMON_TASK_REF, self.__monitoring_task)
             else:
@@ -838,6 +845,9 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=["S2"])
     def reload_all(self, tg_ids=None):
+        if self._tui:
+            self.external_display.disp.hide_basic_output_panel()
+
         return self._reload_all(tg_ids=tg_ids)
 
     def _reload_all(self, tg_ids=None):
@@ -892,6 +902,7 @@ class FmkPlumbing(object):
 
         self._start_fmk_plumbing()
         if self.is_not_ok():
+            self.show_and_flush_errors()
             self._stop_fmk_plumbing(before_reload=True)
             return False
 

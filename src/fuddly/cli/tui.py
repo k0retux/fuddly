@@ -54,7 +54,7 @@ fuddly_tui_tcss = """
     scrollbar-size: 1 1;
     box-sizing: border-box;
     width: 100%;
-    border: solid blue;
+    border: solid green;
 }
 
 .help_hidden_mode {
@@ -72,7 +72,24 @@ fuddly_tui_tcss = """
     text-overflow: fold;
     height: 4fr;
     width: 100%;
-    border: solid green;
+    border: solid #008B8B;
+}
+
+#basic_output {
+    scrollbar-size: 1 1;
+    box-sizing: border-box;
+    text-wrap: wrap;
+    text-overflow: fold;
+    width: 100%;
+    border: solid #88C0D0;
+}
+
+.basic_output_hidden_mode {
+    height: 0%;
+}
+
+.basic_output_visible_mode {
+    height: 2fr;
 }
 
 .box {
@@ -115,7 +132,7 @@ fuddly_tui_tcss = """
 
 tcss_selectors = [
     '#status', '#main_panel_area', '#main_rlog_area', '#help_zone',
-    '#main_rlog', '.box', '.hl_box', '.help_visible_mode', '.help_hidden_mode',
+    '#main_rlog', '#basic_output', '.box', '.hl_box', '.help_visible_mode', '.help_hidden_mode',
     '#db_dir_tree', '#db_display', '#db_status', '#current_fmkdb']
 tcss_fname = os.path.join(config_folder, FUDDLY_TUI_FNAME)
 write_tcss = False
@@ -165,11 +182,13 @@ class FuddlyTUI(App):
     # """
 
 
-    def __init__(self, cmd_fifo, main_fifo_ansi, main_fifo_bbcode, status_fifo, help_fifo):
+    def __init__(self, cmd_fifo, main_fifo_ansi, main_fifo_bbcode, basic_fifo,
+                 status_fifo, help_fifo):
         super().__init__()
         self._cmd_fifo = cmd_fifo
         self._main_fifo_ansi = main_fifo_ansi
         self._main_fifo_bbcode = main_fifo_bbcode
+        self._basic_fifo = basic_fifo
         self._status_fifo = status_fifo
         self._help_fifo = help_fifo
         self._cmd_re = re.compile(r'(\d)\x00(.*?)\x00(.*?)\x00(.*?)\x00', flags=re.S)
@@ -177,12 +196,15 @@ class FuddlyTUI(App):
         self._loggers_fifo = {}
         self._status_msg = Text.from_ansi('')
         self._help_markup_mode = False
+        self._basic_output_markup_mode = False
 
         self._main_panel = None
         self._main_rlog = None
         self._right_panel = None
         self._help_zone = None
         # self._help_zone_hidden = True
+        self._basic_zone = None
+        self._basic_zone_hidden = True
 
         self.fmkdb = None
 
@@ -339,6 +361,21 @@ class FuddlyTUI(App):
                     # self._help_zone.add_class('help_hidden_mode', update=True)
                     # self._help_zone_hidden = True
 
+
+            elif cmd == RichTerm.CMD_BASIC_OUTPUT_MODE:
+                mode = parsed.group(2)
+
+                if mode == 'm': # markup mode
+                    self._basic_output_markup_mode = True
+                else:
+                    self._basic_output_markup_mode = False
+
+            elif cmd == RichTerm.CMD_BASIC_OUTPUT_HIDE:
+                if self._basic_zone:
+                    self._basic_zone.remove_class('basic_output_visible_mode')
+                    self._basic_zone.add_class('basic_output_hidden_mode', update=True)
+                    self._basic_zone_hidden = True
+
             else:
                 self._status_msg = Text.from_ansi(f'Unknown Command: {cmd}')
         else:
@@ -370,6 +407,11 @@ class FuddlyTUI(App):
                 epobj.register(fd_bbcode, select.EPOLLIN | select.EPOLLHUP)
             else:
                 fd_bbcode = None
+            if self._basic_fifo:
+                fd_basic = os.open(self._basic_fifo, os.O_RDONLY | os.O_NONBLOCK)
+                epobj.register(fd_basic, select.EPOLLIN | select.EPOLLHUP)
+            else:
+                fd_basic = None
             if self._status_fifo:
                 fd_status = os.open(self._status_fifo, os.O_RDONLY | os.O_NONBLOCK)
                 epobj.register(fd_status, select.EPOLLIN | select.EPOLLHUP)
@@ -381,7 +423,7 @@ class FuddlyTUI(App):
             else:
                 fd_help = None
 
-            if (fd_ansi is None and fd_bbcode is None and fd_status is None
+            if (fd_ansi is None and fd_bbcode is None and fd_basic is None and fd_status is None
                     and fd_cmd is None and fd_help is None):
                 return
 
@@ -487,6 +529,37 @@ class FuddlyTUI(App):
                             if text:
                                 self._help_zone.write(text)
 
+                        elif fd == fd_basic:
+                            text = ''
+                            data = 'INIT'
+                            while data:
+                                try:
+                                    data = os.read(fd, 8).decode()
+                                except BlockingIOError:
+                                    data = ''
+                                else:
+                                    text += data
+
+                            if not self._basic_zone:
+                                self._basic_zone = RichLog(id='basic_output', classes='basic_output_visible_mode', wrap=True)
+                                self._basic_zone.border_title = 'basic output'
+                                await self._main_rlog_area.mount(self._basic_zone, after=self._main_rlog)
+                                self._basic_zone_hidden = False
+
+                            if self._basic_zone_hidden:
+                                self._basic_zone.remove_class('basic_output_hidden_mode', update=True)
+                                self._basic_zone.add_class('basic_output_visible_mode', update=True)
+                                self._basic_zone_hidden = False
+
+                            if self._basic_output_markup_mode:
+                                text = Text.from_markup(text)
+                            else:
+                                text = Text.from_ansi(text)
+
+                            if text:
+                                self._basic_zone.clear()
+                                self._basic_zone.write(text)
+
                         elif fd in (fd_ansi, fd_bbcode):
                             text = ''
                             data = 'INIT'
@@ -527,13 +600,14 @@ class FuddlyTUI(App):
 def start(args: argparse.Namespace):
     main_fifo_ansi = args.main_fifo_ansi
     main_fifo_bbcode = args.main_fifo_bbcode
+    basic_fifo = args.basic_fifo
     status_fifo = args.status_fifo
     cmd_fifo = args.cmd_fifo
     help_fifo = args.help_fifo
 
     console = Console(record=True, width=200)
 
-    app = FuddlyTUI(cmd_fifo, main_fifo_ansi, main_fifo_bbcode,
+    app = FuddlyTUI(cmd_fifo, main_fifo_ansi, main_fifo_bbcode, basic_fifo,
                     status_fifo, help_fifo)
     try:
         app.run()
