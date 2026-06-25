@@ -149,12 +149,37 @@ if write_tcss:
     with open(tcss_fname, 'w') as f:
         f.write(fuddly_tui_tcss)
 
-class FuddlyLogger(RichLog):
+class AltLogger(RichLog):
 
     def on_focus(self, event: events.Focus) -> None:
         # self.styles.border = ('solid', 'green')
         self.remove_class('hl_box')
         self.add_class('box', update=True)
+
+    def watch_scroll_y(self, old_value, new_value) -> None:
+        super().watch_scroll_y(old_value, new_value)
+
+        if self.auto_scroll and new_value > 0 and new_value - old_value < 0:
+            self.auto_scroll = False
+
+        elif not self.auto_scroll and self.is_vertical_scroll_end and self.max_scroll_y > 0:
+            self.auto_scroll = True
+
+
+class MainLogger(RichLog):
+
+    def watch_scroll_y(self, old_value, new_value) -> None:
+        super().watch_scroll_y(old_value, new_value)
+
+        if self.auto_scroll and new_value > 0 and new_value - old_value < 0:
+            self.auto_scroll = False
+            # self.app.notify(f"Auto scroll disabled ({old_value} --> {new_value})")
+
+        elif not self.auto_scroll and self.is_vertical_scroll_end and self.max_scroll_y > 0:
+            # Note: self.max_scroll_y == 0 if not enough text to allow scrolling
+            self.auto_scroll = True
+            # self.app.notify(f"Auto scroll enabled ({old_value} --> {new_value})")
+
 
 class FmkDBDirectoryTree(DirectoryTree):
 
@@ -192,9 +217,10 @@ class FuddlyTUI(App):
         self._status_fifo = status_fifo
         self._help_fifo = help_fifo
         self._cmd_re = re.compile(r'(\d)\x00(.*?)\x00(.*?)\x00(.*?)\x00', flags=re.S)
+        self._sending_preample_re = re.compile(r'.*====\[', flags=re.S)
         self._loggers_fd = {}
         self._loggers_fifo = {}
-        self._status_msg = Text.from_ansi('')
+        self._status_msg = Text('')
         self._help_markup_mode = False
         self._basic_output_markup_mode = False
 
@@ -205,6 +231,7 @@ class FuddlyTUI(App):
         # self._help_zone_hidden = True
         self._basic_zone = None
         self._basic_zone_hidden = True
+        self._previous_text_nb_lines = 0
 
         self.fmkdb = None
 
@@ -282,7 +309,9 @@ class FuddlyTUI(App):
                                      expand=True),
                         Horizontal(
                             Vertical(
-                                RichLog(id='main_rlog', wrap=True),
+                                MainLogger(id='main_rlog', wrap=True, auto_scroll=True),
+                                RichLog(id='basic_output', classes='basic_output_hidden_mode',
+                                        wrap=True, auto_scroll=False),
                                 id="main_rlog_area"
                             ),
                             id='main_panel_area'
@@ -304,6 +333,7 @@ class FuddlyTUI(App):
 
     async def _process_command(self, cmd_msg, epobj):
         parsed = self._cmd_re.match(cmd_msg)
+        self._status_msg = ''
         if parsed:
             cmd = int(parsed.group(1))
             if cmd == RichTerm.CMD_NEW_LOG_PANEL:
@@ -316,14 +346,19 @@ class FuddlyTUI(App):
 
                 markup_mode = True if mode == 'm' else False
 
-                new_fd = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
-                rlog_id = fifo.split('/')[-1]
-                title = title.replace('[', r'\[')
-                self._loggers_fd[new_fd] = ('#' + rlog_id, title, markup_mode)
-                self._loggers_fifo[rlog_id] = new_fd
-                epobj.register(new_fd, select.EPOLLIN | select.EPOLLHUP)
+                try:
+                    new_fd = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
+                except FileNotFoundError:
+                    self._status_msg = Text.from_markup(
+                        f'[b red]New communicated fifo is not found \\[[/][i]{fifo}[/][b red]][/]')
+                else:
+                    rlog_id = fifo.split('/')[-1]
+                    title = title.replace('[', r'\[')
+                    self._loggers_fd[new_fd] = ('#' + rlog_id, title, markup_mode)
+                    self._loggers_fifo[rlog_id] = new_fd
+                    epobj.register(new_fd, select.EPOLLIN | select.EPOLLHUP)
 
-                self._status_msg = Text.from_ansi(f'New fifo registered: {fifo}')
+                    self._status_msg = Text.from_ansi(f'New fifo registered: {fifo}')
 
             elif cmd == RichTerm.CMD_RM_LOG_PANEL:
                 # remove log panel
@@ -372,6 +407,7 @@ class FuddlyTUI(App):
 
             elif cmd == RichTerm.CMD_BASIC_OUTPUT_HIDE:
                 if self._basic_zone:
+                    self._basic_zone.clear()
                     self._basic_zone.remove_class('basic_output_visible_mode')
                     self._basic_zone.add_class('basic_output_hidden_mode', update=True)
                     self._basic_zone_hidden = True
@@ -388,7 +424,11 @@ class FuddlyTUI(App):
         self._main_panel = self.query_one("#main_panel_area")
         self._main_panel_area = self.query_one("#main_panel_area")
         self._main_rlog_area = self.query_one("#main_rlog_area")
+        self._basic_zone: RichLog = self.query_one("#basic_output")
         epobj = None
+
+        self._basic_zone.border_title = 'basic output'
+        self._basic_zone_hidden = True
 
         try:
             epobj = select.epoll()
@@ -436,7 +476,7 @@ class FuddlyTUI(App):
                             data = 'INIT'
                             while data:
                                 try:
-                                    data = os.read(fd, 64).decode()
+                                    data = os.read(fd, 128).decode('latin_1')
                                 except BlockingIOError:
                                     data = ''
                                 else:
@@ -452,7 +492,7 @@ class FuddlyTUI(App):
                             data = 'INIT'
                             while data:
                                 try:
-                                    data = os.read(fd, 256).decode()
+                                    data = os.read(fd, 512).decode('latin_1')
                                 except BlockingIOError:
                                     # await asyncio.sleep(0.05)
                                     data = ''
@@ -475,7 +515,7 @@ class FuddlyTUI(App):
                                 try:
                                     rlog = self.query_one(w_id)
                                 except NoMatches:
-                                    rlog = FuddlyLogger(highlight=True, id=w_id[1:], classes='box')
+                                    rlog = AltLogger(highlight=True, id=w_id[1:], classes='box')
                                     rlog.border_title = title
                                     await self._right_panel.mount(rlog)
 
@@ -489,7 +529,7 @@ class FuddlyTUI(App):
                             data = 'INIT'
                             while data:
                                 try:
-                                    data = os.read(fd, 8).decode()
+                                    data = os.read(fd, 128).decode()
                                 except BlockingIOError:
                                     data = ''
                                 else:
@@ -504,14 +544,15 @@ class FuddlyTUI(App):
                             data = 'INIT'
                             while data:
                                 try:
-                                    data = os.read(fd, 8).decode()
+                                    data = os.read(fd, 256).decode()
                                 except BlockingIOError:
                                     data = ''
                                 else:
                                     text += data
 
                             if not self._help_zone:
-                                self._help_zone = RichLog(id='help_zone', classes='help_visible_mode')
+                                self._help_zone = RichLog(id='help_zone', classes='help_visible_mode',
+                                                          auto_scroll=False)
                                 self._help_zone.border_title = 'help'
                                 await self._main_rlog_area.mount(self._help_zone, before=self._main_rlog)
                             #     self._help_zone_hidden = False
@@ -527,6 +568,7 @@ class FuddlyTUI(App):
                                 text = Text.from_ansi(text)
 
                             if text:
+                                self._help_zone.clear()
                                 self._help_zone.write(text)
 
                         elif fd == fd_basic:
@@ -534,38 +576,69 @@ class FuddlyTUI(App):
                             data = 'INIT'
                             while data:
                                 try:
-                                    data = os.read(fd, 8).decode()
+                                    data = os.read(fd, 512).decode('latin_1')
                                 except BlockingIOError:
                                     data = ''
                                 else:
                                     text += data
 
-                            if not self._basic_zone:
-                                self._basic_zone = RichLog(id='basic_output', classes='basic_output_visible_mode', wrap=True)
-                                self._basic_zone.border_title = 'basic output'
-                                await self._main_rlog_area.mount(self._basic_zone, after=self._main_rlog)
-                                self._basic_zone_hidden = False
+                            # self.app.notify(f'text: {repr(text[:10])}')
 
                             if self._basic_zone_hidden:
                                 self._basic_zone.remove_class('basic_output_hidden_mode', update=True)
                                 self._basic_zone.add_class('basic_output_visible_mode', update=True)
                                 self._basic_zone_hidden = False
 
-                            if self._basic_output_markup_mode:
-                                text = Text.from_markup(text)
+                            obj = self._sending_preample_re.match(text)
+                            if obj:
+                                nb_lines_before_preamble = obj.group().count('\n')
+                                if nb_lines_before_preamble > 0:
+                                    nb_lines_before_preamble -= 1
+                                # self.app.notify(f'nb lines before preamble: {nb_lines_before_preamble}')
                             else:
-                                text = Text.from_ansi(text)
+                                nb_lines_before_preamble = 0
+
+                            if self._basic_output_markup_mode:
+                                text = Text.from_markup(text, overflow='fold')
+                            else:
+                                text = Text.from_ansi(text, no_wrap=False, overflow='fold')
 
                             if text:
-                                self._basic_zone.clear()
+                                DELTA_FIX = 2
+                                self._basic_zone.auto_scroll = False
+                                # self._basic_zone.clear()
+                                initial_nb_lines = len(self._basic_zone.lines)
                                 self._basic_zone.write(text)
+                                new_nb_lines = len(self._basic_zone.lines)
+                                text_nb_lines = new_nb_lines - initial_nb_lines - nb_lines_before_preamble
+                                available_nb_lines = self._basic_zone.scrollable_content_region.height
+                                # self.app.notify(f'available lines: {available_nb_lines}, text height: {text_nb_lines}')
+                                if available_nb_lines < text_nb_lines:
+                                    move_up = self._basic_zone.max_scroll_y - (text_nb_lines - available_nb_lines)
+                                    if self._previous_text_nb_lines == DELTA_FIX:
+                                        # TODO: more robust approach
+                                        # in the case there is a feedback timeout > 0 there is a delay between
+                                        # the printing of the 1-liner "sending preamble" and the description of
+                                        # the sending.
+                                        # Thus, we accommodate the move up
+                                        move_up -= DELTA_FIX
+                                    self._basic_zone.scroll_to(y=move_up, animate=False)
+                                else:
+                                    if text_nb_lines > DELTA_FIX:
+                                        nb_lines = available_nb_lines - text_nb_lines - 1
+                                        if self._previous_text_nb_lines == DELTA_FIX:
+                                            nb_lines -= DELTA_FIX
+                                        self._basic_zone.write(Text('\n' * nb_lines))
+                                    self._basic_zone.scroll_end(animate=False)
+
+                                self._previous_text_nb_lines = text_nb_lines
 
                         elif fd in (fd_ansi, fd_bbcode):
                             text = ''
                             data = 'INIT'
                             while data:
                                 try:
-                                    data = os.read(fd, 256).decode()
+                                    data = os.read(fd, 512).decode('latin_1')
                                 except BlockingIOError:
                                     # await asyncio.sleep(0.05)
                                     data = ''
@@ -573,9 +646,9 @@ class FuddlyTUI(App):
                                     text += data
 
                             if fd == fd_ansi:
-                                text = Text.from_ansi(text)
+                                text = Text.from_ansi(text, no_wrap=False, overflow='fold')
                             else:
-                                text = Text.from_markup(text)
+                                text = Text.from_markup(text, overflow='fold')
 
                             if text:
                                 self._main_rlog.write(text)

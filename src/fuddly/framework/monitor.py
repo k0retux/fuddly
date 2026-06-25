@@ -354,12 +354,15 @@ class Monitor(object):
             self.probe_users[probe.__class__.__name__] = ProbeUser(probe)
 
     def start(self):
-        self._logger.print_console('*** Monitor is started ***\n', nl_before=False, rgb=Color.COMPONENT_START)
+        self._logger.print_console('*** Monitor is started ***\n', nl_before=False,
+                                   rgb=Color.COMPONENT_START, all_output=True)
 
     def stop(self):
-        self._logger.print_console('*** Monitor stopping in progress... ***\n', nl_before=False, rgb=Color.COMPONENT_INFO)
+        self._logger.print_console('*** Monitor stopping in progress... ***\n', nl_before=False,
+                                   rgb=Color.COMPONENT_INFO, all_output=True)
         self.stop_all_probes()
-        self._logger.print_console('*** Monitor is stopped ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
+        self._logger.print_console('*** Monitor is stopped ***\n', nl_before=False,
+                                   rgb=Color.COMPONENT_STOP, all_output=True)
 
     def enable_hooks(self):
         self.__enable = True

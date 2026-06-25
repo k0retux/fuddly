@@ -180,7 +180,7 @@ class Target(object):
 
     def _start(self, target_desc, tg_id):
         self._logger.print_console('*** Target initialization: ({:d}) {!s} ***\n'.format(tg_id, target_desc),
-                                   nl_before=False, rgb=Color.COMPONENT_START)
+                                   nl_before=False, rgb=Color.COMPONENT_START, all_output=True)
         with self._state_lock:
             self._state.data_sent = False
             self._state.data_sent_from_fmkplumbing = False

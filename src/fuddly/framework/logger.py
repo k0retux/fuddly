@@ -135,16 +135,23 @@ class Logger(object):
 
         self._ext_disp = ExternalDisplay()
 
+        self.style2bbcode = {
+            None: '',
+            FontStyle.BOLD: 'bold',
+        }
+
         self._post_processed_info = None
 
         def init_logfn(
-            x,
-            nl_before=True,
-            nl_after=False,
-            rgb=None,
-            style=None,
-            verbose=False,
-            do_record=True,
+                x,
+                nl_before=True,
+                nl_after=False,
+                rgb=None,
+                style=None,
+                verbose=False,
+                do_record=True,
+                basic_output = False,
+                all_output= False
         ):
             if not self.display_on_term:
                 return
@@ -171,6 +178,8 @@ class Logger(object):
                 rgb=rgb,
                 style=style,
                 no_format_mode=no_format_mode,
+                basic_output=basic_output,
+                all_output=all_output
             )
             if verbose and issubclass(x.__class__, Data):
                 self.pretty_print_data(x)
@@ -287,13 +296,15 @@ class Logger(object):
             self._fd = open(log_file, "w")
 
             def intern_func(
-                x,
-                nl_before=True,
-                nl_after=False,
-                rgb=None,
-                style=None,
-                verbose=False,
-                do_record=True,
+                    x,
+                    nl_before=True,
+                    nl_after=False,
+                    rgb=None,
+                    style=None,
+                    verbose=False,
+                    do_record=True,
+                    basic_output=False,
+                    all_output=False,
             ):
                 no_format_mode = False
                 if issubclass(x.__class__, Data):
@@ -319,6 +330,8 @@ class Logger(object):
                     rgb=rgb,
                     style=style,
                     no_format_mode=no_format_mode,
+                    basic_output=basic_output,
+                    all_output=all_output
                 )
                 if not do_record:
                     return data
@@ -332,6 +345,7 @@ class Logger(object):
                         "\n*** ERROR: The log file has been closed."
                         " (Maybe because the Logger has been stopped and has not been restarted yet.)",
                         rgb=Color.ERROR,
+                        basic_output=True
                     )
 
                 return data
@@ -352,13 +366,17 @@ class Logger(object):
         while not self._thread_initialized.is_set():
             self._thread_initialized.wait(0.1)
 
-        if self._tui:
-            bbcode = Color.to_bbcode(Color.COMPONENT_START)
-            self.print_markup(f"[{bbcode}]*** Logger is started ***[/]\n")
-        else:
-            self.print_console(
-                "*** Logger is started ***\n", nl_before=False, rgb=Color.COMPONENT_START
-            )
+        # if self._tui:
+        #     bbcode = Color.to_bbcode(Color.COMPONENT_START)
+        #     self._ext_disp.disp.set_basic_output_mode(markup=True)
+        #     time.sleep(0.1)
+        #     self.print_basic(f"[{bbcode}]*** Logger is started ***[/]\n")
+        #     self._ext_disp.disp.set_basic_output_mode(markup=False)
+        # else:
+        self.print_console(
+            "*** Logger is started ***\n", nl_before=False, rgb=Color.COMPONENT_START,
+            basic_output=True
+        )
 
     def _stop_log_handler(self):
         with self._sync_lock:
@@ -405,12 +423,12 @@ class Logger(object):
                         if self._ext_disp.is_enabled:
                             self._ext_disp.disp.print_markup(params)
                         else:
-                            pass
+                            sys.stdout.write(params)
                     elif api == Logger.BASIC_OUTPUT_API:
                         if self._ext_disp.is_enabled:
                             self._ext_disp.disp.print_basic(params)
                         else:
-                            pass
+                            sys.stdout.write(params + '\n')
                     elif api == Logger.ANYFIFO_API:
                         if self._ext_disp.is_enabled:
                             self._ext_disp.disp.print_on(*params)
@@ -432,11 +450,9 @@ class Logger(object):
                                 traceback.print_exc()
 
                             if self._ext_disp.is_enabled:
-                                self._ext_disp.disp.print('\n')
-                                self._ext_disp.disp.print(accu.content)
+                                self._ext_disp.disp.print_basic('\n' + accu.content)
                             else:
-                                sys.stdout.write('\n')
-                                sys.stdout.write(accu.content)
+                                sys.stdout.write('\n' + accu.content)
                             accu.clear()
                         else:
                             try:
@@ -454,7 +470,7 @@ class Logger(object):
                         self._print_console(*params)
                     else:
                         self._print_console(
-                            "*** ERROR[Logger]: Unknown API ***", rgb=Color.ERROR
+                            "*** ERROR[Logger]: Unknown API ***", rgb=Color.ERROR, basic_output=True
                         )
         except Exception as e:
             err_msg = colorize(f'\n*** ERROR: The display server thread got an exeception [{e}]\n',
@@ -571,9 +587,10 @@ class Logger(object):
             return None
 
     def mark_last_data_final(self):
-        self._returned_last_data_attrs.set(DataAttr.SC_FinalData)
-        self.fmkDB.update_data(self._returned_last_data_ID,
-                               new_attrs=str(self._returned_last_data_attrs))
+        if self._returned_last_data_attrs is not None:
+            self._returned_last_data_attrs.set(DataAttr.SC_FinalData)
+            self.fmkDB.update_data(self._returned_last_data_ID,
+                                   new_attrs=str(self._returned_last_data_attrs))
 
 
     def log_async_data(
@@ -608,15 +625,17 @@ class Logger(object):
             )
 
     def log_fmk_info(
-        self,
-        info,
-        nl_before=False,
-        nl_after=False,
-        rgb=Color.FMKINFO,
-        data_id=None,
-        do_show=True,
-        do_record=True,
-        delay_recording=False,
+            self,
+            info,
+            nl_before=False,
+            nl_after=False,
+            rgb=Color.FMKINFO,
+            data_id=None,
+            do_show=True,
+            do_record=True,
+            delay_recording=False,
+            basic_output = False,
+            all_output = False,
     ):
         now = datetime.datetime.now()
 
@@ -625,7 +644,7 @@ class Logger(object):
 
         msg = f"{p:s}*** [ {info} ] ***{s:s}"
         if do_show:
-            self.log_fn(msg, rgb=rgb)
+            self.log_fn(msg, rgb=rgb, basic_output=basic_output, all_output=all_output)
 
         if do_record:
             if not delay_recording:
@@ -896,13 +915,13 @@ class Logger(object):
         now = self._current_sent_date.strftime("%d/%m/%Y - %H:%M:%S.%f")
         msg = "====[ {:d} ]==[ {:s} ]====".format(self.__idx, now)
         msg += "=" * (max(80 - len(msg), 0))
-        self.log_fn(msg, rgb=Color.NEWLOGENTRY, style=FontStyle.BOLD)
+        self.log_fn(msg, rgb=Color.NEWLOGENTRY, style=FontStyle.BOLD, all_output=True)
 
         return self._current_sent_date
 
     def log_dmaker_step(self, num):
         msg = "### Step %d:" % num
-        self.log_fn(msg, rgb=Color.DMAKERSTEP)
+        self.log_fn(msg, rgb=Color.DMAKERSTEP, all_output=True)
 
     def log_generator_info(
         self, dmaker_type, name, user_input, data_id=None, disabled=False
@@ -916,14 +935,14 @@ class Logger(object):
         if not disabled:
             self._current_dmaker_list.append((dmaker_type, name, user_input))
             self._current_src_data_id = data_id
-        self.log_fn(msg, rgb=Color.DISABLED if disabled else Color.DATAINFO)
+        self.log_fn(msg, rgb=Color.DISABLED if disabled else Color.DATAINFO, all_output=True)
 
     def log_operator_info(self, dmaker_type, name, user_input):
         msg = f"|- operator type: {dmaker_type} | operator name: {name}"
         msg += f"\n|- user input: {user_input}" if user_input else f"\n|- no user input"
 
         self._current_dmaker_list.append((dmaker_type, name, user_input))
-        self.log_fn(msg, rgb=Color.DATAINFO)
+        self.log_fn(msg, rgb=Color.DATAINFO, all_output=True)
 
     def log_data_info(self, data_info, dmaker_type, data_maker_name):
         if not data_info:
@@ -931,12 +950,12 @@ class Logger(object):
 
         self._current_dmaker_info[(dmaker_type, data_maker_name)] = data_info
 
-        self.log_fn("|- data info:", rgb=Color.DATAINFO)
+        self.log_fn("|- data info:", rgb=Color.DATAINFO, all_output=True)
         for msg in data_info:
             if len(msg) > self._term_display_limit:
                 msg = msg[: self._term_display_limit] + " ..."
 
-            self.log_fn("    | " + msg, rgb=Color.DATAINFO)
+            self.log_fn("    | " + msg, rgb=Color.DATAINFO, all_output=True)
 
     def log_post_processed_info(self):
         if self._post_processed_info:
@@ -957,8 +976,8 @@ class Logger(object):
     def log_target_ack_date(self):
         for tg_ref, ack_date in self._current_ack_dates.items():
             msg = "### Ack from '{!s}' received at: ".format(tg_ref)
-            self.log_fn(msg, nl_after=False, rgb=Color.LOGSECTION)
-            self.log_fn(str(ack_date), nl_before=False)
+            self.log_fn(msg, nl_after=False, rgb=Color.LOGSECTION, all_output=True)
+            self.log_fn(str(ack_date), nl_before=False, all_output=True)
 
     def set_target_ack_date(self, tg_ref, date):
         if self._current_ack_dates is None:
@@ -969,33 +988,35 @@ class Logger(object):
     def log_data(self, data, verbose=False):
         ret = True
 
-        self.log_fn("### Data size: ", rgb=Color.LOGSECTION, nl_after=False)
+        self.log_fn("### Data size: ", rgb=Color.LOGSECTION, nl_after=False, all_output=True)
         self._current_size = data.get_length()
-        self.log_fn("%d bytes" % self._current_size, nl_before=False)
+        self.log_fn("%d bytes" % self._current_size, nl_before=False, all_output=True)
 
         if self.__explicit_data_recording and not data.is_recordable():
             self.last_data_recordable = False
-            self.log_fn("### Data emitted but not recorded", rgb=Color.LOGSECTION)
+            self.log_fn("### Data emitted but not recorded", rgb=Color.LOGSECTION, all_output=True)
             return False
 
         self._current_data = data
         self.last_data_recordable = self._current_data.is_recordable()
 
         if not self.__record_data:
-            self.log_fn("### Data emitted:", rgb=Color.LOGSECTION)
-            self.log_fn(data, nl_after=True, verbose=verbose)
+            self.log_fn("### Data emitted:", rgb=Color.LOGSECTION, all_output=True)
+            self.log_fn(data, nl_after=True, verbose=verbose, all_output=True)
         else:
             ffn = self._export_data_func(data)
             if ffn:
                 self.log_fn(
-                    "### Emitted data is stored in the file:", rgb=Color.LOGSECTION
+                    "### Emitted data is stored in the file:", rgb=Color.LOGSECTION,
+                    all_output=True
                 )
-                self.log_fn(ffn)
+                self.log_fn(ffn, all_output=True)
             else:
                 self.print_console(
-                    "ERROR: saving data in an extenal file has failed!",
+                    "ERROR: saving data in an external file has failed!",
                     nl_before=True,
                     rgb=Color.ERROR,
+                    basic_output=True
                 )
                 ret = False
 
@@ -1060,15 +1081,17 @@ class Logger(object):
         self.fmkDB.insert_fmk_info(data_id, msg, now, error=True)
 
     def print_console(
-        self,
-        msg,
-        nl_before=True,
-        nl_after=False,
-        rgb=None,
-        style=None,
-        raw_limit=None,
-        limit_output=True,
-        no_format_mode=False,
+            self,
+            msg,
+            nl_before=True,
+            nl_after=False,
+            rgb=None,
+            style=None,
+            raw_limit=None,
+            limit_output=True,
+            no_format_mode=False,
+            basic_output=False,
+            all_output=False,
     ):
         with self._sync_lock:
             with self._log_entry_submitted_cond:
@@ -1081,20 +1104,24 @@ class Logger(object):
                     raw_limit,
                     limit_output,
                     no_format_mode,
+                    basic_output,
+                    all_output
                 )
                 self._log_entry_list.append((Logger.PRINT_CONSOLE_API, params))
                 self._log_entry_submitted_cond.notify()
 
     def _print_console(
-        self,
-        msg,
-        nl_before=True,
-        nl_after=False,
-        rgb=None,
-        style=None,
-        raw_limit=None,
-        limit_output=True,
-        no_format_mode=False,
+            self,
+            msg,
+            nl_before=True,
+            nl_after=False,
+            rgb=None,
+            style=None,
+            raw_limit=None,
+            limit_output=True,
+            no_format_mode=False,
+            basic_output=False,
+            all_output = False
     ):
         if not self.display_on_term:
             return
@@ -1109,12 +1136,13 @@ class Logger(object):
 
         if no_format_mode:
             if self._ext_disp.is_enabled:
-                self._ext_disp.disp.print(prefix + msg)
+                if all_output or basic_output:
+                    self._ext_disp.disp.print_basic(prefix + msg, newline=False)
+                if all_output or not basic_output:
+                    self._ext_disp.disp.print(prefix + msg, newline=False)
             else:
                 sys.stdout.write(prefix + msg)
                 sys.stdout.flush()
-
-            # print(f'{msg}')
 
         else:
             if isinstance(msg, Data):
@@ -1127,14 +1155,32 @@ class Logger(object):
 
             suffix += s
 
+            # if self._tui:
+            #     msg = msg.replace('[', r'\[')
+            #     if rgb is None:
+            #         color = ''
+            #     else:
+            #         color = Color.to_bbcode(rgb)
+            # else:
             if rgb is not None:
                 msg = colorize(msg, rgb=rgb)
 
             if style is None:
-                style = ""
+                style = ''
 
             if self._ext_disp.is_enabled:
-                self._ext_disp.disp.print(style + prefix + msg + suffix + FontStyle.END)
+                # if self._tui:
+                #     self._ext_disp.disp.set_basic_output_mode(markup=True)
+                #     time.sleep(0.1)
+                #     self._ext_disp.disp.print_basic(
+                #         '[' + self.style2bbcode[style] + color + ']' + prefix + msg + suffix + '[/]')
+                #     self._ext_disp.disp.set_basic_output_mode(markup=False)
+                # else:
+                if all_output or basic_output:
+                    self._ext_disp.disp.print_basic(style + prefix + msg + suffix + FontStyle.END,
+                                                    newline=False)
+                if all_output or not basic_output:
+                    self._ext_disp.disp.print(prefix + msg, newline=False)
             else:
                 sys.stdout.write(style + prefix + msg + suffix + FontStyle.END)
                 sys.stdout.flush()

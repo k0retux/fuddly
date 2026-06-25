@@ -658,7 +658,7 @@ class FmkPlumbing(object):
     def show_and_flush_errors(self):
         err_list = self.get_error()
         for e in err_list:
-            self.print(colorize("    (_ [#{err!s:s}]: {msg:s} _)".format(err=e, msg=e.msg),rgb=e.color))
+            self.print(colorize(f"    [{e!s}] - {e.msg}",rgb=e.color))
 
     def flush_errors(self):
         self.error = False
@@ -1650,7 +1650,7 @@ class FmkPlumbing(object):
                         del self._generic_tactics.operators[op_ref]
 
         if self._is_started():
-            if self.is_target_enabled():
+            if self.is_target_enabled() and EnforceOrder.current_state == "S2":
                 self.log_target_residual_feedback()
 
             self._cleanup_tasks()
@@ -2070,7 +2070,7 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=["S2"])
     def stop_continuous_monitoring(self):
-        self.continuous_monitoring_enabled = True
+        self.continuous_monitoring_enabled = False
 
     @EnforceOrder(accepted_states=["20_load_prj", "25_load_dm", "S1", "S2"], final_state="25_load_dm")
     def load_project(self, prj=None, name=None):
@@ -2107,6 +2107,7 @@ class FmkPlumbing(object):
         self._init_fmk_internals_step1(self.prj, self.dm)
         self._start_fmk_plumbing()
         if self.is_not_ok():
+            self.show_and_flush_errors()
             self._stop_fmk_plumbing()
             return False
 
@@ -2190,7 +2191,7 @@ class FmkPlumbing(object):
         if (self._orig_fbk_timeout or self._orig_fbk_mode
                 or self._orig_delay is not None or self._orig_burst is not None):
             suffix = f' [{reason}]' if reason else ''
-            self.lg.log_fmk_info(f'Restore Previous Framework State{suffix}', do_record=False)
+            self.lg.log_fmk_info(f'Restore previous framework state{suffix}', do_record=False)
 
             if self._orig_delay is not None:
                 self.set_delay_between_two_actions(self._orig_delay)
@@ -2209,7 +2210,7 @@ class FmkPlumbing(object):
 
         else:
             suffix = f' [{reason}]' if reason else ''
-            self.lg.log_fmk_info(f'NO NEED to restore Previous Framework State{suffix}', do_record=False)
+            self.lg.log_fmk_info(f'No need to restore previous framework state{suffix}', do_record=False)
             state_restored = False
 
 
@@ -3171,8 +3172,7 @@ class FmkPlumbing(object):
     def _log_data(self, data_list, verbose=False):
         if self.__tg_enabled:
             if not self._is_data_valid(data_list):
-                self.set_error("Data is empty and miss some needed meta-info --> will not be "
-                               "logged",
+                self.set_error("Data is empty and miss some needed meta-info --> will not be logged",
                                code=Error.DataInvalid)
                 return
 
@@ -3189,13 +3189,15 @@ class FmkPlumbing(object):
                 raise ValueError
 
             if multiple_data:
-                self.lg.log_fmk_info("MULTIPLE DATA EMISSION", nl_after=True, delay_recording=True)
+                self.lg.log_fmk_info("MULTIPLE DATA EMISSION", nl_after=True, delay_recording=True,
+                                     all_output=True)
 
             for idx, dt in enumerate(data_list):
                 dt_mk_h = dt.get_history()
                 if multiple_data:
-                    self.lg.log_fmk_info("Data #%d" % (idx + 1), nl_before=True, delay_recording=True)
-                    self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
+                    self.lg.log_fmk_info("Data #%d" % (idx + 1), nl_before=True, delay_recording=True,
+                                         all_output=True)
+                    self.lg.log_fn("--------------------------", rgb=Color.SUBINFO, all_output=True)
 
                 gen_info = dt.get_initial_dmaker()
                 gen_type_initial, gen_name, gen_ui = gen_info if gen_info is not None else (None, None, None)
@@ -3272,15 +3274,15 @@ class FmkPlumbing(object):
                     self.last_data_id = self.lg.commit_data_table_entry(self.group_id, self.prj.name)
                     if self.last_data_id is None:
                         self.lg.print_console("### Data not recorded in FmkDB",
-                                              rgb=Color.DATAINFO, nl_after=True)
+                                              rgb=Color.DATAINFO, nl_after=True, all_output=True)
                     else:
                         self.lg.print_console("### FmkDB Data ID: {!r}".format(self.last_data_id),
-                                              rgb=Color.DATAINFO, nl_after=True)
+                                              rgb=Color.DATAINFO, nl_after=True, all_output=True)
 
                 self.lg.log_post_processed_info()
 
                 if multiple_data:
-                    self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
+                    self.lg.log_fn("--------------------------", rgb=Color.SUBINFO, all_output=True)
 
                 if self._burst_countdown <= 1:
                     self.lg.log_target_ack_date()
@@ -3494,12 +3496,14 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=["S2"])
     def show_data(self, data: Data | str, verbose=Verbose.Normal, debug=False):
-        self.lg.print_console("-=[ Data Visualization ]=-\n", rgb=Color.INFO, style=FontStyle.BOLD)
+        self.lg.print_console("-=[ Data Visualization ]=-\n", rgb=Color.INFO, style=FontStyle.BOLD,
+                              basic_output=True)
         if isinstance(data, Data):
             self.lg.pretty_print_data(data, raw_limit=400, verbose=verbose, debug=debug)
         else:
             self.lg.write(f'\n{data}')
-        self.lg.print_console("\n\n", nl_before=False)
+        self.lg.print_console("\n\n", nl_before=False,
+                              basic_output=True)
 
     @EnforceOrder(accepted_states=["S2"])
     def show_scenario(self, sc_name, fmt="pdf"):
@@ -3545,10 +3549,11 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=["S2"])
     def show_atom_identifiers(self):
-        self.lg.print_console("-=[ Atom IDs of the current data model ]=-", nl_after=True, rgb=Color.INFO, style=FontStyle.BOLD)
+        self.lg.print_console("-=[ Atom IDs of the current data model ]=-", nl_after=True,
+                              rgb=Color.INFO, style=FontStyle.BOLD, basic_output=True)
         for k in self.dm.atom_identifiers():
-            self.lg.print_console(k, rgb=Color.SUBINFO)
-        self.lg.print_console("\n\n", nl_before=False)
+            self.lg.print_console(k, rgb=Color.SUBINFO, basic_output=True)
+        self.lg.print_console("\n\n", nl_before=False, basic_output=True)
 
     @EnforceOrder(accepted_states=["S2"])
     def log_comment(self, comments):
@@ -3671,18 +3676,18 @@ class FmkPlumbing(object):
                     else:
                         msg = f"|- data id: {data_id} | generator type: {gen_type_initial} | generator name: {gen_name}"
                         msg += f"\n|- user input: {gen_ui}" if gen_ui else f"\n|- no user input"
-                    self.lg.print_console(msg, rgb=Color.SUBINFO)
+                    self.lg.print_console(msg, rgb=Color.SUBINFO, basic_output=True)
 
                 if dmaker_type not in gen:
                     msg = f"|- operator type: {dmaker_type} | data_maker name: {data_maker_name}"
                     msg += f"\n|- user input: {user_input}" if user_input else f"\n|- no user input"
-                    self.lg.print_console(msg, rgb=Color.SUBINFO)
+                    self.lg.print_console(msg, rgb=Color.SUBINFO, basic_output=True)
 
-                    self.lg.print_console("|- data info:", rgb=Color.SUBINFO)
+                    self.lg.print_console("|- data info:", rgb=Color.SUBINFO, basic_output=True)
 
                     for data_info in data.read_info(dmaker_type, data_maker_name):
                         for msg in data_info:
-                            self.lg.print_console("   |_ " + msg, rgb=Color.SUBINFO)
+                            self.lg.print_console("   |_ " + msg, rgb=Color.SUBINFO, basic_output=True)
         else:
             init_dmaker = data.get_initial_dmaker()
             if init_dmaker is None:
@@ -3692,23 +3697,23 @@ class FmkPlumbing(object):
             dm = data.get_data_model()
             dm_name = None if dm is None else dm.name
             msg = f"|- data id: {data_id} | type: {dtype} | data model: {dm_name}"
-            self.lg.print_console(msg, rgb=Color.SUBINFO)
+            self.lg.print_console(msg, rgb=Color.SUBINFO, basic_output=True)
 
-        self.lg.print_console("|_ OUT > ", rgb=Color.SUBINFO)
-        self.lg.print_console(data, nl_before=False)
-        self.lg.print_console("=" * 80 + "\n", rgb=Color.INFO)
+        self.lg.print_console("|_ OUT > ", rgb=Color.SUBINFO, basic_output=True)
+        self.lg.print_console(data, nl_before=False, basic_output=True)
+        self.lg.print_console("=" * 80 + "\n", rgb=Color.INFO, basic_output=True)
 
     @EnforceOrder(accepted_states=["S2"])
     def show_data_bank(self):
-        self.lg.print_console("-=[ Data Bank ]=-\n", rgb=Color.INFO, style=FontStyle.BOLD)
+        self.lg.print_console("-=[ Data Bank ]=-\n", rgb=Color.INFO, style=FontStyle.BOLD, basic_output=True)
 
         for idx, entry in self.__data_bank.items():
             msg = "===[ {:d} ]===".format(idx)
             msg += "=" * (max(80 - len(msg), 0))
-            self.lg.print_console(msg, rgb=Color.INFO)
+            self.lg.print_console(msg, rgb=Color.INFO, basic_output=True)
             self._show_entry(entry)
 
-        self.lg.print_console("\n", nl_before=False)
+        self.lg.print_console("\n", nl_before=False, basic_output=True)
 
     @EnforceOrder(accepted_states=["S2"])
     def show_wkspace(self):
@@ -3716,12 +3721,13 @@ class FmkPlumbing(object):
             self.set_error("Workspace is disabled!", code=Error.CommandError)
             return
 
-        self.lg.print_console("-=[ Workspace ]=-\n", rgb=Color.INFO, style=FontStyle.BOLD)
+        self.lg.print_console("-=[ Workspace ]=-\n", rgb=Color.INFO, style=FontStyle.BOLD,
+                              basic_output=True)
 
         for data in self.__current:
             self._show_entry(data)
 
-        self.lg.print_console("\n", nl_before=False)
+        self.lg.print_console("\n", nl_before=False, basic_output=True)
 
     @EnforceOrder(accepted_states=["S2"])
     def empty_data_bank(self):
@@ -3758,14 +3764,14 @@ class FmkPlumbing(object):
     @EnforceOrder(accepted_states=["S2"])
     def show_directors(self):
         directors = self.prj.get_directors()
-        self.lg.print_console("-=[ Directors ]=-", rgb=Color.INFO, style=FontStyle.BOLD)
-        self.lg.print_console("")
+        self.lg.print_console("-=[ Directors ]=-", rgb=Color.INFO, nl_after=True,
+                              style=FontStyle.BOLD, basic_output=True)
         for d in directors:
-            self.lg.print_console(d, rgb=Color.SUBINFO)
+            self.lg.print_console(d, rgb=Color.SUBINFO, basic_output=True)
             desc = self._dmaker_desc_str(self.prj.get_director(d))
-            self.lg.print_console(desc, limit_output=False)
+            self.lg.print_console(desc, limit_output=False, basic_output=True)
 
-        self.lg.print_console("\n\n", nl_before=False)
+        self.lg.print_console("\n\n", nl_before=False, basic_output=True)
 
     @EnforceOrder(accepted_states=["S2"])
     def get_director(self, name):
@@ -4542,21 +4548,22 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=["S2"])
     def show_tasks(self):
-        self.lg.print_console("-=[ Running Tasks ]=-", rgb=Color.INFO, style=FontStyle.BOLD)
-        self.lg.print_console("")
+        self.lg.print_console("-=[ Running Tasks ]=-\n", rgb=Color.INFO, style=FontStyle.BOLD,
+                              basic_output=True)
         if not self._task_list:
-            self.lg.print_console("No task is currently running", rgb=Color.SUBINFO)
+            self.lg.print_console("No task is currently running", rgb=Color.SUBINFO,
+                                  basic_output=True)
         else:
             for tk_id, tk in self._task_list.items():
                 msg = "Task ID #{!s}".format(tk_id)
-                self.lg.print_console(msg, rgb=Color.SUBINFO)
-        self.lg.print_console("\n", nl_before=False)
+                self.lg.print_console(msg, rgb=Color.SUBINFO, basic_output=True)
+        self.lg.print_console("\n", nl_before=False, basic_output=True)
 
     @EnforceOrder(accepted_states=["S2"])
     def show_probes(self):
         probes = self.prj.get_probes()
-        self.lg.print_console("-=[ Probes ]=-", rgb=Color.INFO, style=FontStyle.BOLD)
-        self.lg.print_console("")
+        self.lg.print_console("-=[ Probes ]=-\n", rgb=Color.INFO, style=FontStyle.BOLD,
+                              basic_output=True)
         for p in probes:
             try:
                 status = self.mon.get_probe_status(p).value
@@ -4574,9 +4581,9 @@ class FmkPlumbing(object):
                 msg += "launched"
             else:
                 msg += "stopped"
-            self.lg.print_console(msg, rgb=Color.SUBINFO)
+            self.lg.print_console(msg, rgb=Color.SUBINFO, basic_output=True)
 
-        self.lg.print_console("\n", nl_before=False)
+        self.lg.print_console("\n", nl_before=False, basic_output=True)
 
     @EnforceOrder(accepted_states=["S2"])
     def launch_probe(self, name):
@@ -4628,12 +4635,14 @@ class FmkPlumbing(object):
             if len(dmaker_list) % 2 != 0:
                 lines.append(colorize("   | ", rgb=Color.FMKINFO) + ln[: -len(sep)])
 
-            self.lg.print_console(" [ " + title + " ]", rgb=Color.FMKINFO, nl_before=True, nl_after=False)
+            self.lg.print_console(" [ " + title + " ]", rgb=Color.FMKINFO, nl_before=True, nl_after=False,
+                                  basic_output=True)
             for ln in lines:
-                self.lg.print_console(ln)
-            self.lg.print_console("")
+                self.lg.print_console(ln, basic_output=True)
+            self.lg.print_console("", basic_output=True)
 
-        self.lg.print_console("===[ Generator Types ]" + "=" * 58, rgb=Color.FMKINFOGROUP, nl_after=True)
+        self.lg.print_console("===[ Generator Types ]" + "=" * 58, rgb=Color.FMKINFOGROUP, nl_after=True,
+                              basic_output=True)
 
         dmakers = {}
         for dt, related_dm in self._tactics.generators_info():
@@ -4652,7 +4661,8 @@ class FmkPlumbing(object):
         l2 = sorted(l2)
         print_dmaker(l2, "Generic")
 
-        self.lg.print_console("===[ Operator Types ]" + "=" * 58, rgb=Color.FMKINFOGROUP, nl_after=True)
+        self.lg.print_console("===[ Operator Types ]" + "=" * 58, rgb=Color.FMKINFOGROUP, nl_after=True,
+                              basic_output=True)
 
         dmakers = {}
         for dt, related_dm in self._tactics.operators_info():
@@ -4751,10 +4761,11 @@ class FmkPlumbing(object):
                 gen_generators = None if dmaker_type not in gen_generators else [dmaker_type]
 
         if generators:
-            self.lg.print_console("\n-=[ SPECIFIC GENERATORS ]=-", rgb=Color.INFO, style=FontStyle.BOLD)
+            self.lg.print_console("\n-=[ SPECIFIC GENERATORS ]=-", rgb=Color.INFO, style=FontStyle.BOLD,
+                                  basic_output=True)
             for dt in sorted(generators):
                 msg = "\n*** Available generators of type '%s' ***" % dt
-                self.lg.print_console(msg, rgb=Color.INFO)
+                self.lg.print_console(msg, rgb=Color.INFO, basic_output=True)
                 generators_list = self._tactics.get_generators_list(dt)
                 for name in generators_list:
                     msg = "  name: %s (weight: %d, valid: %r)" % (
@@ -4763,13 +4774,15 @@ class FmkPlumbing(object):
                         self._tactics.get_generator_validness(dt, name),
                     )
                     msg += self._dmaker_desc_str(self._tactics.get_generator_obj(dt, name))
-                    self.lg.print_console(msg, limit_output=False)
+                    self.lg.print_console(msg, limit_output=False, basic_output=True)
 
         if gen_generators:
-            self.lg.print_console("\n-=[ GENERIC GENERATORS ]=-", rgb=Color.INFO, style=FontStyle.BOLD)
+            self.lg.print_console("\n-=[ GENERIC GENERATORS ]=-", rgb=Color.INFO, style=FontStyle.BOLD,
+                                  basic_output=True)
             for dt in sorted(gen_generators):
                 msg = "\n*** Generic generators of type '%s' ***" % dt
-                self.lg.print_console(msg, rgb=Color.INFO)
+                self.lg.print_console(msg, rgb=Color.INFO,
+                                      basic_output=True)
                 gen_generators_list = self._generic_tactics.get_generators_list(dt)
                 for name in gen_generators_list:
                     msg = "  name: %s (weight: %d, valid: %r)" % (
@@ -4778,9 +4791,10 @@ class FmkPlumbing(object):
                         self._generic_tactics.get_generator_validness(dt, name),
                     )
                     msg += self._dmaker_desc_str(self._generic_tactics.get_generator_obj(dt, name))
-                    self.lg.print_console(msg, limit_output=False)
+                    self.lg.print_console(msg, limit_output=False,
+                                          basic_output=True)
 
-        self.lg.print_console("\n", nl_before=False)
+        self.lg.print_console("\n", nl_before=False, basic_output=True)
 
     @EnforceOrder(accepted_states=["S2"])
     def show_operators(self, dmaker_type=None):
@@ -4796,10 +4810,11 @@ class FmkPlumbing(object):
                 gen_operators = [] if dmaker_type not in gen_operators else [dmaker_type]
 
         if operators:
-            self.lg.print_console("\n-=[ SPECIFIC OPERATORS ]=-", rgb=Color.INFO, style=FontStyle.BOLD)
+            self.lg.print_console("\n-=[ SPECIFIC OPERATORS ]=-", rgb=Color.INFO, style=FontStyle.BOLD,
+                                  basic_output=True)
             for dmt in sorted(operators):
                 msg = "\n*** Specific operators of type '%s' ***" % dmt
-                self.lg.print_console(msg, rgb=Color.INFO)
+                self.lg.print_console(msg, rgb=Color.INFO, basic_output=True)
                 operators_list = self._tactics.get_operators_list(dmt)
                 for name in operators_list:
                     dis_obj = self._tactics.get_operator_obj(dmt, name)
@@ -4813,13 +4828,14 @@ class FmkPlumbing(object):
                                   self._tactics.get_operator_validness(dmt, name))
                     msg += " " + colorize("[{:s}]".format(dis_type), rgb=Color.INFO_ALT)
                     msg += self._dmaker_desc_str(dis_obj)
-                    self.lg.print_console(msg, limit_output=False)
+                    self.lg.print_console(msg, limit_output=False, basic_output=True)
 
         if gen_operators:
-            self.lg.print_console("\n-=[ GENERIC OPERATORS ]=-", rgb=Color.INFO, style=FontStyle.BOLD)
+            self.lg.print_console("\n-=[ GENERIC OPERATORS ]=-", rgb=Color.INFO, style=FontStyle.BOLD,
+                                  basic_output=True)
             for dmt in sorted(gen_operators):
                 msg = "\n*** Generic operators of type '%s' ***" % dmt
-                self.lg.print_console(msg, rgb=Color.INFO)
+                self.lg.print_console(msg, rgb=Color.INFO, basic_output=True)
                 gen_operators_list = self._generic_tactics.get_operators_list(dmt)
                 for name in gen_operators_list:
                     dis_obj = self._generic_tactics.get_operator_obj(dmt, name)
@@ -4833,9 +4849,9 @@ class FmkPlumbing(object):
                               self._generic_tactics.get_operator_validness(dmt, name))
                     msg += " " + colorize("[{:s}]".format(dis_type), rgb=Color.INFO_ALT)
                     msg += self._dmaker_desc_str(dis_obj)
-                    self.lg.print_console(msg, limit_output=False)
+                    self.lg.print_console(msg, limit_output=False, basic_output=True)
 
-        self.lg.print_console("\n", nl_before=False)
+        self.lg.print_console("\n", nl_before=False, basic_output=True)
 
     @EnforceOrder(accepted_states=["20_load_prj", "25_load_dm", "S1", "S2"])
     def display_color_theme(self):
@@ -4954,25 +4970,28 @@ class FmkShell(cmd.Cmd):
         time.sleep(0.05)
 
         printed_err = False
-        self.print("")
+        if not self.fz._tui:
+            # With TUI it triggers an unfortunate new line in the basic output panel
+            self.print("")
+
         if self.fz.is_not_ok() or self.__error:
             printed_err = True
             msg = "| ERROR / WARNING / INFO |"
-            self.print(colorize("-" * len(msg), rgb=Color.WARNING))
+            self.print(colorize("\n" + "-" * len(msg), rgb=Color.WARNING))
             self.print(colorize(msg, rgb=Color.WARNING))
             self.print(colorize("-" * len(msg), rgb=Color.WARNING))
 
         if self.fz.is_not_ok():
             err_list = self.fz.get_error()
             for e in err_list:
-                self.print(colorize("    (_ FMK [#{err!s:s}]: {msg:s} _)".format(err=e, msg=e.msg), rgb=e.color)
+                self.print(colorize(f"     > FMK [{e!s}] - {e.msg}", rgb=e.color)
                 )
 
         if self.__error:
             self.__error = False
             if self.__error_msg != "":
                 self.print(
-                    colorize("    (_ SHELL: {:s} _)".format(self.__error_msg), rgb=Color.WARNING)
+                    colorize(f"     > SHELL - {self.__error_msg}", rgb=Color.WARNING)
                 )
 
         if printed_err:
@@ -6142,6 +6161,8 @@ class FmkShell(cmd.Cmd):
         self.fz.reload_all(tg_ids=tg_ids)
 
         self._reload_project_data()
+
+        self.fz.start_continuous_monitoring()
 
         self.__error = False
         return False
