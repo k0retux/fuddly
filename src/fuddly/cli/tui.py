@@ -287,9 +287,10 @@ class FuddlyTUI(App):
         self._status_fifo = status_fifo
         self._help_fifo = help_fifo
         self._cmd_re = re.compile(r'(\d)\x00(.*?)\x00(.*?)\x00(.*?)\x00', flags=re.S)
-        pattern = r'(.*' + Logger.PREAMBLE_PREFIX.replace('[', r'\[') + r')(.*)'
-        self._sending_preample_re = re.compile(pattern, flags=re.S)
-        # self._sending_preample_re = re.compile(r'(.*====\[)(.*)', flags=re.S)
+        preamble_pattern = r'(.*' + Logger.PREAMBLE_PREFIX.replace('[', r'\[') + r')(.*)'
+        epilogue_pattern = r'(.*' + Logger.EPILOGUE_PREFIX.replace('[', r'\[') + r')(.*)'
+        self._sending_preample_re = re.compile(preamble_pattern, flags=re.S)
+        self._sending_epilogue_re = re.compile(epilogue_pattern, flags=re.S)
         self._loggers_fd = {}
         self._loggers_fifo = {}
         self._status_msg = Text('')
@@ -307,6 +308,8 @@ class FuddlyTUI(App):
         self._previous_text_empty_lines = False
         self._previous_text_nb_added_empty_lines = 0
         self._previous_text_is_only_preamble = False
+
+        self._previous_nb_lines_displayed = 0
 
         self._rpanel_stop_scrolling = False
 
@@ -554,10 +557,10 @@ class FuddlyTUI(App):
             else:
                 fd_bbcode = None
             if self._basic_fifo:
-                fd_basic = os.open(self._basic_fifo, os.O_RDONLY | os.O_NONBLOCK)
-                epobj.register(fd_basic, select.EPOLLIN | select.EPOLLHUP)
+                fd_main = os.open(self._basic_fifo, os.O_RDONLY | os.O_NONBLOCK)
+                epobj.register(fd_main, select.EPOLLIN | select.EPOLLHUP)
             else:
-                fd_basic = None
+                fd_main = None
             if self._status_fifo:
                 fd_status = os.open(self._status_fifo, os.O_RDONLY | os.O_NONBLOCK)
                 epobj.register(fd_status, select.EPOLLIN | select.EPOLLHUP)
@@ -569,7 +572,7 @@ class FuddlyTUI(App):
             else:
                 fd_help = None
 
-            if (fd_ansi is None and fd_bbcode is None and fd_basic is None and fd_status is None
+            if (fd_ansi is None and fd_bbcode is None and fd_main is None and fd_status is None
                     and fd_cmd is None and fd_help is None):
                 return
 
@@ -664,12 +667,6 @@ class FuddlyTUI(App):
                                                           auto_scroll=False, max_lines=1000)
                                 self._help_zone.border_title = 'help'
                                 await self._main_area.mount(self._help_zone, after=self._raw_display)
-                            #     self._help_zone_hidden = False
-                            #
-                            # if self._help_zone_hidden:
-                            #     self._help_zone.remove_class('help_hidden_mode', update=True)
-                            #     self._help_zone.add_class('help_visible_mode', update=True)
-                            #     self._help_zone_hidden = False
 
                             if self._help_markup_mode:
                                 text = Text.from_markup(text)
@@ -680,7 +677,7 @@ class FuddlyTUI(App):
                                 self._help_zone.clear()
                                 self._help_zone.write(text)
 
-                        elif fd == fd_basic:
+                        elif fd == fd_main:
                             text = ''
                             data = 'INIT'
                             while data:
@@ -692,24 +689,35 @@ class FuddlyTUI(App):
                                     text += data
 
                             # self.app.notify(f'text: {repr(text[:10])}')
+                            obj = self._sending_epilogue_re.match(text)
+                            if obj:
+                                epilogue_detected = True
+                            else:
+                                epilogue_detected = False
 
                             obj = self._sending_preample_re.match(text)
                             if obj:
-                                nb_lines_before_preamble = obj.group(1).count('\n')
+                                nb_lines_till_preamble = obj.group(1).count('\n') # including preamble
                                 total_nb_lines = obj.group(0).count('\n')
-                                # self.app.notify(
-                                #     f'Parsing {total_nb_lines} - {total_nb_lines - nb_lines_before_preamble}: {obj.group(2)}')
-                                if total_nb_lines - nb_lines_before_preamble == 0:
-                                    # self.app.notify(f'Parsing {total_nb_lines} - {total_nb_lines - nb_lines_before_preamble}: {obj.group(2)}')
+                                nb_lines_after_preamble = total_nb_lines - nb_lines_till_preamble
+                                if nb_lines_till_preamble > 0:
+                                    nb_lines_before_preamble = nb_lines_till_preamble - 1
+                                else:
+                                    # BUG?
+                                    raise NotImplementedError
+                                if nb_lines_after_preamble == 0:
                                     text_is_only_preamble = True
+                                    text_is_preamble_and_more = False
                                 else:
                                     text_is_only_preamble = False
-                                if nb_lines_before_preamble > 0:
-                                    nb_lines_before_preamble -= 1
-                                # self.app.notify(f'nb lines before preamble: {nb_lines_before_preamble}')
+                                    text_is_preamble_and_more = True
                             else:
                                 nb_lines_before_preamble = 0
+                                nb_lines_after_preamble = 0
                                 text_is_only_preamble = False
+                                text_is_preamble_and_more = False
+
+                            preamble_detected = text_is_preamble_and_more or text_is_only_preamble
 
                             if self._main_display_markup_mode:
                                 text = Text.from_markup(text, overflow='fold')
@@ -717,45 +725,69 @@ class FuddlyTUI(App):
                                 text = Text.from_ansi(text, no_wrap=False, overflow='fold')
 
                             if text:
-                                PREAMBLE_H = 2
                                 self._main_display.auto_scroll = False
+                                available_nb_lines = self._main_display.scrollable_content_region.height
 
                                 self._remove_empty_lines_from_main_display()
 
                                 initial_nb_lines = len(self._main_display.lines)
                                 self._main_display.write(text)
                                 new_nb_lines = len(self._main_display.lines)
-                                text_nb_lines = new_nb_lines - initial_nb_lines - nb_lines_before_preamble
-                                available_nb_lines = self._main_display.scrollable_content_region.height
 
-                                if available_nb_lines < text_nb_lines:
-                                    move_up = self._main_display.max_scroll_y - (text_nb_lines - available_nb_lines) + 1
-                                    if self._previous_text_is_only_preamble:
-                                        # in the case there is a feedback timeout > 0 there is a delay between
-                                        # the printing of the 1-liner "sending preamble" and the description of
-                                        # the sending.
-                                        # Thus, we accommodate the move up
-                                        move_up -= PREAMBLE_H
-                                        # self.app.notify(f'(1) previous text was preamble')
+                                added_nb_lines = new_nb_lines - initial_nb_lines
 
-                                    self._main_display.scroll_to(y=move_up, animate=False)
+                                if preamble_detected:
+                                    nb_lines_to_display = added_nb_lines - nb_lines_before_preamble
+                                    # final_nb_lines_to_display = self._previous_nb_lines_displayed + nb_lines_to_display
+
+                                    if available_nb_lines < nb_lines_to_display:
+                                        # self.app.notify(f'preamble detected - case (1)')
+                                        move_up = self._main_display.max_scroll_y - (nb_lines_to_display - available_nb_lines) + 1
+                                        self._main_display.scroll_to(y=move_up, animate=False)
+                                    else:
+                                        # self.app.notify(f'preamble detected - case (2) - {nb_lines_before_preamble}, {nb_lines_after_preamble}')
+                                        nb_empty_lines = available_nb_lines - nb_lines_to_display
+                                        empty_lines = '\n' * nb_empty_lines
+                                        self._main_display.write(Text(empty_lines))
+                                        self._previous_text_empty_lines = True
+                                        self._previous_text_nb_added_empty_lines = nb_empty_lines + 1
+                                        # TODO: understand why +1 is necessary because of the write?
+                                        self._main_display.scroll_end(animate=False)
+
+                                    self._previous_nb_lines_displayed = nb_lines_after_preamble + 1 # +1 to count the preamble line
 
                                 else:
-                                    nb_lines = available_nb_lines - text_nb_lines
-                                    if self._previous_text_is_only_preamble:
-                                        nb_lines -= PREAMBLE_H
-                                        # self.app.notify(f'(2) previous text was preamble')
-                                    empty_lines = '\n' * nb_lines
-                                    self._main_display.write(Text(empty_lines))
-                                    self._previous_text_empty_lines = True
-                                    if text_is_only_preamble:
-                                        nb_lines += 1
-                                        # self.app.notify(f'text is only preamble ')
-                                    self._previous_text_nb_added_empty_lines = nb_lines
-                                    self._main_display.scroll_end(animate=False)
+                                    if epilogue_detected:
+                                        # assumption: preamble is already displayed
 
-                                self._previous_text_nb_lines = text_nb_lines
-                                self._previous_text_is_only_preamble = text_is_only_preamble
+                                        nb_lines_to_display = self._previous_nb_lines_displayed + added_nb_lines
+                                        if available_nb_lines < nb_lines_to_display:
+                                            # self.app.notify(f'epilogue detected (no preamble) - case (1)')
+                                            pass
+                                        else:
+                                            # self.app.notify(f'epilogue detected (no preamble) - case (2) - {available_nb_lines} / {self._previous_nb_lines_displayed}, {added_nb_lines}')
+                                            nb_empty_lines = available_nb_lines - nb_lines_to_display - 1
+                                            # TODO: understand why -1 is necessary because of the write?
+                                            empty_lines = '\n' * nb_empty_lines
+                                            self._main_display.write(Text(empty_lines))
+                                            self._previous_text_empty_lines = True
+                                            self._previous_text_nb_added_empty_lines = nb_empty_lines
+                                            self._main_display.scroll_end(animate=False)
+
+                                    else:
+                                        nb_lines_to_display = added_nb_lines
+                                        if available_nb_lines < nb_lines_to_display:
+                                            # self.app.notify(f'no preamble/epilogue - case (1)')
+                                            move_up = self._main_display.max_scroll_y - (nb_lines_to_display - available_nb_lines)
+                                            self._main_display.scroll_to(y=move_up, animate=False)
+                                        else:
+                                            # self.app.notify(f'no preamble/epilogue - case (2)')
+                                            nb_empty_lines = available_nb_lines - nb_lines_to_display
+                                            empty_lines = '\n' * nb_empty_lines
+                                            self._main_display.write(Text(empty_lines))
+                                            self._previous_text_empty_lines = True
+                                            self._previous_text_nb_added_empty_lines = nb_empty_lines
+                                            self._main_display.scroll_end(animate=False)
 
                         elif fd in (fd_ansi, fd_bbcode):
                             text = ''

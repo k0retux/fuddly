@@ -975,9 +975,11 @@ class Logger(object):
         msg = "### Info: {:s}".format(info)
         self.log_fn(msg, rgb=Color.INFO)
 
+    EPILOGUE_PREFIX = '### Ack from'
+
     def log_target_ack_date(self):
         for tg_ref, ack_date in self._current_ack_dates.items():
-            msg = "### Ack from '{!s}' received at: ".format(tg_ref)
+            msg = f"{self.EPILOGUE_PREFIX} '{tg_ref!s}' received at: "
             self.log_fn(msg, nl_after=False, rgb=Color.LOGSECTION, all_output=True)
             self.log_fn(str(ack_date), nl_before=False, all_output=True)
 
