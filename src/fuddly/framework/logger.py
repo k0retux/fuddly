@@ -238,7 +238,7 @@ class Logger(object):
                 )
                 self._log_entry_submitted_cond.notify()
 
-    def print_basic(self, msg: str):
+    def print_main(self, msg: str):
         with self._sync_lock:
             with self._log_entry_submitted_cond:
                 self._log_entry_list.append(
@@ -370,7 +370,7 @@ class Logger(object):
         #     bbcode = Color.to_bbcode(Color.COMPONENT_START)
         #     self._ext_disp.disp.set_basic_output_mode(markup=True)
         #     time.sleep(0.1)
-        #     self.print_basic(f"[{bbcode}]*** Logger is started ***[/]\n")
+        #     self.print_main(f"[{bbcode}]*** Logger is started ***[/]\n")
         #     self._ext_disp.disp.set_basic_output_mode(markup=False)
         # else:
         self.print_console(
@@ -426,7 +426,7 @@ class Logger(object):
                             sys.stdout.write(params)
                     elif api == Logger.BASIC_OUTPUT_API:
                         if self._ext_disp.is_enabled:
-                            self._ext_disp.disp.print_basic(params)
+                            self._ext_disp.disp.print_main(params)
                         else:
                             sys.stdout.write(params + '\n')
                     elif api == Logger.ANYFIFO_API:
@@ -450,7 +450,7 @@ class Logger(object):
                                 traceback.print_exc()
 
                             if self._ext_disp.is_enabled:
-                                self._ext_disp.disp.print_basic('\n' + accu.content)
+                                self._ext_disp.disp.print_main('\n' + accu.content)
                             else:
                                 sys.stdout.write('\n' + accu.content)
                             accu.clear()
@@ -909,11 +909,13 @@ class Logger(object):
             return None
         return convert_to_internal_repr(feedback)
 
+    PREAMBLE_PREFIX = '====['
+
     def start_new_log_entry(self, preamble=""):
         self.__idx += 1
         self._current_sent_date = datetime.datetime.now()
         now = self._current_sent_date.strftime("%d/%m/%Y - %H:%M:%S.%f")
-        msg = "====[ {:d} ]==[ {:s} ]====".format(self.__idx, now)
+        msg = f"{self.PREAMBLE_PREFIX} {self.__idx} ]==[ {now} ]===="
         msg += "=" * (max(80 - len(msg), 0))
         self.log_fn(msg, rgb=Color.NEWLOGENTRY, style=FontStyle.BOLD, all_output=True)
 
@@ -1137,7 +1139,7 @@ class Logger(object):
         if no_format_mode:
             if self._ext_disp.is_enabled:
                 if all_output or basic_output:
-                    self._ext_disp.disp.print_basic(prefix + msg, newline=False)
+                    self._ext_disp.disp.print_main(prefix + msg, newline=False)
                 if all_output or not basic_output:
                     self._ext_disp.disp.print(prefix + msg, newline=False)
             else:
@@ -1172,13 +1174,13 @@ class Logger(object):
                 # if self._tui:
                 #     self._ext_disp.disp.set_basic_output_mode(markup=True)
                 #     time.sleep(0.1)
-                #     self._ext_disp.disp.print_basic(
+                #     self._ext_disp.disp.print_main(
                 #         '[' + self.style2bbcode[style] + color + ']' + prefix + msg + suffix + '[/]')
                 #     self._ext_disp.disp.set_basic_output_mode(markup=False)
                 # else:
                 if all_output or basic_output:
-                    self._ext_disp.disp.print_basic(style + prefix + msg + suffix + FontStyle.END,
-                                                    newline=False)
+                    self._ext_disp.disp.print_main(style + prefix + msg + suffix + FontStyle.END,
+                                                   newline=False)
                 if all_output or not basic_output:
                     self._ext_disp.disp.print(prefix + msg, newline=False)
             else:

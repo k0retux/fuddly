@@ -130,7 +130,7 @@ class Printer(io.StringIO):
 
     def print(self, msg):
         if self.fmk.lg:
-            self.fmk.lg.print_basic(msg)
+            self.fmk.lg.print_main(msg)
         else:
             sys.__stdout__.write(msg + "\n")
 
@@ -846,7 +846,7 @@ class FmkPlumbing(object):
     @EnforceOrder(accepted_states=["S2"])
     def reload_all(self, tg_ids=None):
         if self._tui:
-            self.external_display.disp.hide_basic_output_panel()
+            self.external_display.disp.hide_raw_display_panel()
 
         return self._reload_all(tg_ids=tg_ids)
 

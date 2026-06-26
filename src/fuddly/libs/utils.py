@@ -92,7 +92,7 @@ class Term(object):
     def print_nl(self, s):
         self.print(s, newline=True)
 
-    print_basic = print
+    print_main = print
 
     def print_help(self, s, newline=True):
         self._print(s, self.main_fifo_ansi, newline=newline)
@@ -112,8 +112,8 @@ class RichTerm(Term):
     CMD_HELP_MODE = 5
     CMD_HELP_HIDE = 6
 
-    CMD_BASIC_OUTPUT_MODE = 7
-    CMD_BASIC_OUTPUT_HIDE = 8
+    CMD_MAIN_DISPLAY_MODE = 7
+    CMD_RAW_DISPLAY_HIDE = 8
 
     def __init__(self, title=None, keepterm=False):
         super().__init__(title=title, keepterm=keepterm)
@@ -182,7 +182,7 @@ class RichTerm(Term):
     def print_markup(self, s, newline=False):
         self._print(s, self.main_fifo_bbcode, newline=newline)
 
-    def print_basic(self, s, newline=True):
+    def print_main(self, s, newline=True):
         self._print(s, self.basic_fifo, newline=newline)
 
     def print_status(self, s, newline=False):
@@ -198,12 +198,12 @@ class RichTerm(Term):
     def hide_help_panel(self):
         self._print(f'{self.CMD_HELP_HIDE}\x00\x00\x00\x00', self.cmd_fifo, newline=True)
 
-    def set_basic_output_mode(self, markup=False):
+    def set_main_display_mode(self, markup=False):
         mode = 'm' if markup else 'a'
-        self._print(f'{self.CMD_BASIC_OUTPUT_MODE}\x00{mode}\x00\x00\x00', self.cmd_fifo, newline=True)
+        self._print(f'{self.CMD_MAIN_DISPLAY_MODE}\x00{mode}\x00\x00\x00', self.cmd_fifo, newline=True)
 
-    def hide_basic_output_panel(self):
-        self._print(f'{self.CMD_BASIC_OUTPUT_HIDE}\x00\x00\x00\x00', self.cmd_fifo, newline=True)
+    def hide_raw_display_panel(self):
+        self._print(f'{self.CMD_RAW_DISPLAY_HIDE}\x00\x00\x00\x00', self.cmd_fifo, newline=True)
 
     def new_log_panel(self, title='', markup=False):
         new_fifo = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))

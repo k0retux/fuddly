@@ -5,6 +5,7 @@ from typing import Iterable
 
 from xdg.Locale import update
 
+from fuddly.framework.logger import Logger
 from fuddly.framework.plumbing import FmkPlumbing
 import fuddly.cli.argparse_wrapper as argparse
 from fuddly.framework.global_resources import fuddly_version
@@ -22,7 +23,7 @@ from rich.traceback import install
 install()
 from textual.widgets import RichLog, TabbedContent, TabPane, DirectoryTree
 from textual.app import App
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll, HorizontalGroup
 from textual.widgets import Input, Static, Button
 from textual.geometry import Size
 from rich.text import Text
@@ -39,16 +40,41 @@ fuddly_tui_tcss = """
     tint: blue 20%;
 }
 
-#main_panel_area {
+#global_area {
     box-sizing: border-box;
     height: 1fr;
     width: 100%;
 }
 
-#main_rlog_area {
+#main_area {
     box-sizing: border-box;
     height: 1fr;
     width: 100%;
+}
+
+#middle_panel {
+    height: auto;
+    content-align: left middle;
+}
+
+#button_panel {
+    content-align: left middle;
+}
+
+.small_button {
+    min-width: 2;
+}
+
+#b_enable_autoscroll_rpanel {
+    display: none;
+}
+
+.as_disabled #b_disable_autoscroll_rpanel {
+    display: none;
+}
+
+.as_disabled #b_enable_autoscroll_rpanel {
+    display: block;
 }
 
 #help_zone {
@@ -66,7 +92,7 @@ fuddly_tui_tcss = """
     height: 1fr;
 }
 
-#main_rlog {
+#main_display {
     scrollbar-size: 1 1;
     box-sizing: border-box;
     text-wrap: wrap;
@@ -76,7 +102,7 @@ fuddly_tui_tcss = """
     border: solid #008B8B;
 }
 
-#basic_output {
+#raw_display {
     scrollbar-size: 1 1;
     box-sizing: border-box;
     text-wrap: wrap;
@@ -85,11 +111,11 @@ fuddly_tui_tcss = """
     border: solid #88C0D0;
 }
 
-.basic_output_hidden_mode {
+.raw_display_hidden_mode {
     height: 0%;
 }
 
-.basic_output_visible_mode {
+.raw_display_visible_mode {
     height: 3fr;
 }
 
@@ -131,10 +157,9 @@ fuddly_tui_tcss = """
 }
 """
 
-tcss_selectors = [
-    '#status', '#main_panel_area', '#main_rlog_area', '#help_zone',
-    '#main_rlog', '#basic_output', '.box', '.hl_box', '.help_visible_mode', '.help_hidden_mode',
-    '#db_dir_tree', '#db_display', '#db_status', '#current_fmkdb']
+new_tcss_selectors = [
+    '#button_panel'
+]
 tcss_fname = os.path.join(config_folder, FUDDLY_TUI_FNAME)
 write_tcss = False
 if not os.path.isfile(tcss_fname):
@@ -142,7 +167,7 @@ if not os.path.isfile(tcss_fname):
 else:
     with open(tcss_fname, 'r') as f:
         read_tcss = f.read()
-        for sel in tcss_selectors:
+        for sel in new_tcss_selectors:
             if sel not in read_tcss:
                 write_tcss = True
                 break
@@ -167,7 +192,7 @@ class AltLogger(RichLog):
             self.auto_scroll = True
 
 
-class MainLogger(RichLog):
+class RawDisplay(RichLog):
 
     def watch_scroll_y(self, old_value, new_value) -> None:
         super().watch_scroll_y(old_value, new_value)
@@ -180,6 +205,34 @@ class MainLogger(RichLog):
             # Note: self.max_scroll_y == 0 if not enough text to allow scrolling
             self.auto_scroll = True
             # self.app.notify(f"Auto scroll enabled ({old_value} --> {new_value})")
+
+
+class ButtonPanel(HorizontalGroup):
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == 'b_scroll_end_lpanel':
+            rlog = self.app.query_one('#raw_display')
+            rlog.auto_scroll = True
+            self.app.notify(f'auto-scroll [green]enabled[/] on [b]left panel[/]')
+        elif event.button.id == 'b_disable_autoscroll_rpanel':
+            self.add_class('as_disabled')
+            self.app._rpanel_stop_scrolling = True
+            self.app.notify(f'auto-scroll [red]disabled[/] on [b]right panel[/]')
+        elif event.button.id == 'b_enable_autoscroll_rpanel':
+            self.remove_class('as_disabled')
+            self.app._rpanel_stop_scrolling = False
+            self.app.notify(f'auto-scroll [green]enabled[/] on [b]right panel[/]')
+
+    def compose(self):
+        yield Button('e', id='b_scroll_end_lpanel', classes='small_button',
+                     compact=True,
+                     tooltip=Text('Scroll to the end of the left panel'))
+        yield Button('!as', id='b_disable_autoscroll_rpanel', classes='small_button',
+                     compact=True,
+                     tooltip=Text('Disable the right panel auto-scroll'))
+        yield Button('as', id='b_enable_autoscroll_rpanel', classes='small_button',
+                     compact=True,
+                     tooltip=Text('Enable the right panel auto-scroll'))
 
 
 class FmkDBDirectoryTree(DirectoryTree):
@@ -207,6 +260,22 @@ class FuddlyTUI(App):
     # DEFAULT_CSS = """
     # """
 
+    BINDINGS = [
+        ("a", "enable_autoscroll_rpanel", "auto-scroll [green]enabled[/] on [b]right panel[/]"),
+        ("alt+a", "disable_autoscroll_rpanel", "auto-scroll [red]disabled[/] on [b]right panel[/]"),
+        ("e", "scroll_end_mpanel", "Scroll to the end (main panel)"),
+    ]
+
+    def action_enable_autoscroll_rpanel(self) -> None:
+        bt: Button = self.query_one('#b_enable_autoscroll_rpanel')
+        bt.action_press()
+
+    def action_disable_autoscroll_rpanel(self) -> None:
+        bt: Button = self.query_one('#b_disable_autoscroll_rpanel')
+        bt.action_press()
+
+    def action_end_mpanel(self) -> None:
+        self._raw_display.scroll_end(animate=False)
 
     def __init__(self, cmd_fifo, main_fifo_ansi, main_fifo_bbcode, basic_fifo,
                  status_fifo, help_fifo):
@@ -218,24 +287,28 @@ class FuddlyTUI(App):
         self._status_fifo = status_fifo
         self._help_fifo = help_fifo
         self._cmd_re = re.compile(r'(\d)\x00(.*?)\x00(.*?)\x00(.*?)\x00', flags=re.S)
-        self._sending_preample_re = re.compile(r'(.*====\[)(.*)', flags=re.S)
+        pattern = r'(.*' + Logger.PREAMBLE_PREFIX.replace('[', r'\[') + r')(.*)'
+        self._sending_preample_re = re.compile(pattern, flags=re.S)
+        # self._sending_preample_re = re.compile(r'(.*====\[)(.*)', flags=re.S)
         self._loggers_fd = {}
         self._loggers_fifo = {}
         self._status_msg = Text('')
         self._help_markup_mode = False
-        self._basic_output_markup_mode = False
+        self._main_display_markup_mode = False
 
-        self._main_panel = None
-        self._main_rlog = None
+        self._global_area = None
+        self._raw_display = None
         self._right_panel = None
         self._help_zone = None
         # self._help_zone_hidden = True
-        self._basic_zone = None
-        self._basic_zone_hidden = True
+        self._main_display = None
+        self._raw_display_hidden = True
         self._previous_text_nb_lines = 0
         self._previous_text_empty_lines = False
         self._previous_text_nb_added_empty_lines = 0
         self._previous_text_is_only_preamble = False
+
+        self._rpanel_stop_scrolling = False
 
         self.fmkdb = None
 
@@ -313,12 +386,19 @@ class FuddlyTUI(App):
                                      expand=True),
                         Horizontal(
                             Vertical(
-                                RichLog(id='basic_output', classes='basic_output_hidden_mode',
+                                RichLog(id='main_display',
+                                        max_lines=20000,
                                         wrap=True, auto_scroll=False),
-                                MainLogger(id='main_rlog', wrap=True, auto_scroll=True),
-                                id="main_rlog_area"
+                                Horizontal(
+                                    ButtonPanel(id="button_panel"),
+                                    id="middle_panel"
+                                ),
+                                RawDisplay(id='raw_display', classes='raw_display_hidden_mode',
+                                           max_lines=50000,
+                                           wrap=True, auto_scroll=True),
+                                id="main_area"
                             ),
-                            id='main_panel_area'
+                            id='global_area'
                         )
                     )
             with TabPane('analyzer', id='f_analyzer'):
@@ -381,7 +461,7 @@ class FuddlyTUI(App):
                         del self._loggers_fd[fd]
                         if self._right_panel and not self._loggers_fd:
                             await self._right_panel.remove()
-                            self._main_rlog_area.styles.width = '100%'
+                            self._main_area.styles.width = '100%'
                             self._right_panel = None
 
             elif cmd == RichTerm.CMD_HELP_MODE:
@@ -401,20 +481,20 @@ class FuddlyTUI(App):
                     # self._help_zone_hidden = True
 
 
-            elif cmd == RichTerm.CMD_BASIC_OUTPUT_MODE:
+            elif cmd == RichTerm.CMD_MAIN_DISPLAY_MODE:
                 mode = parsed.group(2)
 
                 if mode == 'm': # markup mode
-                    self._basic_output_markup_mode = True
+                    self._main_display_markup_mode = True
                 else:
-                    self._basic_output_markup_mode = False
+                    self._main_display_markup_mode = False
 
-            elif cmd == RichTerm.CMD_BASIC_OUTPUT_HIDE:
-                if self._basic_zone:
-                    self._basic_zone.clear()
-                    self._basic_zone.remove_class('basic_output_visible_mode')
-                    self._basic_zone.add_class('basic_output_hidden_mode', update=True)
-                    self._basic_zone_hidden = True
+            elif cmd == RichTerm.CMD_RAW_DISPLAY_HIDE:
+                if self._raw_display:
+                    self._raw_display.clear()
+                    self._raw_display.remove_class('raw_display_visible_mode')
+                    self._raw_display.add_class('raw_display_hidden_mode', update=True)
+                    self._raw_display_hidden = True
 
             else:
                 self._status_msg = Text.from_ansi(f'Unknown Command: {cmd}')
@@ -422,7 +502,7 @@ class FuddlyTUI(App):
             self._status_msg = Text.from_ansi(f'Command Parsing Error: {cmd_msg}')
 
     def _remove_empty_lines_from_main_display(self):
-        rlog = self._basic_zone
+        rlog = self._main_display
 
         if self._previous_text_empty_lines:
             self._previous_text_empty_lines = False
@@ -440,19 +520,21 @@ class FuddlyTUI(App):
             rlog.virtual_size = Size(rlog.virtual_size.width, len(rlog.lines))
             rlog.refresh()
             rlog.focus()
-            self._main_rlog.focus()
+            self._raw_display.focus()
 
     async def update_text(self) -> None:
-        self._main_rlog: RichLog = self.query_one("#main_rlog")
         self._status_wdg: Static = self.query_one("#status")
         self._status_msg.stylize('bold')
-        self._main_panel = self.query_one("#main_panel_area")
-        self._main_rlog_area = self.query_one("#main_rlog_area")
-        self._basic_zone: RichLog = self.query_one("#basic_output")
-        epobj = None
+        self._global_area = self.query_one("#global_area")
+        self._main_area = self.query_one("#main_area")
+        self._main_display: RichLog = self.query_one("#main_display")
+        self._raw_display: RichLog = self.query_one("#raw_display")
+        self._button_panel = self.query_one("#button_panel")
 
-        self._basic_zone.border_title = 'main display'
-        self._basic_zone_hidden = True
+        epobj = None
+        self._button_panel.styles.align = ("right", "middle")
+        self._raw_display.border_title = 'raw display'
+        self._raw_display_hidden = True
 
         try:
             epobj = select.epoll()
@@ -533,19 +615,21 @@ class FuddlyTUI(App):
                             if text:
                                 if not self._right_panel:
                                     self._right_panel = VerticalScroll(id="loggers")
-                                    await self._main_panel.mount(self._right_panel)
-                                    self._main_rlog_area.styles.width = '60%'
+                                    await self._global_area.mount(self._right_panel)
+                                    self._main_area.styles.width = '60%'
 
                                 try:
                                     rlog = self.query_one(w_id)
                                 except NoMatches:
-                                    rlog = AltLogger(highlight=True, id=w_id[1:], classes='box')
+                                    rlog = AltLogger(highlight=True, max_lines=10000,
+                                                     id=w_id[1:], classes='box')
                                     rlog.border_title = title
                                     await self._right_panel.mount(rlog)
 
                                 rlog.remove_class('box')
                                 rlog.add_class('hl_box', update=True)
-                                rlog.scroll_visible()
+                                if not self._rpanel_stop_scrolling:
+                                    rlog.scroll_visible()
                                 rlog.write(text)
 
                         elif fd == fd_status:
@@ -562,6 +646,7 @@ class FuddlyTUI(App):
                             if text:
                                 text.stylize('bold')
                                 self._status_wdg.update(text)
+                                # self.app.notify(text)
 
                         elif fd == fd_help:
                             text = ''
@@ -576,9 +661,9 @@ class FuddlyTUI(App):
 
                             if not self._help_zone:
                                 self._help_zone = RichLog(id='help_zone', classes='help_visible_mode',
-                                                          auto_scroll=False)
+                                                          auto_scroll=False, max_lines=1000)
                                 self._help_zone.border_title = 'help'
-                                await self._main_rlog_area.mount(self._help_zone, after=self._main_rlog)
+                                await self._main_area.mount(self._help_zone, after=self._raw_display)
                             #     self._help_zone_hidden = False
                             #
                             # if self._help_zone_hidden:
@@ -608,11 +693,6 @@ class FuddlyTUI(App):
 
                             # self.app.notify(f'text: {repr(text[:10])}')
 
-                            if self._basic_zone_hidden:
-                                self._basic_zone.remove_class('basic_output_hidden_mode', update=True)
-                                self._basic_zone.add_class('basic_output_visible_mode', update=True)
-                                self._basic_zone_hidden = False
-
                             obj = self._sending_preample_re.match(text)
                             if obj:
                                 nb_lines_before_preamble = obj.group(1).count('\n')
@@ -631,26 +711,25 @@ class FuddlyTUI(App):
                                 nb_lines_before_preamble = 0
                                 text_is_only_preamble = False
 
-                            if self._basic_output_markup_mode:
+                            if self._main_display_markup_mode:
                                 text = Text.from_markup(text, overflow='fold')
                             else:
                                 text = Text.from_ansi(text, no_wrap=False, overflow='fold')
 
                             if text:
                                 PREAMBLE_H = 2
-                                self._basic_zone.auto_scroll = False
+                                self._main_display.auto_scroll = False
 
                                 self._remove_empty_lines_from_main_display()
 
-                                # self._basic_zone.clear()
-                                initial_nb_lines = len(self._basic_zone.lines)
-                                self._basic_zone.write(text)
-                                new_nb_lines = len(self._basic_zone.lines)
+                                initial_nb_lines = len(self._main_display.lines)
+                                self._main_display.write(text)
+                                new_nb_lines = len(self._main_display.lines)
                                 text_nb_lines = new_nb_lines - initial_nb_lines - nb_lines_before_preamble
-                                available_nb_lines = self._basic_zone.scrollable_content_region.height
+                                available_nb_lines = self._main_display.scrollable_content_region.height
 
                                 if available_nb_lines < text_nb_lines:
-                                    move_up = self._basic_zone.max_scroll_y - (text_nb_lines - available_nb_lines) + 1
+                                    move_up = self._main_display.max_scroll_y - (text_nb_lines - available_nb_lines) + 1
                                     if self._previous_text_is_only_preamble:
                                         # in the case there is a feedback timeout > 0 there is a delay between
                                         # the printing of the 1-liner "sending preamble" and the description of
@@ -659,7 +738,7 @@ class FuddlyTUI(App):
                                         move_up -= PREAMBLE_H
                                         # self.app.notify(f'(1) previous text was preamble')
 
-                                    self._basic_zone.scroll_to(y=move_up, animate=False)
+                                    self._main_display.scroll_to(y=move_up, animate=False)
 
                                 else:
                                     nb_lines = available_nb_lines - text_nb_lines
@@ -667,13 +746,13 @@ class FuddlyTUI(App):
                                         nb_lines -= PREAMBLE_H
                                         # self.app.notify(f'(2) previous text was preamble')
                                     empty_lines = '\n' * nb_lines
-                                    self._basic_zone.write(Text(empty_lines))
+                                    self._main_display.write(Text(empty_lines))
                                     self._previous_text_empty_lines = True
                                     if text_is_only_preamble:
                                         nb_lines += 1
                                         # self.app.notify(f'text is only preamble ')
                                     self._previous_text_nb_added_empty_lines = nb_lines
-                                    self._basic_zone.scroll_end(animate=False)
+                                    self._main_display.scroll_end(animate=False)
 
                                 self._previous_text_nb_lines = text_nb_lines
                                 self._previous_text_is_only_preamble = text_is_only_preamble
@@ -690,13 +769,18 @@ class FuddlyTUI(App):
                                 else:
                                     text += data
 
+                            if self._raw_display_hidden:
+                                self._raw_display.remove_class('raw_display_hidden_mode', update=True)
+                                self._raw_display.add_class('raw_display_visible_mode', update=True)
+                                self._raw_display_hidden = False
+
                             if fd == fd_ansi:
                                 text = Text.from_ansi(text, no_wrap=False, overflow='fold')
                             else:
                                 text = Text.from_markup(text, overflow='fold')
 
                             if text:
-                                self._main_rlog.write(text)
+                                self._raw_display.write(text)
                         else:
                             pass
 
@@ -705,12 +789,12 @@ class FuddlyTUI(App):
 
                     else:
                         error_msg = Text.from_markup(f'Unknown epoll() event: {evt}')
-                        self._main_rlog.write(error_msg)
+                        self._status_wdg.update(error_msg)
         finally:
             if epobj:
                 epobj.close()
-            error_msg = Text.from_markup(f'Exit from EPOLL loop!')
-            self._main_rlog.write(error_msg)
+            error_msg = Text.from_markup(f'Exit from [i]epoll()[/] loop!')
+            self._status_wdg.update(error_msg)
 
 
 
