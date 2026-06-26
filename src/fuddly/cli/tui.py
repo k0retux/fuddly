@@ -24,6 +24,7 @@ from textual.widgets import RichLog, TabbedContent, TabPane, DirectoryTree
 from textual.app import App
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Input, Static, Button
+from textual.geometry import Size
 from rich.text import Text
 
 from fuddly.framework.global_resources import *
@@ -70,7 +71,7 @@ fuddly_tui_tcss = """
     box-sizing: border-box;
     text-wrap: wrap;
     text-overflow: fold;
-    height: 4fr;
+    height: 3fr;
     width: 100%;
     border: solid #008B8B;
 }
@@ -89,7 +90,7 @@ fuddly_tui_tcss = """
 }
 
 .basic_output_visible_mode {
-    height: 2fr;
+    height: 3fr;
 }
 
 .box {
@@ -217,7 +218,7 @@ class FuddlyTUI(App):
         self._status_fifo = status_fifo
         self._help_fifo = help_fifo
         self._cmd_re = re.compile(r'(\d)\x00(.*?)\x00(.*?)\x00(.*?)\x00', flags=re.S)
-        self._sending_preample_re = re.compile(r'.*====\[', flags=re.S)
+        self._sending_preample_re = re.compile(r'(.*====\[)(.*)', flags=re.S)
         self._loggers_fd = {}
         self._loggers_fifo = {}
         self._status_msg = Text('')
@@ -232,6 +233,9 @@ class FuddlyTUI(App):
         self._basic_zone = None
         self._basic_zone_hidden = True
         self._previous_text_nb_lines = 0
+        self._previous_text_empty_lines = False
+        self._previous_text_nb_added_empty_lines = 0
+        self._previous_text_is_only_preamble = False
 
         self.fmkdb = None
 
@@ -309,9 +313,9 @@ class FuddlyTUI(App):
                                      expand=True),
                         Horizontal(
                             Vertical(
-                                MainLogger(id='main_rlog', wrap=True, auto_scroll=True),
                                 RichLog(id='basic_output', classes='basic_output_hidden_mode',
                                         wrap=True, auto_scroll=False),
+                                MainLogger(id='main_rlog', wrap=True, auto_scroll=True),
                                 id="main_rlog_area"
                             ),
                             id='main_panel_area'
@@ -417,17 +421,37 @@ class FuddlyTUI(App):
         else:
             self._status_msg = Text.from_ansi(f'Command Parsing Error: {cmd_msg}')
 
+    def _remove_empty_lines_from_main_display(self):
+        rlog = self._basic_zone
+
+        if self._previous_text_empty_lines:
+            self._previous_text_empty_lines = False
+            cpt = self._previous_text_nb_added_empty_lines
+            # cpt = 0
+            # r_len = len(rlog.lines)
+            # for l in reversed(rlog.lines):
+            #     if l.text == '':
+            #         cpt += 1
+            #     else:
+            #         self.app.notify(f'line: {repr(l.text)}')
+            #         break
+
+            rlog.lines = rlog.lines[:-self._previous_text_nb_added_empty_lines]
+            rlog.virtual_size = Size(rlog.virtual_size.width, len(rlog.lines))
+            rlog.refresh()
+            rlog.focus()
+            self._main_rlog.focus()
+
     async def update_text(self) -> None:
         self._main_rlog: RichLog = self.query_one("#main_rlog")
         self._status_wdg: Static = self.query_one("#status")
         self._status_msg.stylize('bold')
         self._main_panel = self.query_one("#main_panel_area")
-        self._main_panel_area = self.query_one("#main_panel_area")
         self._main_rlog_area = self.query_one("#main_rlog_area")
         self._basic_zone: RichLog = self.query_one("#basic_output")
         epobj = None
 
-        self._basic_zone.border_title = 'basic output'
+        self._basic_zone.border_title = 'main display'
         self._basic_zone_hidden = True
 
         try:
@@ -554,7 +578,7 @@ class FuddlyTUI(App):
                                 self._help_zone = RichLog(id='help_zone', classes='help_visible_mode',
                                                           auto_scroll=False)
                                 self._help_zone.border_title = 'help'
-                                await self._main_rlog_area.mount(self._help_zone, before=self._main_rlog)
+                                await self._main_rlog_area.mount(self._help_zone, after=self._main_rlog)
                             #     self._help_zone_hidden = False
                             #
                             # if self._help_zone_hidden:
@@ -591,12 +615,21 @@ class FuddlyTUI(App):
 
                             obj = self._sending_preample_re.match(text)
                             if obj:
-                                nb_lines_before_preamble = obj.group().count('\n')
+                                nb_lines_before_preamble = obj.group(1).count('\n')
+                                total_nb_lines = obj.group(0).count('\n')
+                                # self.app.notify(
+                                #     f'Parsing {total_nb_lines} - {total_nb_lines - nb_lines_before_preamble}: {obj.group(2)}')
+                                if total_nb_lines - nb_lines_before_preamble == 0:
+                                    # self.app.notify(f'Parsing {total_nb_lines} - {total_nb_lines - nb_lines_before_preamble}: {obj.group(2)}')
+                                    text_is_only_preamble = True
+                                else:
+                                    text_is_only_preamble = False
                                 if nb_lines_before_preamble > 0:
                                     nb_lines_before_preamble -= 1
                                 # self.app.notify(f'nb lines before preamble: {nb_lines_before_preamble}')
                             else:
                                 nb_lines_before_preamble = 0
+                                text_is_only_preamble = False
 
                             if self._basic_output_markup_mode:
                                 text = Text.from_markup(text, overflow='fold')
@@ -604,34 +637,46 @@ class FuddlyTUI(App):
                                 text = Text.from_ansi(text, no_wrap=False, overflow='fold')
 
                             if text:
-                                DELTA_FIX = 2
+                                PREAMBLE_H = 2
                                 self._basic_zone.auto_scroll = False
+
+                                self._remove_empty_lines_from_main_display()
+
                                 # self._basic_zone.clear()
                                 initial_nb_lines = len(self._basic_zone.lines)
                                 self._basic_zone.write(text)
                                 new_nb_lines = len(self._basic_zone.lines)
                                 text_nb_lines = new_nb_lines - initial_nb_lines - nb_lines_before_preamble
                                 available_nb_lines = self._basic_zone.scrollable_content_region.height
-                                # self.app.notify(f'available lines: {available_nb_lines}, text height: {text_nb_lines}')
+
                                 if available_nb_lines < text_nb_lines:
-                                    move_up = self._basic_zone.max_scroll_y - (text_nb_lines - available_nb_lines)
-                                    if self._previous_text_nb_lines == DELTA_FIX:
-                                        # TODO: more robust approach
+                                    move_up = self._basic_zone.max_scroll_y - (text_nb_lines - available_nb_lines) + 1
+                                    if self._previous_text_is_only_preamble:
                                         # in the case there is a feedback timeout > 0 there is a delay between
                                         # the printing of the 1-liner "sending preamble" and the description of
                                         # the sending.
                                         # Thus, we accommodate the move up
-                                        move_up -= DELTA_FIX
+                                        move_up -= PREAMBLE_H
+                                        # self.app.notify(f'(1) previous text was preamble')
+
                                     self._basic_zone.scroll_to(y=move_up, animate=False)
+
                                 else:
-                                    if text_nb_lines > DELTA_FIX:
-                                        nb_lines = available_nb_lines - text_nb_lines - 1
-                                        if self._previous_text_nb_lines == DELTA_FIX:
-                                            nb_lines -= DELTA_FIX
-                                        self._basic_zone.write(Text('\n' * nb_lines))
+                                    nb_lines = available_nb_lines - text_nb_lines
+                                    if self._previous_text_is_only_preamble:
+                                        nb_lines -= PREAMBLE_H
+                                        # self.app.notify(f'(2) previous text was preamble')
+                                    empty_lines = '\n' * nb_lines
+                                    self._basic_zone.write(Text(empty_lines))
+                                    self._previous_text_empty_lines = True
+                                    if text_is_only_preamble:
+                                        nb_lines += 1
+                                        # self.app.notify(f'text is only preamble ')
+                                    self._previous_text_nb_added_empty_lines = nb_lines
                                     self._basic_zone.scroll_end(animate=False)
 
                                 self._previous_text_nb_lines = text_nb_lines
+                                self._previous_text_is_only_preamble = text_is_only_preamble
 
                         elif fd in (fd_ansi, fd_bbcode):
                             text = ''
