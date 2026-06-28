@@ -47,21 +47,21 @@ default.add("FmkPlumbing", """
 config_name = FmkPlumbing
 
 [misc]
-fuzz.delay = 0
-fuzz.burst = 1
+fuzz_delay = 0
+fuzz_burst = 1
 continuous_monitoring_mode = True
 
 [misc.doc]
 self: (default values used when the framework resets)
-fuzz.delay: Default value (> 0) for fuzz_delay
-fuzz.burst: Default value (>= 1) for fuzz_burst
+fuzz_delay: Default value (> 0) for fuzz_delay
+fuzz_burst: Default value (>= 1) for fuzz_burst
 
 [targets]
-empty_tg.verbose = False
+empty_tg_verbose = False
 
 [targets.doc]
 self: configuration related to targets
-empty_tg.verbose: Enable verbose mode (if True) on the default EmptyTarget()
+empty_tg_verbose: Enable verbose mode (if True) on the default EmptyTarget()
 
 [terminal]
 external_term = False
@@ -85,8 +85,8 @@ default.add("FmkShell", """
 config_name = FmkShell
 prompt = >>
 
-;;  [global.doc]
-;;  prompt: Set the 'Fuddly Shell' prompt
+[global.doc]
+prompt: Set the 'Fuddly Shell' prompt
 
 [completion]
 offline_doc = True
@@ -95,45 +95,45 @@ dmaker_short_desc = False
 
 [completion.doc]
 offline_doc: When set to True, documentation for Generators and Operators are
-              are displayed (while being completed by the shell) on the external terminal
-              if it is enabled (either via with the config parameter 'external_term' set
-              to True in 'FmkPlumbing.ini', or by launching the fuddly shell with the
-              option '--external-display').
-              Besides, description of their parameters are also displayed on the external
-              terminal while being completed by the shell.
+             are displayed (while being completed by the shell) on the external terminal
+             if it is enabled (either via with the config parameter 'external_term' set
+             to True in 'FmkPlumbing.ini', or by launching the fuddly shell with the
+             option '--external-display').
+             Besides, description of their parameters are also displayed on the external
+             terminal while being completed by the shell.
 inline_doc: When set to True, documentation for Generators and Operators are
-             displayed inline, as well as description of their parameters when parameters
-             are being completed by the shell.
+            displayed inline, as well as description of their parameters when parameters
+            are being completed by the shell.
 dmaker_short_desc: When set to True, only a short description of data makers (Generators
-                        and Operators) will be displayed. Otherwise, full documentation
-                        including parameters will be displayed.
+                   and Operators) will be displayed. Otherwise, full documentation
+                   including parameters will be displayed.
 
 [config]
 middle = 40
-indent.width = 4
-indent.level = 0
+indent_width = 4
+indent_level = 0
 
 [config.doc]
 self: Configuration applicable to the 'config' command
 middle: Set the column where the helpers are defined.
-indent.width: Set the indentation width used to display the helpers.
-indent.level: Set the initial level of indentation width
-                    used to display the helpers.
+indent_width: Set the indentation width used to display the helpers.
+indent_level: Set the initial level of indentation width
+              used to display the helpers.
 
 [send_loop]
 aligned = False
-aligned_options.batch_mode = False
-aligned_options.hide_cursor = True
-aligned_options.prompt_height = 3
+aligned_options_batch_mode = False
+aligned_options_hide_cursor = True
+aligned_options_prompt_height = 3
 
 [send_loop.doc]
 self: Configuration applicable to the 'send_loop' command.
 
 aligned: Enable aligned display while sending data payloads.
-aligned_options.batch_mode: Enable fitting multiple payloads onscreen
-                 (when using 'send_loop -1 <generator>').
-aligned_options.hide_cursor: Attempt to reduce blinking by hiding cursor.
-aligned_options.prompt_height: Estimation of prompt's height.
+aligned_options_batch_mode: Enable fitting multiple payloads onscreen
+                            (when using 'send_loop -1 <generator>').
+aligned_options_hide_cursor: Attempt to reduce blinking by hiding cursor.
+aligned_options_prompt_height: Estimation of prompt's height.
 
 [send]
 reset_dmakers = False
@@ -147,8 +147,6 @@ reset_dmakers: [OBSOLETE] When this property is False, the data makers (Generato
   are provided to them. In this case, all the data makers in the command will be reset.
   When this property is set to True, the data makers involved in the send* commands will be
   systematically reset before being used.
-
-
 """)
 
 default.add("Database", """

@@ -669,8 +669,8 @@ class FmkPlumbing(object):
         self.cleanup_all_dmakers(reset_existing_seed)
         # Warning: fuzz delay is not set to 0 by default in order to have a time frame
         # where SIGINT is accepted from user
-        delay = self.config.misc["fuzz.delay"] if self.prj.default_sending_delay is None else self.prj.default_sending_delay
-        burst = self.config.misc["fuzz.burst"] if self.prj.default_burst_value is None else self.prj.default_burst_value
+        delay = self.config.misc.fuzz_delay if self.prj.default_sending_delay is None else self.prj.default_sending_delay
+        burst = self.config.misc.fuzz_burst if self.prj.default_burst_value is None else self.prj.default_burst_value
         self.set_delay_between_two_actions(delay)
         self.set_sending_burst_counter(burst)
 
@@ -1313,9 +1313,9 @@ class FmkPlumbing(object):
         try:
             targets = module.targets
             # the field has a . in it, so we use the dict syntax to access the options
-            targets.insert(0, EmptyTarget(verbose=self.config.targets["empty_tg.verbose"]))
+            targets.insert(0, EmptyTarget(verbose=self.config.targets.empty_tg_verbose))
         except AttributeError:
-            tg = EmptyTarget(verbose=self.config.targets["empty_tg.verbose"])
+            tg = EmptyTarget(verbose=self.config.targets.empty_tg_verbose)
             tg.set_project(prj)
             targets = [tg]
 
@@ -5382,8 +5382,8 @@ class FmkShell(cmd.Cmd):
         """
         self.__error = True
 
-        level = self.config.config["indent.level"]
-        indent = self.config.config["indent.width"]
+        level = self.config.config.indent_level
+        indent = self.config.config.indent_width
         middle = self.config.config.middle
 
         args = line.split()
@@ -5449,6 +5449,8 @@ class FmkShell(cmd.Cmd):
                         self.__error = False
                 except KeyError:
                     self.__error_msg = f'Unknown option "{option}" in section "{section}" in config "{target.name}"'
+                except Exception as e:
+                    self.__error_msg = "config: " + str(e)
 
             # Set value in a section
             case 3:
@@ -5458,16 +5460,13 @@ class FmkShell(cmd.Cmd):
 
                 try:
                     target[section][option] = value
+                    self.print(target.help(args[:-1], level, indent, middle))
+                    self.__error = False
                 except KeyError:
                     self.__error_msg = f"'{option}' is not a valid config key"
-                    return False
                 except Exception as e:
                     self.__error_msg = "config: " + str(e)
-                    return False
 
-                self.print(target.help(args[:-1], level, indent, middle))
-                self.__error = False
-                return False
 
             case _:
                 self.do_config("")
@@ -6364,13 +6363,13 @@ class FmkShell(cmd.Cmd):
             self.__error_msg = "Syntax Error!"
             return False
 
-        conf = self.config.send_loop.aligned_options
+        conf = self.config.send_loop
         kwargs = {
-            "enabled": self.config.send_loop.aligned,
+            "enabled": conf.aligned,
             "page_head": r"^[^=]+====. [^ ]+ .==. [^=]+={9,}.{4}$",
-            "batch_mode": (max_loop == -1) and conf.batch_mode,
-            "hide_cursor": conf.hide_cursor,
-            "prompt_height": conf.prompt_height,
+            "batch_mode": (max_loop == -1) and conf.aligned_options_batch_mode,
+            "hide_cursor": conf.aligned_options_hide_cursor,
+            "prompt_height": conf.aligned_options_prompt_height,
         }
 
         with aligned_stdout(**kwargs):
@@ -6454,13 +6453,13 @@ class FmkShell(cmd.Cmd):
             self.__error_msg = "Syntax Error!"
             return False
 
-        conf = self.config.send_loop.aligned_options
+        conf = self.config.send_loop
         kwargs = {
-            "enabled": self.config.send_loop.aligned,
+            "enabled": conf.aligned,
             "page_head": r"^[^=]+====. [^ ]+ .==. [^=]+={9,}.{4}$",
             "batch_mode": False,
-            "hide_cursor": conf.hide_cursor,
-            "prompt_height": conf.prompt_height,
+            "hide_cursor": conf.aligned_options_hide_cursor,
+            "prompt_height": conf.aligned_options_prompt_height,
         }
 
         with aligned_stdout(**kwargs):
