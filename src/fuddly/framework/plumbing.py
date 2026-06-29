@@ -3037,14 +3037,19 @@ class FmkPlumbing(object):
         for dt in data_list:
             dt.make_recordable()
 
-        # When checking target readiness, feedback timeout is taken into account indirectly
-        # through the call to Target.is_feedback_received()
-        cont0 = self.wait_for_target_readiness() >= 0
-
         if multiple_data:
             self._log_data(data_list, verbose=verbose)
         else:
             self._log_data(data_list[0], verbose=verbose)
+
+        # When checking target readiness, feedback timeout is taken into account indirectly
+        # through the call to Target.is_feedback_received()
+        cont0 = self.wait_for_target_readiness() >= 0
+
+        # if multiple_data:
+        #     self._log_data_part2(data_list, verbose=verbose)
+        # else:
+        #     self._log_data_part2(data_list[0], verbose=verbose)
 
         cont1 = True
         cont2 = True
@@ -3288,6 +3293,45 @@ class FmkPlumbing(object):
                     self.lg.log_target_ack_date()
 
                 self.lg.reset_current_state()
+
+
+    @EnforceOrder(accepted_states=["S2"])
+    def _log_data_part2(self, data_list, verbose=False):
+        pass
+        # if isinstance(data_list, Data):
+        #     data_list = [data_list]
+        #     multiple_data = False
+        # elif isinstance(data_list, list):
+        #     multiple_data = True
+        # else:
+        #     raise ValueError
+        #
+        # for idx, dt in enumerate(data_list):
+        #     tg_ids = self._vtg_to_tg(dt)
+        #     for tg_id in tg_ids:
+        #         tg = self.targets[tg_id]
+        #         ack_date = tg.get_last_target_ack_date()
+        #         self.lg.set_target_ack_date(FeedbackSource(tg), date=ack_date)
+        #
+        #     if self.fmkDB.enabled:
+        #         self.last_data_id = self.lg.commit_data_table_entry(self.group_id, self.prj.name)
+        #         if self.last_data_id is None:
+        #             self.lg.print_console("### Data not recorded in FmkDB",
+        #                                   rgb=Color.DATAINFO, nl_after=True, all_output=True)
+        #         else:
+        #             self.lg.print_console("### FmkDB Data ID: {!r}".format(self.last_data_id),
+        #                                   rgb=Color.DATAINFO, nl_after=True, all_output=True)
+        #
+        #     self.lg.log_post_processed_info()
+        #
+        #     if multiple_data:
+        #         self.lg.log_fn("--------------------------", rgb=Color.SUBINFO, all_output=True)
+        #
+        #     if self._burst_countdown <= 1:
+        #         self.lg.log_target_ack_date()
+        #
+        #     self.lg.reset_current_state()
+
 
     def _update_last_recorded_data(self):
         if self.fmkDB.enabled:
@@ -3934,6 +3978,11 @@ class FmkPlumbing(object):
                         self.lg.log_fmk_info("Director will shutdown because waiting has been cancelled by the user")
                     elif ret == -3:
                         self.lg.log_fmk_info("Director will shutdown because of exception in user code")
+
+                # if multiple_data:
+                #     self._log_data_part2(data_list, verbose=verbose)
+                # else:
+                #     self._log_data_part2(data_list[0], verbose=verbose)
 
                 # Target fbk is logged only at the end of a burst
                 if self._burst_countdown <= 1:

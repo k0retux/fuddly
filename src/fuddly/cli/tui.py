@@ -304,12 +304,11 @@ class FuddlyTUI(App):
         # self._help_zone_hidden = True
         self._main_display = None
         self._raw_display_hidden = True
-        self._previous_text_nb_lines = 0
         self._previous_text_empty_lines = False
         self._previous_text_nb_added_empty_lines = 0
-        self._previous_text_is_only_preamble = False
-
         self._previous_nb_lines_displayed = 0
+
+        self._wait_for_epilogue = False
 
         self._rpanel_stop_scrolling = False
 
@@ -678,7 +677,7 @@ class FuddlyTUI(App):
                                 self._help_zone.write(text)
 
                         elif fd == fd_main:
-                            text = ''
+                            rtext = ''
                             data = 'INIT'
                             while data:
                                 try:
@@ -686,16 +685,25 @@ class FuddlyTUI(App):
                                 except BlockingIOError:
                                     data = ''
                                 else:
-                                    text += data
+                                    rtext += data
+
+                            # lf = rtext.find('\n')
+                            # if lf != -1 and lf < 20:
+                            #     for c in rtext[:lf]:
+                            #         if ord(c) > 0x20:
+                            #             break
+                            #     else:
+                            #         self.app.notify('lf replaced')
+                            #         rtext = rtext.replace('\n', '')
 
                             # self.app.notify(f'text: {repr(text[:10])}')
-                            obj = self._sending_epilogue_re.match(text)
+                            obj = self._sending_epilogue_re.match(rtext)
                             if obj:
                                 epilogue_detected = True
                             else:
                                 epilogue_detected = False
 
-                            obj = self._sending_preample_re.match(text)
+                            obj = self._sending_preample_re.match(rtext)
                             if obj:
                                 nb_lines_till_preamble = obj.group(1).count('\n') # including preamble
                                 total_nb_lines = obj.group(0).count('\n')
@@ -720,11 +728,12 @@ class FuddlyTUI(App):
                             preamble_detected = text_is_preamble_and_more or text_is_only_preamble
 
                             if self._main_display_markup_mode:
-                                text = Text.from_markup(text, overflow='fold')
+                                text = Text.from_markup(rtext, overflow='fold')
                             else:
-                                text = Text.from_ansi(text, no_wrap=False, overflow='fold')
+                                text = Text.from_ansi(rtext, no_wrap=False, overflow='fold')
 
                             if text:
+                                # self._raw_display.write(Text(repr(rtext[:20])+' ... '+repr(rtext[-20:])))
                                 self._main_display.auto_scroll = False
                                 available_nb_lines = self._main_display.scrollable_content_region.height
 
@@ -737,6 +746,8 @@ class FuddlyTUI(App):
                                 added_nb_lines = new_nb_lines - initial_nb_lines
 
                                 if preamble_detected:
+                                    if not epilogue_detected:
+                                        self._wait_for_epilogue = True
                                     nb_lines_to_display = added_nb_lines - nb_lines_before_preamble
                                     # final_nb_lines_to_display = self._previous_nb_lines_displayed + nb_lines_to_display
 
@@ -758,6 +769,7 @@ class FuddlyTUI(App):
 
                                 else:
                                     if epilogue_detected:
+                                        self._wait_for_epilogue = False
                                         # assumption: preamble is already displayed
 
                                         nb_lines_to_display = self._previous_nb_lines_displayed + added_nb_lines
@@ -775,11 +787,18 @@ class FuddlyTUI(App):
                                             self._main_display.scroll_end(animate=False)
 
                                     else:
-                                        nb_lines_to_display = added_nb_lines
+                                        if self._wait_for_epilogue:
+                                            nb_lines_to_display = self._previous_nb_lines_displayed + added_nb_lines
+                                        else:
+                                            nb_lines_to_display = added_nb_lines
+
                                         if available_nb_lines < nb_lines_to_display:
                                             # self.app.notify(f'no preamble/epilogue - case (1)')
-                                            move_up = self._main_display.max_scroll_y - (nb_lines_to_display - available_nb_lines)
-                                            self._main_display.scroll_to(y=move_up, animate=False)
+                                            if self._wait_for_epilogue:
+                                                self._previous_nb_lines_displayed = nb_lines_to_display
+                                            else:
+                                                move_up = self._main_display.max_scroll_y - (nb_lines_to_display - available_nb_lines) + 1
+                                                self._main_display.scroll_to(y=move_up, animate=False)
                                         else:
                                             # self.app.notify(f'no preamble/epilogue - case (2)')
                                             nb_empty_lines = available_nb_lines - nb_lines_to_display
