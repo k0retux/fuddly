@@ -18,7 +18,6 @@
 ################################################################################
 
 import os
-import re
 import sys
 import configparser
 
@@ -30,14 +29,8 @@ class Default:
     def __init__(self):
         self.configs = {}
 
-    # TODO when all known default configs have been updated, this can be removed
-    __unindent = re.compile(r'^;;\s\s*', re.MULTILINE)
-
-    def _unindent(self, multiline):
-        return self.__unindent.sub('', multiline)
-
     def add(self, name, doc):
-        self.configs[name] = self._unindent(doc)
+        self.configs[name] = doc
 
 
 default = Default()
@@ -166,20 +159,7 @@ before_data_id: an async_data (without any associated data_id) will be considere
 after_data_id: if after the last registered data by the framework, an async data is sent after
   more than the amount of seconds specified in this parameter, it won't be considered to be
   related to this last registered data.
-
 """)
-
-
-def update_config(from_whom, old_config):
-    error_msg = (f"\n[WARNING] Old version detected for '{old_config.config_name}.ini' (renamed)."
-                 f" New version is about to be installed.\n")
-    current_fn = os.path.join(config_folder, old_config.config_name + ".ini")
-    new_fn = current_fn + '_old'
-    os.rename(current_fn, new_fn)
-    new_config = config(from_whom, path=[config_folder])
-    with open(current_fn, "w") as cfile:
-        new_config.write(cfile)
-    return new_config, error_msg
 
 
 def check_type(name: str, value: str):
@@ -305,9 +285,6 @@ class ConfigParser(configparser.ConfigParser):
         object.__setattr__(self, "_initialised", False)
         super().__init__(*args, **kwargs)
 
-        loaded = False
-        loaded_from_default = False
-
         if isinstance(parent, str):
             name = parent
         else:
@@ -337,23 +314,6 @@ class ConfigParser(configparser.ConfigParser):
         else:
             sys.stderr.write(f'Warning: Unable to load any of {config_files}\n')
 
-        if not loaded and name in default.configs:
-            if verbose:
-                sys.stderr.write(f"Loading default config for {name}...\n")
-            self.read_string(default.configs[name], 'default_' + name)
-            loaded = True
-            loaded_from_default = True
-
-        if not loaded and verbose:
-            sys.stderr.write(f"Creating a new config for {name}...\n")
-
-        if not self.has_section("global"):
-            self.add_section("global")
-
-        if "config_name" not in self["global"]:
-            self["config_name"] = 'global'
-
-        self._config_changed = loaded_from_default
         self._initialised = True
         if auto_update:
             defconf = configparser.ConfigParser()
@@ -424,6 +384,28 @@ class ConfigParser(configparser.ConfigParser):
                 filename = os.path.join(path, self.config_name + ".ini")
             with open(filename, "w") as cfile:
                 self.write(cfile)
+
+    def clean(self, default: configparser.ConfigParser) -> bool:
+        "Remove config options and sections that do not exist in the default config"
+        changed = False
+        # Converting to lists because we are changing the dict
+        # during the iteration
+        for section in list(self):
+            if section == "DEFAULT":
+                continue
+
+            if not default.has_section(section):
+                print(f"Removing section {section} in {self.name}")
+                self.remove_section(section)
+                changed = True
+                continue
+            for opt in list(self.options(section)):
+                if not default.has_option(section, opt):
+                    print(f"Removing option {opt} from section {section} in {self.name}")
+                    self.remove_option(section, opt)
+                    changed = True
+        return changed
+
 
 # Alias to stay backwards compatible
 config = ConfigParser

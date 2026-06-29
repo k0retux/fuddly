@@ -54,7 +54,7 @@ from pprint import pprint
 from fuddly.libs.importer import fuddly_importer_hook
 fuddly_importer_hook.setup()
 
-from fuddly.framework.config import config, update_config, SectionProxyWrapper
+from fuddly.framework.config import config, SectionProxyWrapper
 from fuddly.framework.cosmetics import aligned_stdout
 from fuddly.framework.database import FeedbackGate
 from fuddly.framework.data import Data, DataProcess
@@ -538,23 +538,10 @@ class FmkPlumbing(object):
         self.printer.start()
 
         self.check_clone_re = re.compile(r'(.*)#(\w{1,30})')
-
         self.config = config(self, path=[config_folder])
-
-        try:
-            self._continuous_monitoring_mode = self.config.misc.continuous_monitoring_mode and self._tui
-        except AttributeError:
-            self.config, error_msg = update_config(from_whom=self, old_config=self.config)
-            self.print(colorize(error_msg, rgb=Color.WARNING))
-            self._continuous_monitoring_mode = self.config.misc.continuous_monitoring_mode and self._tui
+        self._continuous_monitoring_mode = self.config.misc.continuous_monitoring_mode and self._tui
 
         error_msg = None
-        try:
-            # detect old versions of configuration files and update them
-            term = self.config.terminal
-            _ = term.cmd
-        except AttributeError:
-            self.config, error_msg = update_config(from_whom=self, old_config=self.config)
 
         external_term = self.config.terminal.external_term
         if external_term and not self.external_display.is_enabled:
@@ -4951,20 +4938,10 @@ class FmkShell(cmd.Cmd):
         atexit.register(save_config)
 
         self.prompt = "\n" + self.config.prompt + " "
-        try:
-            self._inline_doc = self.config.completion.inline_doc
-            self._offline_doc = self.config.completion.offline_doc
-            self._dmaker_short_desc = self.config.completion.dmaker_short_desc
-            self._reset_dmakers_mode = self.config.send.reset_dmakers
-        except AttributeError:
-            self.config, error_msg = update_config(from_whom=self, old_config=self.config)
-            self.print(colorize(error_msg, rgb=Color.WARNING))
-            self.available_configs['shell'] = self.config
-            self._inline_doc = self.config.completion.inline_doc
-            self._offline_doc = self.config.completion.offline_doc
-            self._dmaker_short_desc = self.config.completion.dmaker_short_desc
-            self._reset_dmakers_mode = self.config.send.reset_dmakers
-
+        self._inline_doc = self.config.completion.inline_doc
+        self._offline_doc = self.config.completion.offline_doc
+        self._dmaker_short_desc = self.config.completion.dmaker_short_desc
+        self._reset_dmakers_mode = self.config.send.reset_dmakers
         self.__error = False
         self.__error_msg = ""
         self.__error_fmk = ""
