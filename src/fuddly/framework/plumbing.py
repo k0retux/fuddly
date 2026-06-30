@@ -3037,14 +3037,14 @@ class FmkPlumbing(object):
         for dt in data_list:
             dt.make_recordable()
 
+        # When checking target readiness, feedback timeout is taken into account indirectly
+        # through the call to Target.is_feedback_received()
+        cont0 = self.wait_for_target_readiness() >= 0
+
         if multiple_data:
             self._log_data(data_list, verbose=verbose)
         else:
             self._log_data(data_list[0], verbose=verbose)
-
-        # When checking target readiness, feedback timeout is taken into account indirectly
-        # through the call to Target.is_feedback_received()
-        cont0 = self.wait_for_target_readiness() >= 0
 
         # if multiple_data:
         #     self._log_data_part2(data_list, verbose=verbose)
@@ -3965,11 +3965,6 @@ class FmkPlumbing(object):
                         dt.make_recordable()
                         self.register_in_data_bank(dt)
 
-                if multiple_data:
-                    self._log_data(data_list, verbose=verbose)
-                else:
-                    self._log_data(data_list[0], verbose=verbose)
-
                 ret = self.wait_for_target_readiness()
                 # Note: the condition (ret = -1) is supposed to be managed by the Director
                 if ret < -1:
@@ -3978,6 +3973,11 @@ class FmkPlumbing(object):
                         self.lg.log_fmk_info("Director will shutdown because waiting has been cancelled by the user")
                     elif ret == -3:
                         self.lg.log_fmk_info("Director will shutdown because of exception in user code")
+
+                if multiple_data:
+                    self._log_data(data_list, verbose=verbose)
+                else:
+                    self._log_data(data_list[0], verbose=verbose)
 
                 # if multiple_data:
                 #     self._log_data_part2(data_list, verbose=verbose)
