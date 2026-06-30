@@ -193,7 +193,7 @@ def check_type(name: str, value: str):
 
 
 class SectionProxyWrapper(configparser.SectionProxy):
-    def __getattr__(self, key: str):
+    def __getattr__(self, key: str) -> object:
         if not self.parser._initialised:
             return super().__getattribute__(key)
         try:
@@ -273,11 +273,19 @@ class SectionProxyWrapper(configparser.SectionProxy):
 
 
 class ConfigParser(configparser.ConfigParser):
+    """
+    parent: object|str   object from which we'll get the config file name
+    path: list[str]      list of paths where the config file can be
+    ect: list[str]       list of extensions the config file can have
+    auto_update: bool    whether or not to update this config file base on 
+                         the default
+    """
+
     def __init__(self,
-                 parent: object,
-                 path=['.'],
-                 ext=['.ini', '.conf', '.cfg'],
-                 auto_update=True,
+                 parent: object | str,
+                 path: list[str] = ['.'],
+                 ext: list[str] = ['.ini', '.conf', '.cfg'],
+                 auto_update: bool = True,
                  *args,
                  **kwargs):
 
@@ -325,7 +333,7 @@ class ConfigParser(configparser.ConfigParser):
             os.rename(loaded_files[0], new_fn)
             self.save(fullpath=loaded_files[0])
 
-    def __getattr__(self, name: str) -> SectionProxyWrapper:
+    def __getattr__(self, name: str) -> SectionProxyWrapper | object:
         # The global section exposes it's options directly instead of going
         # though a section
         if not self._initialised:
@@ -340,7 +348,7 @@ class ConfigParser(configparser.ConfigParser):
 
     # Using the parent class' original getitem method but downcast the
     # SectionProxy to our wrapper
-    def __getitem__(self, name: str) -> object:
+    def __getitem__(self, name: str) -> SectionProxyWrapper | object:
         s = super().__getitem__(name)
         object.__setattr__(s, "__class__", SectionProxyWrapper)
         return s
@@ -386,7 +394,10 @@ class ConfigParser(configparser.ConfigParser):
                 self.write(cfile)
 
     def clean(self, default: configparser.ConfigParser) -> bool:
-        "Remove config options and sections that do not exist in the default config"
+        """
+        Remove config options and sections that do not exist in the default
+        config
+        """
         changed = False
         # Converting to lists because we are changing the dict
         # during the iteration
