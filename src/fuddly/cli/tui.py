@@ -63,6 +63,10 @@ fuddly_tui_tcss = """
 
 .small_button {
     min-width: 2;
+    background: blue 50%;
+    color: azure;
+    border-right: solid;
+    border-left: solid;
 }
 
 #b_enable_autoscroll_rpanel {
@@ -97,9 +101,16 @@ fuddly_tui_tcss = """
     box-sizing: border-box;
     text-wrap: wrap;
     text-overflow: fold;
-    height: 3fr;
     width: 100%;
     border: solid #008B8B;
+}
+
+.main_display_hidden_mode {
+    height: 0%;
+}
+
+.main_display_visible_mode {
+    height: 3fr;
 }
 
 #raw_display {
@@ -158,7 +169,7 @@ fuddly_tui_tcss = """
 """
 
 new_tcss_selectors = [
-    '#button_panel'
+    '.main_display_hidden_mode'
 ]
 tcss_fname = os.path.join(config_folder, FUDDLY_TUI_FNAME)
 write_tcss = False
@@ -222,15 +233,34 @@ class ButtonPanel(HorizontalGroup):
             self.remove_class('as_disabled')
             self.app._rpanel_stop_scrolling = False
             self.app.notify(f'auto-scroll [green]enabled[/] on [b]right panel[/]')
+        elif event.button.id == 'b_hide_raw_display':
+            if not self.app._raw_display_hidden:
+                rlog = self.app.query_one('#raw_display')
+                rlog.remove_class('raw_display_visible_mode')
+                rlog.add_class('raw_display_hidden_mode', update=True)
+                self.app._raw_display_hidden = True
+        elif event.button.id == 'b_hide_main_display':
+            if not self.app._main_display_hidden:
+                rlog = self.app.query_one('#main_display')
+                rlog.remove_class('main_display_visible_mode')
+                rlog.add_class('main_display_hidden_mode', update=True)
+                self.app._main_display_hidden = True
+
 
     def compose(self):
-        yield Button('e', id='b_scroll_end_lpanel', classes='small_button',
+        yield Button('hide main', id='b_hide_main_display', classes='small_button',
+                     compact=True,
+                     tooltip=Text('Hide the main display'))
+        yield Button('hide raw', id='b_hide_raw_display', classes='small_button',
+                     compact=True,
+                     tooltip=Text('Hide the raw display'))
+        yield Button('scroll end', id='b_scroll_end_lpanel', classes='small_button',
                      compact=True,
                      tooltip=Text('Scroll to the end of the left panel'))
-        yield Button('!as', id='b_disable_autoscroll_rpanel', classes='small_button',
+        yield Button('!auto-scroll', id='b_disable_autoscroll_rpanel', classes='small_button',
                      compact=True,
                      tooltip=Text('Disable the right panel auto-scroll'))
-        yield Button('as', id='b_enable_autoscroll_rpanel', classes='small_button',
+        yield Button('auto-scroll', id='b_enable_autoscroll_rpanel', classes='small_button',
                      compact=True,
                      tooltip=Text('Enable the right panel auto-scroll'))
 
@@ -304,6 +334,7 @@ class FuddlyTUI(App):
         # self._help_zone_hidden = True
         self._main_display = None
         self._raw_display_hidden = True
+        self._main_display_hidden = False
         self._previous_text_empty_lines = False
         self._previous_text_nb_added_empty_lines = 0
         self._previous_nb_lines_displayed = 0
@@ -388,7 +419,7 @@ class FuddlyTUI(App):
                                      expand=True),
                         Horizontal(
                             Vertical(
-                                RichLog(id='main_display',
+                                RichLog(id='main_display', classes='main_display_visible_mode',
                                         max_lines=20000,
                                         wrap=True, auto_scroll=False),
                                 Horizontal(
@@ -689,6 +720,11 @@ class FuddlyTUI(App):
                                     data = ''
                                 else:
                                     rtext += data
+
+                            if self._main_display_hidden:
+                                self._main_display.remove_class('main_display_hidden_mode', update=True)
+                                self._main_display.add_class('main_display_visible_mode', update=True)
+                                self._main_display_hidden = False
 
                             # lf = rtext.find('\n')
                             # if lf != -1 and lf < 20:
