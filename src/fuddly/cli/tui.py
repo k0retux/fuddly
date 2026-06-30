@@ -316,9 +316,9 @@ class FuddlyTUI(App):
 
         self._standalone_app = not self._cmd_fifo
 
-    def on_mount(self) -> None:
+    def on_ready(self) -> None:
         if not self._standalone_app:
-            self.run_worker(self.update_text())
+            self.run_worker(self.update_text(), thread=False)
 
 
     def _launch_fmkdb_analysis(self, fmkdb_path=None):
@@ -508,21 +508,20 @@ class FuddlyTUI(App):
 
         if self._previous_text_empty_lines:
             self._previous_text_empty_lines = False
-            cpt = self._previous_text_nb_added_empty_lines
-            # cpt = 0
-            # r_len = len(rlog.lines)
-            # for l in reversed(rlog.lines):
-            #     if l.text == '':
-            #         cpt += 1
-            #     else:
-            #         self.app.notify(f'line: {repr(l.text)}')
-            #         break
-
             rlog.lines = rlog.lines[:-self._previous_text_nb_added_empty_lines]
             rlog.virtual_size = Size(rlog.virtual_size.width, len(rlog.lines))
-            rlog.refresh()
-            rlog.focus()
-            self._raw_display.focus()
+            rlog.clear_cached_dimensions()
+
+            # rlog.scroll_to(y=rlog.scroll_y - self._previous_text_nb_added_empty_lines, animate=False)
+
+            # hack to force a redraw without playing with the focus
+            # it is necessary to bypass textual redraw optimizations
+            # rlog.toggle_class("-engine-refresh-trigger")
+            # rlog.refresh(layout=True)
+
+            # previous hack, but stealing focus is an issue
+            # rlog.focus()
+            # self._raw_display.focus()
 
     async def update_text(self) -> None:
         self._status_wdg: Static = self.query_one("#status")
@@ -576,8 +575,12 @@ class FuddlyTUI(App):
                 return
 
             while True:
+                await asyncio.sleep(0)
+
                 evts = epobj.poll(timeout=1)
                 for fd, evt in evts:
+                    await asyncio.sleep(0)
+
                     if evt & select.EPOLLIN:
                         if fd == fd_cmd:
                             cmd_msgs = ''
@@ -755,6 +758,7 @@ class FuddlyTUI(App):
                                         # self.app.notify(f'preamble detected - case (1)')
                                         move_up = self._main_display.max_scroll_y - (nb_lines_to_display - available_nb_lines) + 1
                                         self._main_display.scroll_to(y=move_up, animate=False)
+
                                     else:
                                         # self.app.notify(f'preamble detected - case (2) - {nb_lines_before_preamble}, {nb_lines_after_preamble}')
                                         nb_empty_lines = available_nb_lines - nb_lines_to_display
@@ -775,7 +779,8 @@ class FuddlyTUI(App):
                                         nb_lines_to_display = self._previous_nb_lines_displayed + added_nb_lines
                                         if available_nb_lines < nb_lines_to_display:
                                             # self.app.notify(f'epilogue detected (no preamble) - case (1)')
-                                            pass
+                                            move_up = initial_nb_lines - 1
+                                            self._main_display.scroll_to(y=move_up, animate=False)
                                         else:
                                             # self.app.notify(f'epilogue detected (no preamble) - case (2) - {available_nb_lines} / {self._previous_nb_lines_displayed}, {added_nb_lines}')
                                             nb_empty_lines = available_nb_lines - nb_lines_to_display - 1
@@ -841,6 +846,13 @@ class FuddlyTUI(App):
                     else:
                         error_msg = Text.from_markup(f'Unknown epoll() event: {evt}')
                         self._status_wdg.update(error_msg)
+
+                    # hack to force a redraw without playing with the focus
+                    # it is necessary to bypass textual redraw optimizations
+                    self._main_display.toggle_class("-engine-refresh-trigger")
+                    self._main_display.refresh(layout=True)
+                    await self._main_display.wait_for_refresh()
+
         finally:
             if epobj:
                 epobj.close()
