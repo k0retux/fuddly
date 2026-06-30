@@ -89,11 +89,11 @@ fuddly_tui_tcss = """
 }
 
 .help_hidden_mode {
-    height: 0%;
+    display: none;
 }
 
 .help_visible_mode {
-    height: 1fr;
+    display: block;
 }
 
 #main_display {
@@ -112,6 +112,19 @@ fuddly_tui_tcss = """
 .main_display_visible_mode {
     height: 3fr;
 }
+
+#b_enable_autoscroll_main_disp {
+    display: none;
+}
+
+.as_disabled_main #b_disable_autoscroll_main_disp {
+    display: none;
+}
+
+.as_disabled_main #b_enable_autoscroll_main_disp {
+    display: block;
+}
+
 
 #raw_display {
     scrollbar-size: 1 1;
@@ -169,7 +182,7 @@ fuddly_tui_tcss = """
 """
 
 new_tcss_selectors = [
-    '.main_display_hidden_mode'
+    '#b_enable_autoscroll_main_disp'
 ]
 tcss_fname = os.path.join(config_folder, FUDDLY_TUI_FNAME)
 write_tcss = False
@@ -218,13 +231,28 @@ class RawDisplay(RichLog):
             # self.app.notify(f"Auto scroll enabled ({old_value} --> {new_value})")
 
 
+class MainDisplay(RichLog):
+
+    def watch_scroll_y(self, old_value, new_value) -> None:
+        super().watch_scroll_y(old_value, new_value)
+
+        if (self.app._main_display_auto_scroll
+                and new_value > 0 and new_value - old_value < 0):
+            pass
+            # self.app._main_display_auto_scroll = False
+
+        elif (not self.app._main_display_auto_scroll
+              and self.is_vertical_scroll_end and self.max_scroll_y > 0):
+            self.app._main_display_auto_scroll = True
+
+
 class ButtonPanel(HorizontalGroup):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == 'b_scroll_end_lpanel':
+        if event.button.id == 'b_enable_autoscroll_raw_disp':
             rlog = self.app.query_one('#raw_display')
             rlog.auto_scroll = True
-            self.app.notify(f'auto-scroll [green]enabled[/] on [b]left panel[/]')
+            self.app.notify(f'auto-scroll [green]enabled[/] on [b]raw display[/]')
         elif event.button.id == 'b_disable_autoscroll_rpanel':
             self.add_class('as_disabled')
             self.app._rpanel_stop_scrolling = True
@@ -233,6 +261,14 @@ class ButtonPanel(HorizontalGroup):
             self.remove_class('as_disabled')
             self.app._rpanel_stop_scrolling = False
             self.app.notify(f'auto-scroll [green]enabled[/] on [b]right panel[/]')
+        elif event.button.id == 'b_disable_autoscroll_main_disp':
+            self.add_class('as_disabled_main')
+            self.app._main_display_auto_scroll = False
+            self.app.notify(f'auto-scroll [red]disabled[/] on [b]main display[/]')
+        elif event.button.id == 'b_enable_autoscroll_main_disp':
+            self.remove_class('as_disabled_main')
+            self.app._main_display_auto_scroll = True
+            self.app.notify(f'auto-scroll [green]enabled[/] on [b]main display[/]')
         elif event.button.id == 'b_hide_raw_display':
             if not self.app._raw_display_hidden:
                 rlog = self.app.query_one('#raw_display')
@@ -254,13 +290,19 @@ class ButtonPanel(HorizontalGroup):
         yield Button('hide raw', id='b_hide_raw_display', classes='small_button',
                      compact=True,
                      tooltip=Text('Hide the raw display'))
-        yield Button('scroll end', id='b_scroll_end_lpanel', classes='small_button',
+        yield Button('!as main', id='b_disable_autoscroll_main_disp', classes='small_button',
                      compact=True,
-                     tooltip=Text('Scroll to the end of the left panel'))
-        yield Button('!auto-scroll', id='b_disable_autoscroll_rpanel', classes='small_button',
+                     tooltip=Text('Enable auto-scroll of the main display'))
+        yield Button('as main', id='b_enable_autoscroll_main_disp', classes='small_button',
+                     compact=True,
+                     tooltip=Text('Enable auto-scroll of the main display'))
+        yield Button('as raw', id='b_enable_autoscroll_raw_disp', classes='small_button',
+                     compact=True,
+                     tooltip=Text('Enable auto-scroll of the raw display'))
+        yield Button('!as rpanel', id='b_disable_autoscroll_rpanel', classes='small_button',
                      compact=True,
                      tooltip=Text('Disable the right panel auto-scroll'))
-        yield Button('auto-scroll', id='b_enable_autoscroll_rpanel', classes='small_button',
+        yield Button('as rpanel', id='b_enable_autoscroll_rpanel', classes='small_button',
                      compact=True,
                      tooltip=Text('Enable the right panel auto-scroll'))
 
@@ -331,8 +373,10 @@ class FuddlyTUI(App):
         self._raw_display = None
         self._right_panel = None
         self._help_zone = None
+        self._help_zone_hidden = True
         # self._help_zone_hidden = True
         self._main_display = None
+        self._main_display_auto_scroll = True
         self._raw_display_hidden = True
         self._main_display_hidden = False
         self._previous_text_empty_lines = False
@@ -419,7 +463,7 @@ class FuddlyTUI(App):
                                      expand=True),
                         Horizontal(
                             Vertical(
-                                RichLog(id='main_display', classes='main_display_visible_mode',
+                                MainDisplay(id='main_display', classes='main_display_visible_mode',
                                         max_lines=20000,
                                         wrap=True, auto_scroll=False),
                                 Horizontal(
@@ -507,12 +551,11 @@ class FuddlyTUI(App):
 
             elif cmd == RichTerm.CMD_HELP_HIDE:
                 if self._help_zone:
-                    self._help_zone.remove()
-                    self._help_zone = None
-                    # self._help_zone.remove_class('help_visible_mode')
-                    # self._help_zone.add_class('help_hidden_mode', update=True)
-                    # self._help_zone_hidden = True
-
+                    # self._help_zone.remove()
+                    # self._help_zone = None
+                    self._help_zone.remove_class('help_visible_mode')
+                    self._help_zone.add_class('help_hidden_mode', update=True)
+                    self._help_zone_hidden = True
 
             elif cmd == RichTerm.CMD_MAIN_DISPLAY_MODE:
                 mode = parsed.group(2)
@@ -535,24 +578,18 @@ class FuddlyTUI(App):
             self._status_msg = Text.from_ansi(f'Command Parsing Error: {cmd_msg}')
 
     def _remove_empty_lines_from_main_display(self):
-        rlog = self._main_display
 
         if self._previous_text_empty_lines:
+            rlog = self._main_display
             self._previous_text_empty_lines = False
             rlog.lines = rlog.lines[:-self._previous_text_nb_added_empty_lines]
             rlog.virtual_size = Size(rlog.virtual_size.width, len(rlog.lines))
             rlog.clear_cached_dimensions()
 
-            # rlog.scroll_to(y=rlog.scroll_y - self._previous_text_nb_added_empty_lines, animate=False)
+            return True
 
-            # hack to force a redraw without playing with the focus
-            # it is necessary to bypass textual redraw optimizations
-            # rlog.toggle_class("-engine-refresh-trigger")
-            # rlog.refresh(layout=True)
-
-            # previous hack, but stealing focus is an issue
-            # rlog.focus()
-            # self._raw_display.focus()
+        else:
+            return False
 
     async def update_text(self) -> None:
         self._status_wdg: Static = self.query_one("#status")
@@ -700,6 +737,7 @@ class FuddlyTUI(App):
                                                           auto_scroll=False, max_lines=1000)
                                 self._help_zone.border_title = 'help'
                                 await self._main_area.mount(self._help_zone, after=self._raw_display)
+                                self._help_zone_hidden = False
 
                             if self._help_markup_mode:
                                 text = Text.from_markup(text)
@@ -707,6 +745,11 @@ class FuddlyTUI(App):
                                 text = Text.from_ansi(text)
 
                             if text:
+                                if self._help_zone_hidden:
+                                    self._help_zone.remove_class('help_hidden_mode')
+                                    self._help_zone.add_class('help_visible_mode', update=True)
+                                    self._help_zone_hidden = False
+
                                 self._help_zone.clear()
                                 self._help_zone.write(text)
 
@@ -725,6 +768,11 @@ class FuddlyTUI(App):
                                 self._main_display.remove_class('main_display_hidden_mode', update=True)
                                 self._main_display.add_class('main_display_visible_mode', update=True)
                                 self._main_display_hidden = False
+
+                            if not self._help_zone_hidden:
+                                self._help_zone.remove_class('help_visible_mode')
+                                self._help_zone.add_class('help_hidden_mode', update=True)
+                                self._help_zone_hidden = True
 
                             # lf = rtext.find('\n')
                             # if lf != -1 and lf < 20:
@@ -775,8 +823,12 @@ class FuddlyTUI(App):
                                 # self._raw_display.write(Text(repr(rtext[:20])+' ... '+repr(rtext[-20:])))
                                 self._main_display.auto_scroll = False
                                 available_nb_lines = self._main_display.scrollable_content_region.height
+                                virtual_size = self._main_display.virtual_size.height
 
-                                self._remove_empty_lines_from_main_display()
+
+                                lines_removed = self._remove_empty_lines_from_main_display()
+                                self._main_display.refresh(layout=True)
+                                await self._main_display.wait_for_refresh()
 
                                 initial_nb_lines = len(self._main_display.lines)
                                 self._main_display.write(text)
@@ -791,19 +843,27 @@ class FuddlyTUI(App):
                                     # final_nb_lines_to_display = self._previous_nb_lines_displayed + nb_lines_to_display
 
                                     if available_nb_lines < nb_lines_to_display:
-                                        # self.app.notify(f'preamble detected - case (1)')
-                                        move_up = self._main_display.max_scroll_y - (nb_lines_to_display - available_nb_lines) + 1
-                                        self._main_display.scroll_to(y=move_up, animate=False)
+                                        move_up = initial_nb_lines + nb_lines_before_preamble + 1
+                                        if self._main_display_auto_scroll:
+                                            self._main_display.scroll_to(y=move_up, animate=False)
+                                        # self.app.notify(f'1.1 preamble detected - case (1)\n'
+                                        #                 f'y:{self._main_display.scroll_y}\n'
+                                        #                 f'max_y:{self._main_display.max_scroll_y}\n'
+                                        #                 f'init_nb_l:{initial_nb_lines}\n'
+                                        #                 f'new_nb_l:{new_nb_lines}\n'
+                                        #                 f'avail_nb_l:{available_nb_lines}\n',
+                                        #                 timeout=30)
 
                                     else:
-                                        # self.app.notify(f'preamble detected - case (2) - {nb_lines_before_preamble}, {nb_lines_after_preamble}')
+                                        # self.app.notify(f'1.2 preamble detected - case (2)')
                                         nb_empty_lines = available_nb_lines - nb_lines_to_display
                                         empty_lines = '\n' * nb_empty_lines
                                         self._main_display.write(Text(empty_lines))
                                         self._previous_text_empty_lines = True
                                         self._previous_text_nb_added_empty_lines = nb_empty_lines + 1
                                         # TODO: understand why +1 is necessary because of the write?
-                                        self._main_display.scroll_end(animate=False)
+                                        if self._main_display_auto_scroll:
+                                            self._main_display.scroll_end(animate=False)
 
                                     self._previous_nb_lines_displayed = nb_lines_after_preamble + 1 # +1 to count the preamble line
 
@@ -814,40 +874,81 @@ class FuddlyTUI(App):
 
                                         nb_lines_to_display = self._previous_nb_lines_displayed + added_nb_lines
                                         if available_nb_lines < nb_lines_to_display:
-                                            # self.app.notify(f'epilogue detected (no preamble) - case (1)')
-                                            move_up = initial_nb_lines - 1
-                                            self._main_display.scroll_to(y=move_up, animate=False)
+                                            # self.app.notify(f'2.1 epilogue detected (no preamble) - case (1)\n'
+                                            #                 f'y:{self._main_display.scroll_y}, '
+                                            #                 f'max_y:{self._main_display.max_scroll_y}, init:{initial_nb_lines},'
+                                            #                 f'empty: {self._previous_text_nb_added_empty_lines}',
+                                            #                 timeout=10)
+                                            if lines_removed:
+                                                # move_up = initial_nb_lines - self._previous_text_nb_added_empty_lines - 1
+                                                if self._main_display_auto_scroll:
+                                                    self._main_display.scroll_relative(
+                                                        y=self._previous_text_nb_added_empty_lines, animate=False)
+                                                    # self._main_display.scroll_to(y=move_up, animate=False)
+                                            else:
+                                                pass
+
+                                            self._previous_text_empty_lines = False
+                                            self._previous_text_nb_added_empty_lines = 0
+
                                         else:
-                                            # self.app.notify(f'epilogue detected (no preamble) - case (2) - {available_nb_lines} / {self._previous_nb_lines_displayed}, {added_nb_lines}')
+                                            # self.app.notify(f'2.2 epilogue detected (no preamble) - case (2)')
                                             nb_empty_lines = available_nb_lines - nb_lines_to_display - 1
-                                            # TODO: understand why -1 is necessary because of the write?
+                                            # TODO: understand why -1 is necessary because of the write('\n...')
                                             empty_lines = '\n' * nb_empty_lines
                                             self._main_display.write(Text(empty_lines))
                                             self._previous_text_empty_lines = True
                                             self._previous_text_nb_added_empty_lines = nb_empty_lines
-                                            self._main_display.scroll_end(animate=False)
+                                            if self._main_display_auto_scroll:
+                                                self._main_display.scroll_end(animate=False)
+
+                                        self._previous_nb_lines_displayed = 0
 
                                     else:
                                         if self._wait_for_epilogue:
-                                            nb_lines_to_display = self._previous_nb_lines_displayed + added_nb_lines
+                                            nb_lines_to_display = self._previous_nb_lines_displayed + added_nb_lines + 1
+                                            self._previous_nb_lines_displayed = nb_lines_to_display
                                         else:
                                             nb_lines_to_display = added_nb_lines
+                                            self._previous_nb_lines_displayed = 0
 
                                         if available_nb_lines < nb_lines_to_display:
-                                            # self.app.notify(f'no preamble/epilogue - case (1)')
                                             if self._wait_for_epilogue:
-                                                self._previous_nb_lines_displayed = nb_lines_to_display
+                                                # self.app.notify(f'A. no preamble/epilogue - case (1)')
+                                                if lines_removed:
+                                                    if self._main_display_auto_scroll:
+                                                        self._main_display.scroll_relative(
+                                                            y=self._previous_text_nb_added_empty_lines, animate=False)
+                                                else:
+                                                    pass
                                             else:
-                                                move_up = self._main_display.max_scroll_y - (nb_lines_to_display - available_nb_lines) + 1
-                                                self._main_display.scroll_to(y=move_up, animate=False)
+                                                move_up = initial_nb_lines + 1
+                                                if self._main_display_auto_scroll:
+                                                    self._main_display.scroll_to(y=move_up, animate=False)
+
+                                            self._previous_text_empty_lines = False
+                                            self._previous_text_nb_added_empty_lines = 0
+
                                         else:
-                                            # self.app.notify(f'no preamble/epilogue - case (2)')
+                                            # if self._wait_for_epilogue:
+                                            #     self.app.notify(f'B. no preamble/epilogue - case (2)')
                                             nb_empty_lines = available_nb_lines - nb_lines_to_display
                                             empty_lines = '\n' * nb_empty_lines
                                             self._main_display.write(Text(empty_lines))
                                             self._previous_text_empty_lines = True
                                             self._previous_text_nb_added_empty_lines = nb_empty_lines
-                                            self._main_display.scroll_end(animate=False)
+                                            if self._main_display_auto_scroll:
+                                                self._main_display.scroll_end(animate=False)
+
+                                # self.app.notify(f'y:{self._main_display.scroll_y}\n'
+                                #                 f'max_y:{self._main_display.max_scroll_y}\n'
+                                #                 f'init_nb_l:{initial_nb_lines}\n'
+                                #                 f'new_nb_l:{new_nb_lines}\n'
+                                #                 f'avail_nb_l:{available_nb_lines}\n'
+                                #                 f'virtual_size:{virtual_size}\n',
+                                #                 title='stats',
+                                #                 timeout=40)
+
 
                         elif fd in (fd_ansi, fd_bbcode):
                             text = ''
