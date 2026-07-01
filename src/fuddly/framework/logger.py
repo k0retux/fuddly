@@ -382,6 +382,7 @@ class Logger(object):
         with self._sync_lock:
             self._log_handler_stop_event.set()
             self._log_handler_thread.join()
+            self._log_handler_stop_event.clear()
 
     def _log_handler(self):
 
@@ -499,8 +500,8 @@ class Logger(object):
         self._returned_last_data_ID = None
         self._returned_last_data_attrs = None
         self.last_data_recordable = None
-
         self._stop_log_handler()
+        self._log_handler_thread = None
 
         self.print_console(
             "*** Logger is stopped ***\n", nl_before=False, rgb=Color.COMPONENT_STOP

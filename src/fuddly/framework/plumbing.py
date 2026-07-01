@@ -1620,6 +1620,10 @@ class FmkPlumbing(object):
 
                 self._start()
 
+        else:
+            self.set_error("[BUG] _start_fmk_plumbing() called while plumbing is in started state")
+
+
     def _stop_fmk_plumbing(self, before_reload=False):
         self.flush_errors()
 

@@ -236,13 +236,14 @@ class MainDisplay(RichLog):
     def watch_scroll_y(self, old_value, new_value) -> None:
         super().watch_scroll_y(old_value, new_value)
 
-        if (self.app._main_display_auto_scroll
-                and new_value > 0 and new_value - old_value < 0):
-            pass
-            # self.app._main_display_auto_scroll = False
+        # Note: for the main display this scrolling event is generated
+        #       not for the reason we want to stop scrolling
+        # if (self.app._main_display_auto_scroll
+        #         and new_value > 0 and new_value - old_value < 0):
+        #     self.app._main_display_auto_scroll = False
 
-        elif (not self.app._main_display_auto_scroll
-              and self.is_vertical_scroll_end and self.max_scroll_y > 0):
+        if (not self.app._main_display_auto_scroll
+                and self.is_vertical_scroll_end and self.max_scroll_y > 0):
             self.app._main_display_auto_scroll = True
 
 
