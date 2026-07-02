@@ -69,6 +69,19 @@ fuddly_tui_tcss = """
     border-left: solid;
 }
 
+#right_button_panel {
+    content-align: right middle;
+    border: solid green
+}
+
+.small_button_alt {
+    min-width: 2;
+    background: green 50%;
+    color: azure;
+    border-right: solid;
+    border-left: solid;
+}
+
 #b_enable_autoscroll_rpanel {
     display: none;
 }
@@ -182,7 +195,7 @@ fuddly_tui_tcss = """
 """
 
 new_tcss_selectors = [
-    '#b_enable_autoscroll_main_disp'
+    '#right_button_panel'
 ]
 tcss_fname = os.path.join(config_folder, FUDDLY_TUI_FNAME)
 write_tcss = False
@@ -254,14 +267,6 @@ class ButtonPanel(HorizontalGroup):
             rlog = self.app.query_one('#raw_display')
             rlog.auto_scroll = True
             self.app.notify(f'auto-scroll [green]enabled[/] on [b]raw display[/]')
-        elif event.button.id == 'b_disable_autoscroll_rpanel':
-            self.add_class('as_disabled')
-            self.app._rpanel_stop_scrolling = True
-            self.app.notify(f'auto-scroll [red]disabled[/] on [b]right panel[/]')
-        elif event.button.id == 'b_enable_autoscroll_rpanel':
-            self.remove_class('as_disabled')
-            self.app._rpanel_stop_scrolling = False
-            self.app.notify(f'auto-scroll [green]enabled[/] on [b]right panel[/]')
         elif event.button.id == 'b_disable_autoscroll_main_disp':
             self.add_class('as_disabled_main')
             self.app._main_display_auto_scroll = False
@@ -300,10 +305,25 @@ class ButtonPanel(HorizontalGroup):
         yield Button('as raw', id='b_enable_autoscroll_raw_disp', classes='small_button',
                      compact=True,
                      tooltip=Text('Enable auto-scroll of the raw display'))
-        yield Button('!as rpanel', id='b_disable_autoscroll_rpanel', classes='small_button',
+
+
+class RightButtonPanel(HorizontalGroup):
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == 'b_disable_autoscroll_rpanel':
+            self.add_class('as_disabled')
+            self.app._rpanel_stop_scrolling = True
+            self.app.notify(f'auto-scroll [red]disabled[/] on [b]right panel[/]')
+        elif event.button.id == 'b_enable_autoscroll_rpanel':
+            self.remove_class('as_disabled')
+            self.app._rpanel_stop_scrolling = False
+            self.app.notify(f'auto-scroll [green]enabled[/] on [b]right panel[/]')
+
+    def compose(self):
+        yield Button('!as rpanel', id='b_disable_autoscroll_rpanel', classes='small_button_alt',
                      compact=True,
                      tooltip=Text('Disable the right panel auto-scroll'))
-        yield Button('as rpanel', id='b_enable_autoscroll_rpanel', classes='small_button',
+        yield Button('as rpanel', id='b_enable_autoscroll_rpanel', classes='small_button_alt',
                      compact=True,
                      tooltip=Text('Enable the right panel auto-scroll'))
 
@@ -373,9 +393,9 @@ class FuddlyTUI(App):
         self._global_area = None
         self._raw_display = None
         self._right_panel = None
+        self._right_area = None
         self._help_zone = None
         self._help_zone_hidden = True
-        # self._help_zone_hidden = True
         self._main_display = None
         self._main_display_auto_scroll = True
         self._raw_display_hidden = True
@@ -537,10 +557,12 @@ class FuddlyTUI(App):
                     else:
                         del self._loggers_fifo[rlog_id]
                         del self._loggers_fd[fd]
-                        if self._right_panel and not self._loggers_fd:
-                            await self._right_panel.remove()
+                        if self._right_area and not self._loggers_fd:
+                            # await self._right_panel.remove()
+                            await self._right_area.remove()
                             self._main_area.styles.width = '100%'
                             self._right_panel = None
+                            self._right_area = None
 
             elif cmd == RichTerm.CMD_HELP_MODE:
                 mode = parsed.group(2)
@@ -687,9 +709,12 @@ class FuddlyTUI(App):
                                 text = Text.from_ansi(text)
 
                             if text:
-                                if not self._right_panel:
+                                if not self._right_area:
+                                    self._right_area = Vertical()
+                                    await self._global_area.mount(self._right_area)
                                     self._right_panel = VerticalScroll(id="loggers")
-                                    await self._global_area.mount(self._right_panel)
+                                    await self._right_area.mount(self._right_panel)
+                                    await self._right_area.mount(RightButtonPanel(id="right_button_panel"))
                                     self._main_area.styles.width = '60%'
 
                                 try:
