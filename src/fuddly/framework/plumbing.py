@@ -531,7 +531,8 @@ class FmkPlumbing(object):
         user_interrupt, go_on = self._collect_residual_feedback(force_mode=True,
                                                                 skip_if_fbk_received=True,
                                                                 skip_tg_readiness_waiting=True,
-                                                                reason='Continuous monitoring')
+                                                                reason='Continuous Monitoring',
+                                                                prefix_enabled=False)
 
     @EnforceOrder(initial_func=True)
     def start(self):
@@ -2459,12 +2460,15 @@ class FmkPlumbing(object):
             raise TargetFeedbackError
 
     def collect_residual_feedback(self, timeout=0):
+        if self.continuous_monitoring_enabled:
+            return
+
         if self._collect_residual_feedback(force_mode=True, timeout=timeout)[0]:
             raise UserInterruption
 
     def _collect_residual_feedback(self, force_mode=False, timeout: int | float= 0,
                                    skip_if_fbk_received=False, skip_tg_readiness_waiting=False,
-                                   reason=None):
+                                   reason=None, prefix_enabled=True):
         """
         :param force_mode:
         :param timeout:
@@ -2509,12 +2513,12 @@ class FmkPlumbing(object):
                 user_interrupt = ret == -2
                 tg_ready = ret >= 0
 
-            log_no_error = self.log_target_residual_feedback()
+            log_no_error = self.log_target_residual_feedback(prefix_enabled=prefix_enabled)
             for tg in targets_to_retrieve_fbk.values():
                 tg.cleanup()
 
         desc = "Probe Status Before Sending Data" if reason is None else reason
-        self.monitor_probes(prefix=desc)
+        self.monitor_probes(prefix=desc if prefix_enabled else None)
         go_on = tg_ready and log_no_error
 
         return user_interrupt, go_on
@@ -3354,13 +3358,13 @@ class FmkPlumbing(object):
         self._current_sent_date = self.lg.start_new_log_entry(preamble=p)
 
     @EnforceOrder(accepted_states=["S2"])
-    def retrieve_and_log_target_feedback(self, residual=False):
+    def retrieve_and_log_target_feedback(self, residual=False, prefix_enabled=True):
         collected_status, err_detected2 = None, False
         ok = True
         if self.__tg_enabled:
             if residual:
-                p = "*** RESIDUAL TARGET FEEDBACK ***"
-                e = "********************************"
+                p = "*** RESIDUAL TARGET FEEDBACK ***" if prefix_enabled else None
+                e = "********************************" if prefix_enabled else None
             else:
                 p = "::[ END BURST ]::\n" if self._burst > 1 else None
                 e = None
@@ -3395,8 +3399,8 @@ class FmkPlumbing(object):
         return ok
 
     @EnforceOrder(accepted_states=["S2"])
-    def log_target_residual_feedback(self):
-        return self.retrieve_and_log_target_feedback(residual=True)
+    def log_target_residual_feedback(self, prefix_enabled=True):
+        return self.retrieve_and_log_target_feedback(residual=True, prefix_enabled=prefix_enabled)
 
     def _log_directly_retrieved_target_feedback(self, tg, preamble=None, epilogue=None,
                                                 store_in_db=True):
