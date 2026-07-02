@@ -47,7 +47,7 @@ See :ref:`dm:mydf` for the implementation.
 A special value in the entry_points needs to be added for `fuddly` to be able to find where the root of your module is.
 The name should end in `__root__`, the first part will be used during imports.
 With the example above, you would import the module with ``import fuddly.data_models.modulename.mydf``.
-It's value should point to the namespace in which the module can be found. This is usually the parent directory to 
+Its value should point to the namespace in which the module can be found. This is usually the parent directory to 
 your data_model, project, target or info.
 In case of a package containing only your module, the name of the module should be used.
 
