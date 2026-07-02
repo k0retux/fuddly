@@ -1135,7 +1135,7 @@ can be performed:
    dt.show()
 
    # Send the current data, log it and save it
-   fmk.send_data_and_log(Data(dt))
+   fmk.process_data_and_send(Data(dt))
 
    # Perform a tTYPE operation on it, but give the 5th generated
    # cases and enforce the operator to strictly follow the ZIP structure
@@ -1145,7 +1145,7 @@ can be performed:
 
    # Send this new data and look at the actions that perform tTYPE and
    # SIZE through the console or the logs
-   fmk.send_data_and_log(altered_data)
+   fmk.process_data_and_send(altered_data)
 
 The last command will display something like this (with some color if
 you have the ``xtermcolor`` python library):

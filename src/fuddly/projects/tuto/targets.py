@@ -58,10 +58,10 @@ targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
            udpnet_tg,
            udpnetsrv_tg,
            rawnetsrv_tg,
+           TestTarget(fbk_samples=['CRC error', 'OK']),
+           TestTarget(),
            (TestTarget(fbk_samples=['CRC error', 'OK']),
-            # mytask),
-            mytask, (P2, 2)),
-           TestTarget()]
+            mytask, (P2, 2)),]
 
 if serial_module:
     targets.append((TestTarget(), probe_pid, (probe_mem, 0.2)))

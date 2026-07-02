@@ -4415,6 +4415,8 @@ class TestDataModelHelpers(unittest.TestCase):
             '\n<LOGIN backend="ssh" auth="cert">\t \n<msg_id>\n56\n\t\n</msg_id>\n<username>\nMyUser'
             '\n</username>\n<password>\nohohoh!  \n</password>\n</LOGIN>\n</command>']
 
+        fmk.continuous_monitoring_enabled = False
+
         for idx, sample in enumerate(xml5_samples):
             xml_atom = fmk.dm.get_atom('xml5')
             status, off, size, name = xml_atom.absorb(sample, constraints=AbsFullCsts())
@@ -4434,7 +4436,7 @@ class TestDataModelHelpers(unittest.TestCase):
             if data is None:
                 break
 
-            go_on, _ = fmk.send_data_and_log([data])
+            go_on, _ = fmk._send_data_and_log([data])
             bstr_len = len(data.to_bytes())
             assert bstr_len == data_sizes[i], f'i: {i}, len(data.to_bytes()): {bstr_len}'
 
@@ -4454,7 +4456,7 @@ class TestDataModelHelpers(unittest.TestCase):
             if node_to_check.to_bytes() == b'None':
                 # one case should trigger this condition
                 specific_cases_checked = True
-            go_on, _ = fmk.send_data_and_log([data])
+            go_on, _ = fmk._send_data_and_log([data])
             if not go_on:
                 raise ValueError
         else:
@@ -4705,13 +4707,15 @@ class TestFMK(unittest.TestCase):
     @unittest.skipIf(not run_long_tests, "Long test case")
     def test_scenario_infra_01b(self):
 
+        fmk.continuous_monitoring_enabled = False
+
         print('\n*** test scenario SC_NO_REGEN via send_data_and_log()')
         # send_data_and_log() is used to stimulate the framework in more places.
 
         base_qty = 0
         for i in range(100):
             data, _ = fmk.process_data(['SC_NO_REGEN'])
-            go_on, _ = fmk.send_data_and_log([data])
+            go_on, _ = fmk._send_data_and_log([data])
             if not go_on:
                 base_qty = i
                 break
@@ -4731,12 +4735,14 @@ class TestFMK(unittest.TestCase):
 
         for i in range(base_qty * 3):
             data, _ = fmk.process_data(['SC_AUTO_REGEN'])
-            go_on, _ = fmk.send_data_and_log([data])
+            go_on, _ = fmk._send_data_and_log([data])
             if not go_on:
                 raise ValueError
 
     @unittest.skipIf(not run_long_tests, "Long test case")
     def test_scenario_infra_02(self):
+
+        fmk.continuous_monitoring_enabled = False
 
         fmk.reload_all(tg_ids=[1])  # to collect feedback from monitoring probes
         fmk.prj.reset_target_mappings()
@@ -4751,7 +4757,7 @@ class TestFMK(unittest.TestCase):
         for i in range(10):
             prev_data = data
             data, _ = fmk.process_data(['SC_EX1'])
-            ok, _ = fmk.send_data_and_log([data])  # needed to make the scenario progress
+            ok, _ = fmk._send_data_and_log([data])  # needed to make the scenario progress
             if not ok:
                 raise ValueError
 
@@ -4770,7 +4776,7 @@ class TestFMK(unittest.TestCase):
                 self.assertTrue(data is None)
             if data is not None:
                 steps.append(data.origin.current_step)
-                ok, _ = fmk.send_data_and_log([data])  # needed to make the scenario progress
+                ok, _ = fmk._send_data_and_log([data])  # needed to make the scenario progress
                 if not ok:
                     raise ValueError
             if i == 0:
@@ -4785,11 +4791,14 @@ class TestFMK(unittest.TestCase):
         self.assertFalse(bool(fmk._task_list))
 
     def test_scenario_infra_03(self):
+
+        fmk.continuous_monitoring_enabled = False
+
         steps = []
         for i in range(6):
             data, _ = fmk.process_data(['SC_EX3'])
             steps.append(data.origin.current_step)
-            ok, _ = fmk.send_data_and_log([data])  # needed to make the scenario progress
+            ok, _ = fmk._send_data_and_log([data])  # needed to make the scenario progress
             if not ok:
                 raise ValueError
 
@@ -4814,7 +4823,7 @@ class TestFMK(unittest.TestCase):
                 if i == 1:
                     scenario = data.origin
                 steps.append(data.origin.current_step)
-                ok, _ = fmk.send_data_and_log([data])  # needed to make the scenario progress
+                ok, _ = fmk._send_data_and_log([data])  # needed to make the scenario progress
                 if not ok:
                     raise ValueError
 
@@ -4824,6 +4833,8 @@ class TestFMK(unittest.TestCase):
                 print('-----')
 
             return scenario, steps
+
+        fmk.continuous_monitoring_enabled = False
 
         scenario, steps = walk_scenario('SC_TEST', 4)
         print('\n++++ env.cbk_true_cpt={:d} | env.cbk_false_cpt={:d}'

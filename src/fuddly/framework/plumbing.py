@@ -498,9 +498,8 @@ class FmkPlumbing(object):
 
     @continuous_monitoring_enabled.setter
     def continuous_monitoring_enabled(self, value):
-        # TODO: it is correctly serialized with self.process_data_and_send() and self.launch_director()
-        #  but not with self.send_data_and_log().
-        #  Forbid execution of self.send_data_and_log() in case continuous monitoring is enabled
+        # It is correctly serialized with self.process_data_and_send() and self.launch_director()
+        # (Not with self._send_data_and_log() which is private method)
 
         if not self._continuous_monitoring_mode:
             return
@@ -2912,8 +2911,8 @@ class FmkPlumbing(object):
                         data.tg_ids = tg_ids
                     data_list.append(data)
 
-                go_on, sdata = self.send_data_and_log(data_list, verbose=verbose,
-                                                      console_display=console_display)
+                go_on, sdata = self._send_data_and_log(data_list, verbose=verbose,
+                                                       console_display=console_display)
                 if sdata:
                     for d in sdata:
                         sent_data.append(d)
@@ -2928,8 +2927,8 @@ class FmkPlumbing(object):
                 cpt += 1
                 if validator_func is not None:
                     validator_func(data)
-                go_on, sdata = self.send_data_and_log(data, verbose=verbose,
-                                                      console_display=console_display)
+                go_on, sdata = self._send_data_and_log(data, verbose=verbose,
+                                                       console_display=console_display)
                 if sdata:
                     for d in sdata:
                         sent_data.append(d)
@@ -2941,7 +2940,7 @@ class FmkPlumbing(object):
         return sent_data
 
     @EnforceOrder(accepted_states=["S2"])
-    def send_data_and_log(self, data_list, verbose=False, console_display=True):
+    def _send_data_and_log(self, data_list, verbose=False, console_display=True):
         if not console_display:
             lg_display_on_term_save = self.lg.display_on_term
             self.lg.display_on_term = False
@@ -6538,7 +6537,7 @@ class FmkShell(cmd.Cmd):
         #
         #     prev_data_list = data_list
         #
-        #     self.fz.send_data_and_log(data_list)
+        #     self.fz._send_data_and_log(data_list)
         #
         # if exhausted_data_cpt > 0:
         #     self.print("\nThe loop has terminated normally, but it remains non exhausted " \
