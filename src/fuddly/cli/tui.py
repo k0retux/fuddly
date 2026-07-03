@@ -126,6 +126,30 @@ fuddly_tui_tcss = """
     height: 3fr;
 }
 
+#b_show_main_display {
+    display: none;
+}
+
+.hide_main #b_hide_main_display {
+    display: none;
+}
+
+.hide_main #b_show_main_display {
+    display: block;
+}
+
+#b_hide_raw_display {
+    display: none;
+}
+
+.show_raw #b_hide_raw_display {
+    display: block;
+}
+
+.show_raw #b_show_raw_display {
+    display: none;
+}
+
 #b_enable_autoscroll_main_disp {
     display: none;
 }
@@ -137,7 +161,6 @@ fuddly_tui_tcss = """
 .as_disabled_main #b_enable_autoscroll_main_disp {
     display: block;
 }
-
 
 #raw_display {
     scrollbar-size: 1 1;
@@ -195,7 +218,7 @@ fuddly_tui_tcss = """
 """
 
 new_tcss_selectors = [
-    '#right_button_panel'
+    '#b_show_main_display'
 ]
 tcss_fname = os.path.join(config_folder, FUDDLY_TUI_FNAME)
 write_tcss = False
@@ -276,26 +299,44 @@ class ButtonPanel(HorizontalGroup):
             self.app._main_display_auto_scroll = True
             self.app.notify(f'auto-scroll [green]enabled[/] on [b]main display[/]')
         elif event.button.id == 'b_hide_raw_display':
-            if not self.app._raw_display_hidden:
-                rlog = self.app.query_one('#raw_display')
-                rlog.remove_class('raw_display_visible_mode')
-                rlog.add_class('raw_display_hidden_mode', update=True)
-                self.app._raw_display_hidden = True
+            rlog = self.app.query_one('#raw_display')
+            self.remove_class('show_raw')
+            rlog.remove_class('raw_display_visible_mode')
+            rlog.add_class('raw_display_hidden_mode', update=True)
+            self.app._raw_display_hidden_by_user = True
+        elif event.button.id == 'b_show_raw_display':
+            rlog = self.app.query_one('#raw_display')
+            self.add_class('show_raw')
+            rlog.remove_class('raw_display_hidden_mode')
+            rlog.add_class('raw_display_visible_mode', update=True)
+            self.app._raw_display_hidden_by_user = False
         elif event.button.id == 'b_hide_main_display':
-            if not self.app._main_display_hidden:
-                rlog = self.app.query_one('#main_display')
-                rlog.remove_class('main_display_visible_mode')
-                rlog.add_class('main_display_hidden_mode', update=True)
-                self.app._main_display_hidden = True
+            rlog = self.app.query_one('#main_display')
+            self.add_class('hide_main')
+            rlog.remove_class('main_display_visible_mode')
+            rlog.add_class('main_display_hidden_mode', update=True)
+            self.app._main_display_hidden_by_user = True
+        elif event.button.id == 'b_show_main_display':
+            rlog = self.app.query_one('#main_display')
+            self.remove_class('hide_main')
+            rlog.remove_class('main_display_hidden_mode')
+            rlog.add_class('main_display_visible_mode', update=True)
+            self.app._main_display_hidden_by_user = False
 
 
     def compose(self):
         yield Button('hide main', id='b_hide_main_display', classes='small_button',
                      compact=True,
                      tooltip=Text('Hide the main display'))
+        yield Button('show main', id='b_show_main_display', classes='small_button',
+                     compact=True,
+                     tooltip=Text('Show the main display'))
         yield Button('hide raw', id='b_hide_raw_display', classes='small_button',
                      compact=True,
                      tooltip=Text('Hide the raw display'))
+        yield Button('show raw', id='b_show_raw_display', classes='small_button',
+                     compact=True,
+                     tooltip=Text('Show the raw display'))
         yield Button('!as main', id='b_disable_autoscroll_main_disp', classes='small_button',
                      compact=True,
                      tooltip=Text('Enable auto-scroll of the main display'))
@@ -399,7 +440,9 @@ class FuddlyTUI(App):
         self._main_display = None
         self._main_display_auto_scroll = True
         self._raw_display_hidden = True
+        self._raw_display_hidden_by_user = False
         self._main_display_hidden = False
+        self._main_display_hidden_by_user = False
         self._previous_text_empty_lines = False
         self._previous_text_nb_added_empty_lines = 0
         self._previous_nb_lines_displayed = 0
@@ -627,6 +670,7 @@ class FuddlyTUI(App):
         self._button_panel.styles.align = ("right", "middle")
         self._raw_display.border_title = 'raw display'
         self._raw_display_hidden = True
+        self._main_display_hidden = False
 
         try:
             epobj = select.epoll()
@@ -790,7 +834,7 @@ class FuddlyTUI(App):
                                 else:
                                     rtext += data
 
-                            if self._main_display_hidden:
+                            if self._main_display_hidden and not self._main_display_hidden_by_user:
                                 self._main_display.remove_class('main_display_hidden_mode', update=True)
                                 self._main_display.add_class('main_display_visible_mode', update=True)
                                 self._main_display_hidden = False
@@ -988,7 +1032,7 @@ class FuddlyTUI(App):
                                 else:
                                     text += data
 
-                            if self._raw_display_hidden:
+                            if self._raw_display_hidden and not self._raw_display_hidden_by_user:
                                 self._raw_display.remove_class('raw_display_hidden_mode', update=True)
                                 self._raw_display.add_class('raw_display_visible_mode', update=True)
                                 self._raw_display_hidden = False
