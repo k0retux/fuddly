@@ -420,7 +420,7 @@ class FuddlyTUI(App):
         self._basic_fifo = basic_fifo
         self._status_fifo = status_fifo
         self._help_fifo = help_fifo
-        self._cmd_re = re.compile(r'(\d)\x00(.*?)\x00(.*?)\x00(.*?)\x00', flags=re.S)
+        self._cmd_re = re.compile(r'(\d+)\x00(.*?)\x00(.*?)\x00(.*?)\x00', flags=re.S)
         preamble_pattern = r'(.*' + Logger.PREAMBLE_PREFIX.replace('[', r'\[') + r')(.*)'
         epilogue_pattern = r'(.*' + Logger.EPILOGUE_PREFIX.replace('[', r'\[') + r')(.*)'
         self._sending_preample_re = re.compile(preamble_pattern, flags=re.S)
@@ -452,6 +452,7 @@ class FuddlyTUI(App):
         self._rpanel_stop_scrolling = False
 
         self.fmkdb = None
+        self._fmkdb_path = None
 
         self._standalone_app = not self._cmd_fifo
 
@@ -460,7 +461,7 @@ class FuddlyTUI(App):
             self.run_worker(self.update_text(), thread=False)
 
 
-    def _launch_fmkdb_analysis(self, fmkdb_path=None):
+    def _launch_fmkdb_analysis(self, fmkdb_path=None, current=False):
         db_disp: RichLog = self.query_one("#db_display")
         db_status: Static = self.query_one("#db_status")
 
@@ -473,8 +474,9 @@ class FuddlyTUI(App):
             return
 
         else:
-            if fmkdb_path is None:
-                text = Text.from_markup(f"[green]Current FmkDB selected[/]")
+            if current:
+                path = f' \\[{fmkdb_path}]' if fmkdb_path is not None else ''
+                text = Text.from_markup(f"[green]Current FmkDB selected[/]{path}")
             else:
                 text = Text.from_markup(f"[green]FmkDB selected[/]: {fmkdb_path}")
 
@@ -508,14 +510,14 @@ class FuddlyTUI(App):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == 'current_fmkdb':
-            self._launch_fmkdb_analysis()
+            self._launch_fmkdb_analysis(fmkdb_path=self._fmkdb_path, current=True)
 
     def on_directory_tree_file_selected(self, event):
         path: Path = event.path
         if not path.is_file():
             return
 
-        self._launch_fmkdb_analysis(path)
+        self._launch_fmkdb_analysis(fmkdb_path=path)
 
 
     def compose(self):
@@ -637,6 +639,11 @@ class FuddlyTUI(App):
                     self._raw_display.remove_class('raw_display_visible_mode')
                     self._raw_display.add_class('raw_display_hidden_mode', update=True)
                     self._raw_display_hidden = True
+
+            elif cmd == RichTerm.CMD_FMKDB_CURRENT:
+                fmkdb_path = parsed.group(2)
+                # self.app.notify(f'fmkdb path: {fmkdb_path}')
+                self._fmkdb_path = fmkdb_path
 
             else:
                 self._status_msg = Text.from_ansi(f'Unknown Command: {cmd}')

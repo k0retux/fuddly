@@ -115,6 +115,8 @@ class RichTerm(Term):
     CMD_MAIN_DISPLAY_MODE = 7
     CMD_RAW_DISPLAY_HIDE = 8
 
+    CMD_FMKDB_CURRENT = 10
+
     def __init__(self, title=None, keepterm=False):
         super().__init__(title=title, keepterm=keepterm)
         self.loggers_fifo = []
@@ -204,6 +206,9 @@ class RichTerm(Term):
 
     def hide_raw_display_panel(self):
         self._print(f'{self.CMD_RAW_DISPLAY_HIDE}\x00\x00\x00\x00', self.cmd_fifo, newline=True)
+
+    def set_current_fmkdb_path(self, fmkdb_path):
+        self._print(f'{self.CMD_FMKDB_CURRENT}\x00{fmkdb_path}\x00\x00\x00', self.cmd_fifo, newline=True)
 
     def new_log_panel(self, title='', markup=False):
         new_fifo = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))

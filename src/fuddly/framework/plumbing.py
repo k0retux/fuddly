@@ -600,6 +600,7 @@ class FmkPlumbing(object):
 
         if self._tui:
             self.external_display.disp.print_status('[green bold]Fuddly initialization complete[/]')
+            self.external_display.disp.set_current_fmkdb_path(self._fmkdb_path)
 
     def switch_term(self):
         if not self.external_display.is_enabled:
