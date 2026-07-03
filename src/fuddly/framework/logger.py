@@ -635,6 +635,7 @@ class Logger(object):
             do_show=True,
             do_record=True,
             delay_recording=False,
+            deco = '***',
             basic_output = False,
             all_output = False,
     ):
@@ -643,7 +644,7 @@ class Logger(object):
         p = "\n" if nl_before else ""
         s = "\n" if nl_after else ""
 
-        msg = f"{p:s}*** [ {info} ] ***{s:s}"
+        msg = f"{p:s}{deco} [ {info} ] {deco}{s:s}"
         if do_show:
             self.log_fn(msg, rgb=rgb, basic_output=basic_output, all_output=all_output)
 
@@ -910,17 +911,24 @@ class Logger(object):
             return None
         return convert_to_internal_repr(feedback)
 
-    PREAMBLE_PREFIX = '====['
+    PREAMBLE_PREFIX = '====[ Data Record #'
 
-    def start_new_log_entry(self, preamble=""):
+    def start_new_log_entry(self):
         self.__idx += 1
         self._current_sent_date = datetime.datetime.now()
         now = self._current_sent_date.strftime("%d/%m/%Y - %H:%M:%S.%f")
-        msg = f"{self.PREAMBLE_PREFIX} {self.__idx} ]==[ {now} ]===="
+        msg = f"{self.PREAMBLE_PREFIX}{self.__idx} ]==[ {now} ]===="
         msg += "=" * (max(80 - len(msg), 0))
         self.log_fn(msg, rgb=Color.NEWLOGENTRY, style=FontStyle.BOLD, all_output=True)
 
         return self._current_sent_date
+
+    EPILOGUE_PREFIX = '====[ End Record #'
+
+    def stop_log_entry(self):
+        msg = f'{self.EPILOGUE_PREFIX}{self.__idx} ]=='
+        msg += "=" * (max(80 - len(msg), 0))
+        self.log_fn(msg, rgb=Color.NEWLOGENTRY, style=FontStyle.BOLD, all_output=True)
 
     def log_dmaker_step(self, num):
         msg = "### Step %d:" % num
@@ -976,11 +984,9 @@ class Logger(object):
         msg = "### Info: {:s}".format(info)
         self.log_fn(msg, rgb=Color.INFO)
 
-    EPILOGUE_PREFIX = '### Ack from'
-
     def log_target_ack_date(self):
         for tg_ref, ack_date in self._current_ack_dates.items():
-            msg = f"{self.EPILOGUE_PREFIX} '{tg_ref!s}' received at: "
+            msg = f"### Ack from '{tg_ref!s}' received at: "
             self.log_fn(msg, nl_after=False, rgb=Color.LOGSECTION, all_output=True)
             self.log_fn(str(ack_date), nl_before=False, all_output=True)
 

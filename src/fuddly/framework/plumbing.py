@@ -3034,9 +3034,9 @@ class FmkPlumbing(object):
             dt.make_recordable()
 
         if multiple_data:
-            self._log_data(data_list, verbose=verbose)
+            self._log_data_part1(data_list, verbose=verbose)
         else:
-            self._log_data(data_list[0], verbose=verbose)
+            self._log_data_part1(data_list[0], verbose=verbose)
 
         # When checking target readiness, feedback timeout is taken into account indirectly
         # through the call to Target.is_feedback_received()
@@ -3170,7 +3170,7 @@ class FmkPlumbing(object):
         return data_list
 
     @EnforceOrder(accepted_states=["S2"])
-    def _log_data(self, data_list, verbose=False):
+    def _log_data_part1(self, data_list, verbose=False):
         if self.__tg_enabled:
             if not self._is_data_valid(data_list):
                 self.set_error("Data is empty and miss some needed meta-info --> will not be logged",
@@ -3190,15 +3190,20 @@ class FmkPlumbing(object):
                 raise ValueError
 
             if multiple_data:
-                self.lg.log_fmk_info("MULTIPLE DATA EMISSION", nl_after=True, delay_recording=True,
-                                     all_output=True)
+                self.lg.log_fmk_info("MULTIPLE DATA EMISSION", nl_after=True,
+                                     do_record = False, all_output=True)
+
+            if self._burst > 1 and self._burst_countdown == self._burst:
+                self.lg.log_fmk_info("START BURST", nl_after=True,
+                                     do_record = False, all_output=True)
 
             for idx, dt in enumerate(data_list):
                 dt_mk_h = dt.get_history()
                 if multiple_data:
-                    self.lg.log_fmk_info("Data #%d" % (idx + 1), nl_before=True, delay_recording=True,
-                                         all_output=True)
-                    self.lg.log_fn("--------------------------", rgb=Color.SUBINFO, all_output=True)
+                    self.lg.log_fmk_info(f"Data #{idx+1} Processing", nl_before=True,
+                                         delay_recording=True, do_record = False,
+                                         rgb=Color.FMKINFO,
+                                         deco = '---', all_output=True)
 
                 gen_info = dt.get_initial_dmaker()
                 gen_type_initial, gen_name, gen_ui = gen_info if gen_info is not None else (None, None, None)
@@ -3263,32 +3268,8 @@ class FmkPlumbing(object):
                     # else:
                     #     self.lg.log_initial_generator(gen_type_initial, gen_name, gen_ui)
 
-                # self.lg.log_data(dt, verbose=verbose)
-                #
-                # tg_ids = self._vtg_to_tg(dt)
-                # for tg_id in tg_ids:
-                #     tg = self.targets[tg_id]
-                #     ack_date = tg.get_last_target_ack_date()
-                #     self.lg.set_target_ack_date(FeedbackSource(tg), date=ack_date)
-                #
-                # if self.fmkDB.enabled:
-                #     self.last_data_id = self.lg.commit_data_table_entry(self.group_id, self.prj.name)
-                #     if self.last_data_id is None:
-                #         self.lg.print_console("### Data not recorded in FmkDB",
-                #                               rgb=Color.DATAINFO, nl_after=True, all_output=True)
-                #     else:
-                #         self.lg.print_console("### FmkDB Data ID: {!r}".format(self.last_data_id),
-                #                               rgb=Color.DATAINFO, nl_after=True, all_output=True)
-                #
-                # self.lg.log_post_processed_info()
-                #
-                # if multiple_data:
-                #     self.lg.log_fn("--------------------------", rgb=Color.SUBINFO, all_output=True)
-                #
-                # if self._burst_countdown <= 1:
-                #     self.lg.log_target_ack_date()
-                #
-                # self.lg.reset_current_state()
+                if multiple_data:
+                    self.lg.log_fn("--------------------------", rgb=Color.FMKINFO, all_output=True)
 
 
     @EnforceOrder(accepted_states=["S2"])
@@ -3304,6 +3285,11 @@ class FmkPlumbing(object):
             raise ValueError
 
         for idx, dt in enumerate(data_list):
+            if multiple_data:
+                self.lg.log_fmk_info(f"Data #{idx+1} Outcomes", nl_before=True,
+                                     delay_recording=True, do_record=False,
+                                     rgb=Color.FMKINFO, deco='---', all_output=True)
+
             self.lg.log_data(dt, verbose=verbose)
 
             tg_ids = self._vtg_to_tg(dt)
@@ -3323,14 +3309,18 @@ class FmkPlumbing(object):
 
             self.lg.log_post_processed_info()
 
-            if multiple_data:
-                self.lg.log_fn("--------------------------", rgb=Color.SUBINFO, all_output=True)
-
             if self._burst_countdown <= 1:
                 self.lg.log_target_ack_date()
 
+            if multiple_data:
+                self.lg.log_fn("--------------------------", rgb=Color.FMKINFO, all_output=True)
+
             self.lg.reset_current_state()
 
+        if self._burst > 1 and self._burst_countdown <= 1:
+            self.lg.log_fmk_info("END BURST", nl_after=True,
+                                 do_record = False, all_output=True)
+        self.lg.stop_log_entry()
 
     def _update_last_recorded_data(self):
         if self.fmkDB.enabled:
@@ -3338,11 +3328,7 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=["S2"])
     def _setup_new_sending(self):
-        if self._burst > 1 and self._burst_countdown <= 1:
-            p = "\n::[ START BURST ]::\n"
-        else:
-            p = "\n"
-        self._current_sent_date = self.lg.start_new_log_entry(preamble=p)
+        self._current_sent_date = self.lg.start_new_log_entry()
 
     @EnforceOrder(accepted_states=["S2"])
     def retrieve_and_log_target_feedback(self, residual=False, prefix_enabled=True):
@@ -3353,7 +3339,7 @@ class FmkPlumbing(object):
                 p = "*** RESIDUAL TARGET FEEDBACK ***" if prefix_enabled else None
                 e = "********************************" if prefix_enabled else None
             else:
-                p = "::[ END BURST ]::\n" if self._burst > 1 else None
+                p = None
                 e = None
             try:
                 collected_status = self.lg.log_collected_feedback(preamble=p, epilogue=e)
@@ -3965,9 +3951,9 @@ class FmkPlumbing(object):
                         self.register_in_data_bank(dt)
 
                 if multiple_data:
-                    self._log_data(data_list, verbose=verbose)
+                    self._log_data_part1(data_list, verbose=verbose)
                 else:
-                    self._log_data(data_list[0], verbose=verbose)
+                    self._log_data_part1(data_list[0], verbose=verbose)
 
                 ret = self.wait_for_target_readiness()
                 # Note: the condition (ret = -1) is supposed to be managed by the Director

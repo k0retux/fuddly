@@ -2094,7 +2094,7 @@ class TestModelWalker(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             idx += 1
 
@@ -2125,7 +2125,7 @@ class TestModelWalker(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             idx += 1
 
@@ -4497,7 +4497,7 @@ class TestFMK(unittest.TestCase):
                 act = [dmaker_type, dis]
                 d, _ = fmk.process_data(act)
             if d is not None:
-                fmk._log_data(d)
+                fmk._log_data_part1(d)
                 print("\n---[ Pretty Print ]---\n")
                 d.show()
                 fmk.cleanup_dmaker(dmaker_type=dmaker_type, reset_existing_seed=True)
@@ -4512,7 +4512,7 @@ class TestFMK(unittest.TestCase):
             if d is None:
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
 
         self.assertGreater(i, 2)
 
@@ -4539,7 +4539,7 @@ class TestFMK(unittest.TestCase):
                     print('--> Exiting (need new input)')
                     break
                 fmk._setup_new_sending()
-                fmk._log_data(d)
+                fmk._log_data_part1(d)
                 outcomes.append(d.to_bytes())
                 d.show()
                 idx += 1
@@ -4559,7 +4559,7 @@ class TestFMK(unittest.TestCase):
                 print('--> Exiting (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             d.show()
             idx += 1
@@ -4601,7 +4601,7 @@ class TestFMK(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             # time.sleep(0.1)
             # d.show()
@@ -4630,7 +4630,7 @@ class TestFMK(unittest.TestCase):
                 print('--> Exiting (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             d.show()
             idx += 1
@@ -5052,7 +5052,7 @@ class TestNode_Recursive(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             # time.sleep(0.1)
             # d.show()
@@ -5089,7 +5089,7 @@ class TestNode_Recursive(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             # time.sleep(0.1)
             # d.show()
@@ -5160,7 +5160,7 @@ class TestNode_Recursive(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             bdata = d.to_bytes()
             if bdata in outcomes:
                 redundant_outcomes.append(bdata)
@@ -5206,7 +5206,7 @@ class TestNode_Recursive(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             bdata = d.to_bytes()
             if bdata in outcomes:
                 redundant_outcomes.append(bdata)
@@ -5282,7 +5282,7 @@ class TestNode_Recursive(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             bdata = d.to_bytes()
             if bdata in outcomes:
                 redundant_outcomes.append(bdata)
@@ -5323,7 +5323,7 @@ class TestNode_Recursive(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             # time.sleep(0.1)
             # d.show()
@@ -5363,7 +5363,7 @@ class TestNode_Recursive(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             # time.sleep(0.1)
             # d.show()
@@ -5406,7 +5406,7 @@ class TestNode_Recursive(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             # time.sleep(0.1)
             outcomes.append(d.to_bytes())
             # d.show()
@@ -5444,7 +5444,7 @@ class TestNode_Recursive(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             # d.show()
             idx += 1
@@ -5504,7 +5504,7 @@ class TestNode_Recursive(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             bdata = d.to_bytes()
             if bdata in outcomes:
                 redundant_outcomes.append(bdata)
@@ -5546,7 +5546,7 @@ class TestNode_Recursive(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             # time.sleep(0.1)
             outcomes.append(d.to_bytes())
             # d.show()
@@ -5578,7 +5578,7 @@ class TestNode_Recursive(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             bdata = d.to_bytes()
             if bdata in outcomes:
                 redundant_outcomes.append(bdata)
@@ -5634,7 +5634,7 @@ class TestConstBackend(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             # d.show()
             idx += 1
@@ -5664,7 +5664,7 @@ class TestConstBackend(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             # d.show()
             idx += 1
@@ -5699,7 +5699,7 @@ class TestConstBackend(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             # d.show()
             idx += 1
@@ -5728,7 +5728,7 @@ class TestConstBackend(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             # d.show()
             idx += 1
@@ -5752,7 +5752,7 @@ class TestConstBackend(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             # d.show()
             idx += 1
@@ -5784,7 +5784,7 @@ class TestConstBackend(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             idx += 1
 
@@ -5816,7 +5816,7 @@ class TestConstBackend(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             idx += 1
 
@@ -5849,7 +5849,7 @@ class TestConstBackend(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             idx += 1
 
@@ -5881,7 +5881,7 @@ class TestConstBackend(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             # d.show()
             idx += 1
@@ -5921,7 +5921,7 @@ class TestConstBackend(unittest.TestCase):
                 self.assertFalse(x == 3 * y + z)
 
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             # outcomes.append(d.to_bytes())
             # d.show()
             idx += 1
@@ -5951,7 +5951,7 @@ class TestConstBackend(unittest.TestCase):
                 break
 
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
 
             nd = d.content
             x = nd['.*/variables/x/val'][0].get_raw_value()
@@ -6059,7 +6059,7 @@ class TestMW_tTYPE(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             # d.show()
             idx += 1
@@ -6084,7 +6084,7 @@ class TestMW_tTYPE(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             # d.show()
             idx2 += 1
@@ -6112,7 +6112,7 @@ class TestMW_tTYPE(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             # d.show()
             idx += 1
@@ -6142,7 +6142,7 @@ class TestMW_tTYPE(unittest.TestCase):
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
-            fmk._log_data(d)
+            fmk._log_data_part1(d)
             outcomes.append(d.to_bytes())
             # d.show()
             idx += 1
