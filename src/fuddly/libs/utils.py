@@ -209,7 +209,8 @@ class RichTerm(Term):
         self._print(f'{self.CMD_RAW_DISPLAY_HIDE}\x00\x00\x00\x00', self.cmd_fifo, newline=True)
 
     def set_current_fmkdb_path(self, fmkdb_path):
-        self._print(f'{self.CMD_FMKDB_CURRENT}\x00{fmkdb_path}\x00\x00\x00', self.cmd_fifo, newline=True)
+        if fmkdb_path is not None:
+            self._print(f'{self.CMD_FMKDB_CURRENT}\x00{fmkdb_path}\x00\x00\x00', self.cmd_fifo, newline=True)
 
     ST_FLAGS_BURST = 0
     ST_FLAGS_NEW_ERROR = 1
