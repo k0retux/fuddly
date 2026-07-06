@@ -193,7 +193,14 @@ class Target(object):
             self.logger = self.setup_child_logger(level=self.log_level)
         else:
             self.logger = None
-        self._started = self.start()
+
+        try:
+            self._started = self.start()
+        except:
+            self._started = False
+            self._stop(target_desc=target_desc, tg_id=tg_id)
+            raise
+
         return self._started
 
     def _stop(self, target_desc, tg_id):

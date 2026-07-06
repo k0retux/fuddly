@@ -485,6 +485,7 @@ class FmkPlumbing(object):
         self._tactics = None
         self.last_data_id = None
         self.next_data_id = None
+        self.data_id_notified = None
 
         self._continuous_monitoring_mode = False  # config parameter
         self.__continuous_monitoring_enabled = False
@@ -601,6 +602,9 @@ class FmkPlumbing(object):
         if self._tui:
             self.external_display.disp.print_status('[green bold]Fuddly initialization complete[/]')
             self.external_display.disp.set_current_fmkdb_path(self._fmkdb_path)
+            # self.external_display.disp.update_status_flags(new_error=False)
+            # self.external_display.disp.update_status_flags(new_error=True, error_info='test info')
+
 
     def switch_term(self):
         if not self.external_display.is_enabled:
@@ -1499,6 +1503,8 @@ class FmkPlumbing(object):
             self.lg.log_fmk_info("A task has been registered (Task ID #{!s})".format(task_ref))
 
     def _start_fmk_plumbing(self):
+        self.data_id_notified = 0
+
         if not self._is_started():
             signal.signal(signal.SIGINT, signal.SIG_IGN)
 
@@ -2147,8 +2153,9 @@ class FmkPlumbing(object):
         if val >= 1:
             self._burst = int(val)
             self._burst_countdown = self._burst
-            self.lg.log_fmk_info("Number of data sent in burst = %d" % self._burst,
+            self.lg.log_fmk_info(f"Number of data sent in burst = {self._burst}",
                                  do_record=do_record)
+            self.external_display.disp.update_status_flags(burst_mode=self._burst > 1)
             return True
         else:
             self.lg.log_fmk_info("Wrong burst value!", do_record=False)
@@ -3048,6 +3055,8 @@ class FmkPlumbing(object):
         else:
             self._log_data_part2(data_list[0], verbose=verbose)
 
+        self.data_id_notified = 0
+
         cont1 = True
         cont2 = True
         # That means this is the end of a burst
@@ -3305,7 +3314,7 @@ class FmkPlumbing(object):
                     self.lg.print_console("### Data not recorded in FmkDB",
                                           rgb=Color.DATAINFO, nl_after=True, all_output=True)
                 else:
-                    self.lg.print_console("### FmkDB Data ID: {!r}".format(self.last_data_id),
+                    self.lg.print_console(f"### FmkDB Data ID: {self.last_data_id!r}",
                                           rgb=Color.DATAINFO, nl_after=True, all_output=True)
 
             self.lg.log_post_processed_info()
@@ -3336,6 +3345,7 @@ class FmkPlumbing(object):
         collected_status, err_detected2 = None, False
         ok = True
         if self.__tg_enabled:
+
             if residual:
                 p = "*** RESIDUAL TARGET FEEDBACK ***" if prefix_enabled else None
                 e = "********************************" if prefix_enabled else None
@@ -3360,6 +3370,13 @@ class FmkPlumbing(object):
                 go_on = self._recover_target(tg) if err_detected1 or err_detected2 else True
                 if not go_on:
                     ok = False
+
+                if (self.data_id_notified != self.last_data_id) and (err_detected1 or err_detected2):
+                    self.data_id_notified = self.last_data_id
+                    self.external_display.disp.update_status_flags(
+                        burst_mode=self._burst > 1,
+                        new_error=True, error_info=f'FmkDB ID#{self.last_data_id}'
+                    )
 
             for tg in self.targets.values():
                 tg_state: TargetState = tg.internal_state # property that provide a copy of the internal state

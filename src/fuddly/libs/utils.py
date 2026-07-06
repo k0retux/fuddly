@@ -116,6 +116,7 @@ class RichTerm(Term):
     CMD_RAW_DISPLAY_HIDE = 8
 
     CMD_FMKDB_CURRENT = 10
+    CMD_STATUS_FLAGS = 11
 
     def __init__(self, title=None, keepterm=False):
         super().__init__(title=title, keepterm=keepterm)
@@ -209,6 +210,15 @@ class RichTerm(Term):
 
     def set_current_fmkdb_path(self, fmkdb_path):
         self._print(f'{self.CMD_FMKDB_CURRENT}\x00{fmkdb_path}\x00\x00\x00', self.cmd_fifo, newline=True)
+
+    ST_FLAGS_BURST = 0
+    ST_FLAGS_NEW_ERROR = 1
+
+    def update_status_flags(self, burst_mode=False, new_error=False, error_info=''):
+        bitmap = (1 if burst_mode else 0) << self.ST_FLAGS_BURST
+        bitmap += (1 if new_error else 0) << self.ST_FLAGS_NEW_ERROR
+        err_info = error_info if new_error else ''
+        self._print(f'{self.CMD_STATUS_FLAGS}\x00{bitmap}\x00{err_info}\x00\x00', self.cmd_fifo, newline=True)
 
     def new_log_panel(self, title='', markup=False):
         new_fifo = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))

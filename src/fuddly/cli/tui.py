@@ -24,7 +24,7 @@ install()
 from textual.widgets import RichLog, TabbedContent, TabPane, DirectoryTree
 from textual.app import App
 from textual.containers import Horizontal, Vertical, VerticalScroll, HorizontalGroup
-from textual.widgets import Input, Static, Button
+from textual.widgets import Input, Static, Button, Select, Label
 from textual.geometry import Size
 from rich.text import Text
 
@@ -34,10 +34,60 @@ from fuddly.framework.data import *
 FUDDLY_TUI_FNAME = 'fuddly_tui.tcss'
 
 fuddly_tui_tcss = """
+#status_area {
+    height: 1;
+}
+
 #status {
-    height: 3;
+    height: 1;
+    border: none;
+    margin-right: 1;
+    width: 3fr;
     content-align: right middle;
     tint: blue 20%;
+}
+
+#status_panel {
+    width: 1fr;
+    border: none;
+}
+
+#error_selector {
+    min-width: 2;
+    background: red 20%;
+    margin-left: 1;
+}
+
+.small_button_status {
+    min-width: 2;
+    background: green 50%;
+    color: azure;
+    border-right: none;
+    border-left: none;
+}
+
+#error_flag {
+    margin-right: 1;
+    margin-left: 1;
+}
+
+.no_error {
+    background: green;
+}
+
+.hl_error {
+    background: red;
+}
+
+#burst_flag {
+}
+
+.burst_mode {
+    background: orange;
+}
+
+.non_burst_mode {
+    background: dodgerblue;
 }
 
 #global_area {
@@ -218,7 +268,7 @@ fuddly_tui_tcss = """
 """
 
 new_tcss_selectors = [
-    '#b_show_main_display'
+    '#error_selector'
 ]
 tcss_fname = os.path.join(config_folder, FUDDLY_TUI_FNAME)
 write_tcss = False
@@ -299,30 +349,21 @@ class ButtonPanel(HorizontalGroup):
             self.app._main_display_auto_scroll = True
             self.app.notify(f'auto-scroll [green]enabled[/] on [b]main display[/]')
         elif event.button.id == 'b_hide_raw_display':
-            rlog = self.app.query_one('#raw_display')
             self.remove_class('show_raw')
-            rlog.remove_class('raw_display_visible_mode')
-            rlog.add_class('raw_display_hidden_mode', update=True)
             self.app._raw_display_hidden_by_user = True
+            self.app.hide_raw_display()
         elif event.button.id == 'b_show_raw_display':
-            rlog = self.app.query_one('#raw_display')
             self.add_class('show_raw')
-            rlog.remove_class('raw_display_hidden_mode')
-            rlog.add_class('raw_display_visible_mode', update=True)
-            self.app._raw_display_hidden_by_user = False
+            self.app.show_raw_display()
+            # self.app._raw_display_hidden_by_user = False
         elif event.button.id == 'b_hide_main_display':
-            rlog = self.app.query_one('#main_display')
             self.add_class('hide_main')
-            rlog.remove_class('main_display_visible_mode')
-            rlog.add_class('main_display_hidden_mode', update=True)
             self.app._main_display_hidden_by_user = True
+            self.app.hide_main_display()
         elif event.button.id == 'b_show_main_display':
-            rlog = self.app.query_one('#main_display')
             self.remove_class('hide_main')
-            rlog.remove_class('main_display_hidden_mode')
-            rlog.add_class('main_display_visible_mode', update=True)
-            self.app._main_display_hidden_by_user = False
-
+            self.app.show_main_display()
+            # self.app._main_display_hidden_by_user = False
 
     def compose(self):
         yield Button('hide main', id='b_hide_main_display', classes='small_button',
@@ -369,6 +410,35 @@ class RightButtonPanel(HorizontalGroup):
                      tooltip=Text('Enable the right panel auto-scroll'))
 
 
+class StatusPanel(HorizontalGroup):
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        # self.app.notify(f'selector: {event.value}')
+        if isinstance(event.value, int):
+            if self.app._raw_display_hidden:
+                self.app.show_raw_display()
+                self.app._button_panel.add_class('show_raw')
+            self.app._raw_display.scroll_to(y=event.value, animate=False)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == 'bs_clear_error':
+            self.app._error_list = []
+            self.app._error_selector.set_options(self.app._error_list)
+            self.app._error_flag.remove_class('hl_error')
+            self.app._error_flag.add_class('no_error')
+            # self.app.notify(f'Clear error list')
+
+    def compose(self):
+        yield Label(' !burst ', id="burst_flag", classes='non_burst_mode')
+        yield Button('clear', id='bs_clear_error', classes='small_button_status',
+                     compact=True,
+                     tooltip=Text('Clear errors'))
+        yield Select(self.app._error_list,
+                     prompt='select error',
+                     allow_blank=True, id="error_selector", compact=True)
+        yield Label('  ', id="error_flag", classes='no_error')
+
+
 class FmkDBDirectoryTree(DirectoryTree):
 
     def filter_paths(self, paths: Iterable[Path]) -> Iterable[Path]:
@@ -397,7 +467,11 @@ class FuddlyTUI(App):
     BINDINGS = [
         ("a", "enable_autoscroll_rpanel", "auto-scroll [green]enabled[/] on [b]right panel[/]"),
         ("alt+a", "disable_autoscroll_rpanel", "auto-scroll [red]disabled[/] on [b]right panel[/]"),
-        ("e", "scroll_end_mpanel", "Scroll to the end (main panel)"),
+        ("m", "show_main", "main display shown"),
+        ("alt+m", "hide_main", "main display hidden"),
+        ("r", "show_raw", "raw display shown"),
+        ("alt+r", "hide_raw", "raw display hidden"),
+        ("e", "scroll_end_rdisplay", "Scroll to the end of the raw display"),
     ]
 
     def action_enable_autoscroll_rpanel(self) -> None:
@@ -408,8 +482,25 @@ class FuddlyTUI(App):
         bt: Button = self.query_one('#b_disable_autoscroll_rpanel')
         bt.action_press()
 
-    def action_end_mpanel(self) -> None:
+    def action_scroll_end_rdisplay(self) -> None:
         self._raw_display.scroll_end(animate=False)
+
+    def action_show_main(self) -> None:
+        bt: Button = self.query_one('#b_show_main_display')
+        bt.action_press()
+
+    def action_hide_main(self) -> None:
+        bt: Button = self.query_one('#b_hide_main_display')
+        bt.action_press()
+
+    def action_show_raw(self) -> None:
+        bt: Button = self.query_one('#b_show_raw_display')
+        bt.action_press()
+
+    def action_hide_raw(self) -> None:
+        bt: Button = self.query_one('#b_hide_raw_display')
+        bt.action_press()
+
 
     def __init__(self, cmd_fifo, main_fifo_ansi, main_fifo_bbcode, basic_fifo,
                  status_fifo, help_fifo):
@@ -455,6 +546,9 @@ class FuddlyTUI(App):
         self._fmkdb_path = None
 
         self._standalone_app = not self._cmd_fifo
+
+        self._error_list = []
+
 
     def on_ready(self) -> None:
         if not self._standalone_app:
@@ -525,8 +619,12 @@ class FuddlyTUI(App):
             if not self._standalone_app:
                 with TabPane('dashboard', id='f_dashboard'):
                     yield Vertical(
-                        Static(Text.from_markup(f'[white]Wait for status...[/]'), id="status", classes='box',
-                                     expand=True),
+                        Horizontal(
+                            Static(Text.from_markup(f'[white]Wait for status...[/]'), id="status",
+                                   classes='box', expand=True),
+                            StatusPanel(id="status_panel"),
+                            id="status_area"
+                        ),
                         Horizontal(
                             Vertical(
                                 MainDisplay(id='main_display', classes='main_display_visible_mode',
@@ -608,6 +706,8 @@ class FuddlyTUI(App):
                             self._main_area.styles.width = '100%'
                             self._right_panel = None
                             self._right_area = None
+                            self._error_list = []
+                            self._bt_clear_errors.action_press()
 
             elif cmd == RichTerm.CMD_HELP_MODE:
                 mode = parsed.group(2)
@@ -645,6 +745,38 @@ class FuddlyTUI(App):
                 # self.app.notify(f'fmkdb path: {fmkdb_path}')
                 self._fmkdb_path = fmkdb_path
 
+            elif cmd == RichTerm.CMD_STATUS_FLAGS:
+                bitmap = int(parsed.group(2))
+                burst = bitmap & (1 << RichTerm.ST_FLAGS_BURST)
+                new_error = bitmap & (1 << RichTerm.ST_FLAGS_NEW_ERROR)
+                err_info = parsed.group(3) if new_error else ''
+
+                if burst:
+                    self._burst_flag.update(' burst ')
+                    self._burst_flag.remove_class('non_burst_mode')
+                    self._burst_flag.add_class('burst_mode')
+                else:
+                    self._burst_flag.update(' !burst ')
+                    self._burst_flag.remove_class('burst_mode')
+                    self._burst_flag.add_class('non_burst_mode')
+
+                if new_error:
+                    self.app._error_flag.remove_class('no_error')
+                    self._error_flag.add_class('hl_error')
+                    raw_display_line = int(self._raw_display.scroll_y)
+                    if len(self._error_list) < 20:
+                        self._error_list.append((err_info, raw_display_line))
+                        self._error_selector.set_options(self._error_list)
+                    elif len(self._error_list) == 20:
+                        self._error_list.append(('...', raw_display_line))
+                        self._error_selector.set_options(self._error_list)
+                    else:
+                        self.app.notify(title='New error', message='Not added to the selector (no more place)')
+
+                    self.app._error_flag.add_class('hl_error')
+
+                # self.app.notify(f'burst: {burst}, error: {error} ({err_info})')
+
             else:
                 self._status_msg = Text.from_ansi(f'Unknown Command: {cmd}')
         else:
@@ -664,6 +796,39 @@ class FuddlyTUI(App):
         else:
             return False
 
+    def show_raw_display(self):
+        self._raw_display.remove_class('raw_display_hidden_mode')
+        self._raw_display.add_class('raw_display_visible_mode', update=True)
+        self._raw_display_hidden = False
+        self._raw_display_hidden_by_user = False
+
+    def hide_raw_display(self):
+        self._raw_display.remove_class('raw_display_visible_mode')
+        self._raw_display.add_class('raw_display_hidden_mode', update=True)
+        self._raw_display_hidden = True
+
+    def show_main_display(self):
+        self._main_display.remove_class('main_display_hidden_mode')
+        self._main_display.add_class('main_display_visible_mode', update=True)
+        self._main_display_hidden = False
+        self._main_display_hidden_by_user = False
+
+    def hide_main_display(self):
+        self._main_display.remove_class('main_display_visible_mode')
+        self._main_display.add_class('main_display_hidden_mode', update=True)
+        self._main_display_hidden = True
+
+    def show_help_zone(self):
+        self._help_zone.remove_class('help_hidden_mode')
+        self._help_zone.add_class('help_visible_mode', update=True)
+        self._help_zone_hidden = False
+
+    def hide_help_zone(self):
+        self._help_zone.remove_class('help_visible_mode')
+        self._help_zone.add_class('help_hidden_mode', update=True)
+        self._help_zone_hidden = True
+
+
     async def update_text(self) -> None:
         self._status_wdg: Static = self.query_one("#status")
         self._status_msg.stylize('bold')
@@ -678,6 +843,11 @@ class FuddlyTUI(App):
         self._raw_display.border_title = 'raw display'
         self._raw_display_hidden = True
         self._main_display_hidden = False
+
+        self._bt_clear_errors = self.query_one("#bs_clear_error")
+        self._error_selector: Select = self.query_one("#error_selector")
+        self._error_flag = self.query_one("#error_flag")
+        self._burst_flag = self.query_one("#burst_flag")
 
         try:
             epobj = select.epoll()
@@ -738,7 +908,8 @@ class FuddlyTUI(App):
                             for cmd_msg in cmd_msg_list:
                                 if cmd_msg:
                                     await self._process_command(cmd_msg, epobj)
-                                    self._status_wdg.update(self._status_msg)
+                                    if self._status_msg:
+                                        self._status_wdg.update(self._status_msg)
 
                         elif fd in self._loggers_fd:
                             text = ''
@@ -823,9 +994,7 @@ class FuddlyTUI(App):
 
                             if text:
                                 if self._help_zone_hidden:
-                                    self._help_zone.remove_class('help_hidden_mode')
-                                    self._help_zone.add_class('help_visible_mode', update=True)
-                                    self._help_zone_hidden = False
+                                    self.show_help_zone()
 
                                 self._help_zone.clear()
                                 self._help_zone.write(text)
@@ -842,14 +1011,10 @@ class FuddlyTUI(App):
                                     rtext += data
 
                             if self._main_display_hidden and not self._main_display_hidden_by_user:
-                                self._main_display.remove_class('main_display_hidden_mode', update=True)
-                                self._main_display.add_class('main_display_visible_mode', update=True)
-                                self._main_display_hidden = False
+                                self.show_main_display()
 
                             if not self._help_zone_hidden:
-                                self._help_zone.remove_class('help_visible_mode')
-                                self._help_zone.add_class('help_hidden_mode', update=True)
-                                self._help_zone_hidden = True
+                                self.hide_help_zone()
 
                             # lf = rtext.find('\n')
                             # if lf != -1 and lf < 20:
@@ -1040,9 +1205,8 @@ class FuddlyTUI(App):
                                     text += data
 
                             if self._raw_display_hidden and not self._raw_display_hidden_by_user:
-                                self._raw_display.remove_class('raw_display_hidden_mode', update=True)
-                                self._raw_display.add_class('raw_display_visible_mode', update=True)
-                                self._raw_display_hidden = False
+                                self.show_raw_display()
+                                self._button_panel.add_class('show_raw')
 
                             if fd == fd_ansi:
                                 text = Text.from_ansi(text, no_wrap=False, overflow='fold')
@@ -1095,5 +1259,5 @@ def start(args: argparse.Namespace):
     finally:
         if app.fmkdb:
             app.fmkdb.stop()
-    # time.sleep(100)
+    time.sleep(100)
     return
