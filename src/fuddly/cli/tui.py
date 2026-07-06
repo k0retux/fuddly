@@ -35,7 +35,8 @@ FUDDLY_TUI_FNAME = 'fuddly_tui.tcss'
 
 fuddly_tui_tcss = """
 #status_area {
-    height: 1;
+    height: 2;
+    border-bottom: solid darkblue;
 }
 
 #status {
@@ -80,6 +81,7 @@ fuddly_tui_tcss = """
 }
 
 #burst_flag {
+    color: auto;
 }
 
 .burst_mode {
@@ -658,7 +660,7 @@ class FuddlyTUI(App):
 
     async def _process_command(self, cmd_msg, epobj):
         parsed = self._cmd_re.match(cmd_msg)
-        self._status_msg = ''
+        self._status_msg = Text('')
         if parsed:
             cmd = int(parsed.group(1))
             if cmd == RichTerm.CMD_NEW_LOG_PANEL:
@@ -697,7 +699,7 @@ class FuddlyTUI(App):
                         await self.query_one('#' + rlog_id).remove()
                     except NoMatches:
                         pass
-                    else:
+                    finally:
                         del self._loggers_fifo[rlog_id]
                         del self._loggers_fd[fd]
                         if self._right_area and not self._loggers_fd:
@@ -954,7 +956,7 @@ class FuddlyTUI(App):
                                 rlog.write(text)
 
                         elif fd == fd_status:
-                            text = ''
+                            status_msgs = ''
                             data = 'INIT'
                             while data:
                                 try:
@@ -962,12 +964,15 @@ class FuddlyTUI(App):
                                 except BlockingIOError:
                                     data = ''
                                 else:
-                                    text += data
-                            text = Text.from_markup(text)
-                            if text:
-                                text.stylize('bold')
-                                self._status_wdg.update(text)
-                                # self.app.notify(text)
+                                    status_msgs += data
+
+                            status_msg_list = status_msgs.split('\x00')
+                            for st_msg in status_msg_list:
+                                if st_msg:
+                                    text = Text.from_markup(st_msg)
+                                    text.stylize('bold')
+                                    self._status_wdg.update(text)
+                                    # self.app.notify(text)
 
                         elif fd == fd_help:
                             text = ''

@@ -188,8 +188,8 @@ class RichTerm(Term):
     def print_main(self, s, newline=True):
         self._print(s, self.basic_fifo, newline=newline)
 
-    def print_status(self, s, newline=False):
-        self._print(s, self.status_fifo, newline=newline)
+    def print_status(self, s: str, newline=False):
+        self._print(s+'\x00', self.status_fifo, newline=newline)
 
     def print_help(self, s, newline=True):
         self._print(s, self.help_fifo, newline=newline)
