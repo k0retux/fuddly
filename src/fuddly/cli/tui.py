@@ -765,7 +765,7 @@ class FuddlyTUI(App):
                 if new_error:
                     self.app._error_flag.remove_class('no_error')
                     self._error_flag.add_class('hl_error')
-                    raw_display_line = int(self._raw_display.scroll_y)
+                    raw_display_line = int(self._raw_display.max_scroll_y)
                     if len(self._error_list) < 20:
                         self._error_list.append((err_info, raw_display_line))
                         self._error_selector.set_options(self._error_list)
