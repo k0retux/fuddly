@@ -963,6 +963,9 @@ class FmkPlumbing(object):
         oks = {x: True for x in self.targets.values()}
         prefix_printed = False
 
+        if not self.mon:
+            return
+
         for probe in self.mon.iter_probes():
             if self.mon.is_probe_launched(probe):
                 pstatus = self.mon.get_probe_status(probe)
@@ -970,6 +973,13 @@ class FmkPlumbing(object):
                 if err < 0 or force_record:
                     tg = self.mon.get_probe_related_tg(probe)
                     if err < 0:
+                        if self.data_id_notified != self.last_data_id:
+                            self.data_id_notified = self.last_data_id
+                            self.external_display.disp.update_status_flags(
+                                burst_mode=self._burst > 1,
+                                new_error=True, error_info=f'FmkDB ID#{self.last_data_id}'
+                            )
+
                         if tg is not None:
                             oks[tg] = False
                     if prefix and not prefix_printed:
