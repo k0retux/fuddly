@@ -20,6 +20,8 @@
 import os
 import sys
 import configparser
+from io import StringIO
+from itertools import product
 
 from collections.abc import Iterator
 from fuddly.framework.global_resources import config_folder
@@ -297,12 +299,9 @@ class ConfigParser(configparser.ConfigParser):
             name = parent
         else:
             name = parent.__class__.__name__
-
         self.name = name
 
-        updated = False
-
-        # Load the default config, value from the conf file will override them
+        # Load the default config, value from the conf file will overwrite them
         if name in default.configs.keys():
             self.read_string(default.configs[name], 'default_' + name)
             self._config_changed = True
@@ -310,28 +309,38 @@ class ConfigParser(configparser.ConfigParser):
             # We don't have a default so we can't auto update
             auto_update = False
 
-        # Try all files in {path} with all the extensions {ext}
-        config_files = []
-        for pdir in path:
-            for pext in ext:
-                config_files.append(os.path.join(pdir, name + pext))
+        # Try the first config file in one of {path} with an extension from {ext}
+        self._conf_file_data = None
+        for pdir, pext in product(path, ext):
+            try:
+                filename = os.path.join(pdir, name + pext)
+                conf_file = open(filename, "r")
+                self._conf_file_data = conf_file.read()
+                break
+            except FileNotFoundError:
+                pass
 
-        loaded_files = self.read(config_files)
-        if len(loaded_files) != 0:
-            self._config_changed = False
-        else:
-            sys.stderr.write(f'Warning: Unable to load any of {config_files}\n')
-
+        self.read_string(self._conf_file_data, filename)
         self._initialised = True
-        if auto_update:
-            defconf = configparser.ConfigParser()
-            defconf.read_string(default.configs[name], 'default_' + name)
-            updated = self.clean(defconf)
-        self._config_changed = self._config_changed or updated
-        if auto_update and self._config_changed:
-            new_fn = loaded_files[0] + '.old'
-            os.rename(loaded_files[0], new_fn)
-            self.save(fullpath=loaded_files[0])
+
+        if self._conf_file_data is None:
+            sys.stderr.write('Warning: No config file found\n')
+            sys.stderr.write(f'Creating new config file from defaults. ({self["global"]["config_name"] + ".ini"})\n')
+            self.save(path[0])
+        else:
+            if auto_update:
+                defconf = configparser.ConfigParser()
+                defconf.read_string(default.configs[name], 'default_' + name)
+                self.clean(defconf)
+                f = StringIO()
+                self.write(f)
+                if f.getvalue() != self._conf_file_data:
+                    sys.stderr.write(f"Config file has changed, saving backup to {filename}.old")
+                    new_fn = filename + '.old'
+                    os.rename(filename, new_fn)
+                    self.save(fullpath=filename)
+
+        self._config_changed = False
 
     def __getattr__(self, name: str) -> SectionProxyWrapper | object:
         # The global section exposes it's options directly instead of going
@@ -388,8 +397,12 @@ class ConfigParser(configparser.ConfigParser):
         if self._config_changed:
             if fullpath is not None:
                 filename = fullpath
+            elif path == "":
+                sys.stderr.write("No destination to write config file")
+                return
             else:
-                filename = os.path.join(path, self.config_name + ".ini")
+                filename = os.path.join(path, self.get("global", "config_name") + ".ini")
+
             with open(filename, "w") as cfile:
                 self.write(cfile)
 
