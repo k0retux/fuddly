@@ -7,6 +7,8 @@ fuddly: a fuzzing and data manipulation framework
    :target: https://readthedocs.org/projects/fuddly/?badge=develop
    :alt: Documentation
 
+.. figure::  docs/source/images/fuddly_tui.png
+   :align:   center
 
 List of features
 ----------------
@@ -16,6 +18,7 @@ List of features
   - complex data manipulations
   - to dissect/absorb existing data
   - generation & mutation fuzzing strategy
+  - ...
 
 + Fuzzing automation framework:
 
@@ -25,25 +28,7 @@ List of features
   - data manipulation based on operators (objects that implement
     specific data transformation)
   - scenario infrastructure (for modeling protocol logic)
-  - virtual directors
-
-+ and so on...
-
-What's still missing
---------------------
-+ Refer to TODO file
-
-About the Documentation
------------------------
-+ The documentation is available `here`_.
-+ In order to generate the documentation from the source, follow these steps:
-
-  #. go to the folder ``docs/``
-  #. execute ``make html`` to generate HTML documentation
-  #. execute ``make latexpdf`` to generate PDF documentation
-  #. generated documentation is located in ``docs/build/``
-
-.. _here: http://fuddly.readthedocs.io
+  - ...
 
 Basic Installation Instructions
 -------------------------------
@@ -62,12 +47,26 @@ Launch fuddly shell
 
 - If `fuddly` is installed either through pip/pipenv or a package from your distribution::
 
-    $ fuddly shell
+    $ fuddly shell [--tui]
+    $ fuddly ishell [--tui]  # to launch fuddly within ipython
 
 - If `fuddly` is not installed::
 
-    $ python -m fuddly.cli shell
+    $ python -m fuddly.cli shell [--tui]
 
+Note: the `--tui` flag enables the launching of the fuddly TUI
+
+About the Documentation
+-----------------------
++ The documentation is available `here`_.
++ In order to generate the documentation from the source, follow these steps:
+
+  #. go to the folder ``docs/``
+  #. execute ``make html`` to generate HTML documentation
+  #. execute ``make latexpdf`` to generate PDF documentation
+  #. generated documentation is located in ``docs/build/``
+
+.. _here: http://fuddly.readthedocs.io
 
 Launch fuddly Test Cases
 ------------------------
