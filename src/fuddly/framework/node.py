@@ -1332,13 +1332,13 @@ class NodeInternalsCriteria(object):
 
 
 class DynNode_Helpers(object):
-    determinist = True
 
-    def __init__(self):
+    def __init__(self, determinist: bool):
+        self.determinist = determinist
         self.reset_graph_info()
 
     def __copy__(self):
-        new_obj = type(self)()
+        new_obj = type(self)(self.determinist)
         new_obj._graph_info = copy.copy(self._graph_info)
         # new_obj._node_ids = copy.copy(self._node_ids)
         new_obj._node_pos = copy.copy(self._node_pos)
@@ -1750,7 +1750,7 @@ class NodeInternals_GenFunc(NodeInternals):
         self.generator_arg = None
         self.node_arg = None
         self.pdepth = 0
-        self._node_helpers = DynNode_Helpers()
+        self._node_helpers = DynNode_Helpers(self.is_attr_set(NodeInternals.Determinist))
         self.provide_helpers = False
         self._trigger_registered = False
         # self.enforce_absorb_constraints(AbsNoCsts())
@@ -2589,7 +2589,7 @@ class NodeInternals_Func(NodeInternals_Term):
         self.fct = None
         self.node_arg = None
         self.fct_arg = None
-        self._node_helpers = DynNode_Helpers()
+        self._node_helpers = DynNode_Helpers(self.is_attr_set(NodeInternals.Determinist))
         self.provide_helpers = False
 
     def import_func(self, fct, fct_node_arg=None, fct_arg=None, provide_helpers=False):
