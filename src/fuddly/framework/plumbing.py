@@ -975,10 +975,11 @@ class FmkPlumbing(object):
                     if err < 0:
                         if self.data_id_notified != self.last_data_id:
                             self.data_id_notified = self.last_data_id
-                            self.external_display.disp.update_status_flags(
-                                burst_mode=self._burst > 1,
-                                new_error=True, error_info=f'FmkDB ID#{self.last_data_id}'
-                            )
+                            if self._tui:
+                                self.external_display.disp.update_status_flags(
+                                    burst_mode=self._burst > 1,
+                                    new_error=True, error_info=f'FmkDB ID#{self.last_data_id}'
+                                )
 
                         if tg is not None:
                             oks[tg] = False
@@ -2165,7 +2166,8 @@ class FmkPlumbing(object):
             self._burst_countdown = self._burst
             self.lg.log_fmk_info(f"Number of data sent in burst = {self._burst}",
                                  do_record=do_record)
-            self.external_display.disp.update_status_flags(burst_mode=self._burst > 1)
+            if self._tui:
+                self.external_display.disp.update_status_flags(burst_mode=self._burst > 1)
             return True
         else:
             self.lg.log_fmk_info("Wrong burst value!", do_record=False)
@@ -3383,10 +3385,11 @@ class FmkPlumbing(object):
 
                 if (self.data_id_notified != self.last_data_id) and (err_detected1 or err_detected2):
                     self.data_id_notified = self.last_data_id
-                    self.external_display.disp.update_status_flags(
-                        burst_mode=self._burst > 1,
-                        new_error=True, error_info=f'FmkDB ID#{self.last_data_id}'
-                    )
+                    if self._tui:
+                        self.external_display.disp.update_status_flags(
+                            burst_mode=self._burst > 1,
+                            new_error=True, error_info=f'FmkDB ID#{self.last_data_id}'
+                        )
 
             for tg in self.targets.values():
                 tg_state: TargetState = tg.internal_state # property that provide a copy of the internal state
