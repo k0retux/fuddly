@@ -1,4 +1,3 @@
-from argcomplete.scripts import python_argcomplete_check_easy_install_script
 from textual import events
 from textual.css.query import NoMatches
 from typing import Iterable
@@ -24,7 +23,7 @@ install()
 from textual.widgets import RichLog, TabbedContent, TabPane, DirectoryTree
 from textual.app import App
 from textual.containers import Horizontal, Vertical, VerticalScroll, HorizontalGroup
-from textual.widgets import Input, Static, Button, Select, Label
+from textual.widgets import Input, Static, Button, Select, Label, Footer
 from textual.geometry import Size
 from rich.text import Text
 
@@ -101,6 +100,13 @@ fuddly_tui_tcss = """
 #main_area {
     box-sizing: border-box;
     height: 1fr;
+}
+
+.main_shrink {
+    width: 60%;
+}
+
+.main_full {
     width: 100%;
 }
 
@@ -467,8 +473,8 @@ class FuddlyTUI(App):
     # """
 
     BINDINGS = [
-        ("a", "enable_autoscroll_rpanel", "auto-scroll [green]enabled[/] on [b]right panel[/]"),
-        ("alt+a", "disable_autoscroll_rpanel", "auto-scroll [red]disabled[/] on [b]right panel[/]"),
+        ("a", "enable_autoscroll_rpanel", "auto-scroll enabled on right panel"),
+        ("alt+a", "disable_autoscroll_rpanel", "auto-scroll disabled on right panel"),
         ("m", "show_main", "main display shown"),
         ("alt+m", "hide_main", "main display hidden"),
         ("r", "show_raw", "raw display shown"),
@@ -705,7 +711,8 @@ class FuddlyTUI(App):
                         if self._right_area and not self._loggers_fd:
                             # await self._right_panel.remove()
                             await self._right_area.remove()
-                            self._main_area.styles.width = '100%'
+                            self.expand_main_area()
+                            # self._main_area.styles.width = '100%'
                             self._right_panel = None
                             self._right_area = None
                             self._error_list = []
@@ -763,7 +770,7 @@ class FuddlyTUI(App):
                     self._burst_flag.add_class('non_burst_mode')
 
                 if new_error:
-                    self.app._error_flag.remove_class('no_error')
+                    self._error_flag.remove_class('no_error')
                     self._error_flag.add_class('hl_error')
                     raw_display_line = int(self._raw_display.max_scroll_y)
                     if len(self._error_list) < 20:
@@ -830,6 +837,13 @@ class FuddlyTUI(App):
         self._help_zone.add_class('help_hidden_mode', update=True)
         self._help_zone_hidden = True
 
+    def shrink_main_area(self):
+        self._main_area.remove_class('main_full')
+        self._main_area.add_class('main_shrink')
+
+    def expand_main_area(self):
+        self._main_area.remove_class('main_shrink')
+        self._main_area.add_class('main_full')
 
     async def update_text(self) -> None:
         self._status_wdg: Static = self.query_one("#status")
@@ -939,7 +953,8 @@ class FuddlyTUI(App):
                                     self._right_panel = VerticalScroll(id="loggers")
                                     await self._right_area.mount(self._right_panel)
                                     await self._right_area.mount(RightButtonPanel(id="right_button_panel"))
-                                    self._main_area.styles.width = '60%'
+                                    # self._main_area.styles.width = '60%'
+                                    self.shrink_main_area()
 
                                 try:
                                     rlog = self.query_one(w_id)
@@ -1264,5 +1279,5 @@ def start(args: argparse.Namespace):
     finally:
         if app.fmkdb:
             app.fmkdb.stop()
-    time.sleep(100)
+    # time.sleep(100)
     return
