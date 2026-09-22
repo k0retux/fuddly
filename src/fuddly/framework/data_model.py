@@ -369,6 +369,8 @@ class DataModel(object):
         self.pre_build()
         if not self._built:
             self._dm_db = dm_db
+            if self.included_models is None or len(self.included_models) == 1:
+                self.config_items = self.import_config_files(from_dm=from_dm)
             self.build_data_model()
 
         if not self._built or force_import_samples:
@@ -378,8 +380,6 @@ class DataModel(object):
                                                      from_dm=from_dm)
                 if raw_data is not None:
                     self.register(*list(map(lambda x: x[0], raw_data.values())))
-
-                self.config_items = self.import_config_files(from_dm=from_dm)
 
             self._built = True
 
