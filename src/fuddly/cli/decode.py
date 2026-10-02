@@ -30,7 +30,7 @@ def start(args: argparse.Namespace) -> int:
     except:
         msg = (f"Error encountered while loading the data model. "
                f"(checkup the associated '{dm.name}.py' file)")
-        sys.stderr(msg)
+        sys.stderr.write(msg)
     else:
         verbose = Verbose.Heavy if args.verbose else Verbose.Normal
         atom_name = args.atom
