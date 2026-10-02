@@ -1178,7 +1178,8 @@ class PDF_DataModel(DataModel):
 
         PDFObj.external_pdf_objs = gather_pdf_objects()
 
-        e_jpg = self.get_external_atom(dm_name='jpg', data_id='JPG_00')
+        e_jpg = self.get_external_atom(dm_name='jpg',
+                                       data_id='JPG00_LENNA_TEST_IMAGE')
 
         PDFObj.jpg_node = e_jpg
 

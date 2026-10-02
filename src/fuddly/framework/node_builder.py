@@ -351,16 +351,18 @@ class NodeBuilder(object):
                     n.clear_attr(MH.Attr.Determinist, conf=conf)
 
             if node_args is not None:
+                n._unfinished_build = True
                 # node_args interpretation is postponed after all nodes has been created
                 if isinstance(node_args, dict):
                     self._register_todo(n, self._complete_generator_from_desc,
                                         args=(node_args, conf), unpack_args=True,
-                                        prio=self.HIGH_PRIO)
-
+                                        # prio=self.HIGH_PRIO)
+                                        prio = self.LOW_PRIO, last_position = True)
                 else:
                     self._register_todo(n, self._complete_generator,
                                         args=(node_args, conf, from_ns, namespace), unpack_args=True,
-                                        prio=self.HIGH_PRIO)
+                                        # prio=self.HIGH_PRIO)
+                                        prio = self.LOW_PRIO, last_position = True)
         else:
             raise ValueError("*** ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
@@ -557,10 +559,12 @@ class NodeBuilder(object):
             n.set_func(contents, func_arg=other_args,
                        provide_helpers=provide_helpers, conf=conf)
 
-            # node_args interpretation is postponed after all nodes has been created
-            self._register_todo(n, self._complete_func,
-                                args=(node_args, conf, from_ns, namespace), unpack_args=True,
-                                prio=self.HIGH_PRIO)
+            if node_args is not None:
+                n._unfinished_build = True
+                # node_args interpretation is postponed after all nodes has been created
+                self._register_todo(n, self._complete_func,
+                                    args=(node_args, conf, from_ns, namespace), unpack_args=True,
+                                    prio=self.LOW_PRIO, last_position=True)
 
         else:
             raise ValueError("ERROR: {:s} is an invalid contents!".format(repr(contents)))
@@ -771,6 +775,7 @@ class NodeBuilder(object):
         return todo
 
     ic = NodeInternalsCriteria(node_kinds=[NodeInternals_Empty])
+    ic_gen = NodeInternalsCriteria(node_kinds=[NodeInternals_GenFunc, NodeInternals_Func])
     # Should be called at the last time to avoid side effects (e.g.,
     # when creating generator/function nodes, the node arguments are
     # provided at a later time. If set_contents()---which copy nodes---is called
@@ -781,13 +786,21 @@ class NodeBuilder(object):
 
         ref_nd = self.node_dico[ref]
         empty_nodes = ref_nd.get_reachable_nodes(internals_criteria=self.ic)
-        if empty_nodes:
+        unfinished_nodes = ref_nd._unfinished_build
+        if not unfinished_nodes:
+            gen_nodes = ref_nd.get_reachable_nodes(internals_criteria=self.ic_gen)
+            if gen_nodes:
+                for g_nd in gen_nodes:
+                    if g_nd._unfinished_build:
+                        unfinished_nodes = True
+                        break
+        if empty_nodes or unfinished_nodes:
             # We can't use it as a reference. This node needs to be resolved first, meaning its
             # empty nodes have to be replaced
             self._register_todo(node, self._clone_from_dict, args=(ref, desc, current_ns),
-                                prio=self.LOW_PRIO)
+                                prio=self.LOW_PRIO, last_position=True)
         else:
-            node.set_contents(self.node_dico[ref], copy_base_node_attrs=True)
+            node.set_contents(ref_nd, copy_base_node_attrs=True)
             self._handle_custo(node, desc, conf=None)
             self._handle_common_attr(node, desc, conf=None, current_ns=current_ns)
 
@@ -858,6 +871,7 @@ class NodeBuilder(object):
                 func_args.append(self.__get_node_from_db(name_desc, namespace=ns))
         internals = node.cc if conf is None else node.c[conf]
         internals.set_func_arg(node=func_args)
+        node._unfinished_build = False
 
     def _complete_generator(self, node, args, conf, from_ns, current_ns):
         ns = current_ns if from_ns is None else from_ns
@@ -867,14 +881,17 @@ class NodeBuilder(object):
             assert isinstance(args, list)
             func_args = []
             for name_desc in args:
-                func_args.append(self.__get_node_from_db(name_desc, namespace=ns))
+                nd = self.__get_node_from_db(name_desc, namespace=ns)
+                func_args.append(nd)
         internals = node.cc if conf is None else node.c[conf]
         internals.set_generator_func_arg(generator_node_arg=func_args)
+        node._unfinished_build = False
 
     def _complete_generator_from_desc(self, node, args, conf):
         node_args = self._create_graph_from_desc(args, None)
         internals = node.cc if conf is None else node.c[conf]
         internals.set_generator_func_arg(generator_node_arg=node_args)
+        node._unfinished_build = False
 
     def _complete_recursive_node(self, node, recursive_link, default_node, desc,
                                  conf, current_ns):

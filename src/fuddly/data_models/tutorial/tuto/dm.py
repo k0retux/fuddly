@@ -1093,34 +1093,34 @@ class MyDF_DataModel(DataModel):
              ]}
 
 
-        tlv_rec0b_desc = \
-            {'name': 'rec0b',
-             'contents': [
-                 {'name': 'type', 'contents': String(values=['SA','SB','TLV']),
-                  'default': 'TLV'},
-                 {'name': 'length', 'contents': LEN(vt=INT_str),
-                  # 'mutable': False,
-                  'node_args': 'value'},
-                 {'name': 'value',
-                  'custo_clear': MH.Custo.NTerm.MutableClone,
-                  'custo_set': MH.Custo.NTerm.CycleClone,
-                  'contents': [
-                      {'name': 'str_a',
-                       'exists_if': (RawCondition('SA'), 'type'),
-                       'contents': String(values=['my_string'])},
-                      {'name': 'str_b',
-                       'exists_if': (RawCondition('SB'), 'type'),
-                       'contents': String(values=['your_string'])},
-                      {'name': 'tlv_a',
-                       'qty': 3,
-                       'exists_if': (RawCondition('TLV'), 'type'),
-                       'contents': MH.RecursiveLink('rec0b', recursion_threshold=5),
-                       'default_node': {'name': 'def_node_a',
-                                        'contents': String(values=['SA7our_str',
-                                                                   'SA11another_str',
-                                                                   'SA9their_str'])}},
-                  ]},
-             ]}
+        tlv_rec0b_desc = {
+            'name': 'rec0b',
+            'contents': [
+                {'name': 'type', 'contents': String(values=['SA','SB','TLV']),
+                 'default': 'TLV'},
+                {'name': 'length', 'contents': LEN(vt=INT_str),
+                 # 'mutable': False,
+                 'node_args': 'value'},
+                {'name': 'value',
+                 'custo_clear': MH.Custo.NTerm.MutableClone,
+                 'custo_set': MH.Custo.NTerm.CycleClone,
+                 'contents': [
+                     {'name': 'str_a',
+                      'exists_if': (RawCondition('SA'), 'type'),
+                      'contents': String(values=['my_string'])},
+                     {'name': 'str_b',
+                      'exists_if': (RawCondition('SB'), 'type'),
+                      'contents': String(values=['your_string'])},
+                     {'name': 'tlv_a',
+                      'qty': 3,
+                      'exists_if': (RawCondition('TLV'), 'type'),
+                      'contents': MH.RecursiveLink('rec0b', recursion_threshold=5),
+                      'default_node': {'name': 'def_node_a',
+                                       'contents': String(values=['SA7our_str',
+                                                                  'SA11another_str',
+                                                                  'SA9their_str'])}},
+                 ]},
+            ]}
 
 
         tlv_rec1_desc = \

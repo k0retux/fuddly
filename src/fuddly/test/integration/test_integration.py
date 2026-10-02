@@ -5936,11 +5936,10 @@ class TestConstBackend(unittest.TestCase):
         samples_per_constraint = 10
 
         expected_outcomes = [
-            b'x = 3y + z [x:121, y:40, z:1)',
-            b'x = 3y + z [x:121, y:40, z:1-',
-            b'x = 3y + z (x:121, y:40, z:1]',
-            b'x = 3y + z (x:121, y:40, z:1-'
-        ]
+            b'x = 3y + z (x:122, y:40, z:2-',
+            b'x = 3y + z [x:122, y:40, z:2)',
+            b'x = 3y + z [x:122, y:40, z:2-',
+            b'x = 3y + z (x:122, y:40, z:2]']
 
         act = [('CSP_STR', UI(determinist=True)),
                ('tCONST', UI(samples_per_cst=samples_per_constraint))]
@@ -5970,7 +5969,7 @@ class TestConstBackend(unittest.TestCase):
 
         self.assertEqual(idx, expected_idx)
         for s in outcomes:
-            self.assertIn(s, expected_outcomes)
+            self.assertIn(s, expected_outcomes, msg=f'\n--> Can fail depending on Z3lib version. New outcomes: \n{outcomes}')
 
 
 class TestMW_tTYPE(unittest.TestCase):

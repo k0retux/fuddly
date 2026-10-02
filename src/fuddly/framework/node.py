@@ -6978,6 +6978,8 @@ class Node(object):
         self.tmp_ref_count = 1
         self.tmp_ref_count_sep_name = 1
 
+        self._unfinished_build = False  # leveraged by node_builder.py
+
         # used for absorption to transfer a resolved postpone
         # node back to where it was defined
         self.abs_postpone_sent_back = None
@@ -7521,9 +7523,7 @@ class Node(object):
         conf = self._check_conf(conf)
         return issubclass(self.internals[conf].__class__, NodeInternals_Term)
 
-    def compliant_with(
-        self, internals_criteria=None, semantics_criteria=None, conf=None
-    ):
+    def compliant_with(self, internals_criteria=None, semantics_criteria=None, conf=None):
         conf = self._check_conf(conf)
 
         if internals_criteria:
