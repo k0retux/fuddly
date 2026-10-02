@@ -2423,6 +2423,15 @@ class INT_str(INT):
         fuzzed_vals = []
         def handle_size(self, v):
             sz = 1 if v == 0 else math.ceil(math.log(abs(v), self._base))
+            if v == 0:
+                sz = 1
+            else:
+                sz_estimation = math.ceil(math.log(abs(v), self._base))
+                if v == 10**sz_estimation:
+                    sz = sz_estimation + 1
+                else:
+                    sz = sz_estimation
+
             if sz <= new_min_size:
                 format_str, _ = self._prepare_format_str(
                     new_min_size, self._base, self._letter_case
