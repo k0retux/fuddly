@@ -119,6 +119,9 @@ type
   - ``MH.NonTerminal``: to specify a *non terminal* node.
   - ``MH.Generator``: to specify a *generator* node.
 
+private
+  Used to store private data within a :class:`fuddly.framework.node.Node` for
+  any kind of use. It basically call :meth:`fuddly.framework.node.Node.set_private`
 
 alt
   Allows to specify alternative contents, by providing a list of

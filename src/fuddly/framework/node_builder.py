@@ -56,6 +56,7 @@ class NodeBuilder(object):
         'custo_set', 'custo_clear', 'evolution_func', 'description',
         'default_qty', 'namespace', 'from_namespace', 'highlight',
         'constraints', 'constraints_highlight',
+        'private',
         # NonTerminal Node description keys
         'weight', 'shape_type', 'section_type', 'duplicate_mode', 'weights',
         'separator', 'prefix', 'suffix', 'unique', 'always', 'optional_tail',
@@ -640,6 +641,9 @@ class NodeBuilder(object):
         param = desc.get('description', None)
         if param is not None:
             node.description = param
+        param = desc.get('private', None)
+        if param is not None:
+            node.set_private(param)
         vals = desc.get('specific_fuzzy_vals', None)
         if vals is not None:
             if not node.is_typed_value(conf=conf):
@@ -880,9 +884,25 @@ class NodeBuilder(object):
         else:
             assert isinstance(args, list)
             func_args = []
+            delay_completion = False
             for name_desc in args:
-                nd = self.__get_node_from_db(name_desc, namespace=ns)
-                func_args.append(nd)
+                try:
+                    nd = self.__get_node_from_db(name_desc, namespace=ns)
+                except ValueError:
+                    # it means name_desc refers to a node which is not complete as
+                    # it is still an EmptyNode
+                    delay_completion = True
+                    break
+                else:
+                    func_args.append(nd)
+
+            if delay_completion:
+                self._register_todo(node, self._complete_generator,
+                                    args=(args, conf, from_ns, current_ns), unpack_args=True,
+                                    prio=self.LOW_PRIO, last_position=True)
+
+                return
+
         internals = node.cc if conf is None else node.c[conf]
         internals.set_generator_func_arg(generator_node_arg=func_args)
         node._unfinished_build = False
