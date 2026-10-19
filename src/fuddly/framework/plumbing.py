@@ -1225,6 +1225,12 @@ class FmkPlumbing(object):
             try:
                 # module_name.submodule.name -> (module_name.submdule., name)
                 *prefix, name = module.module.split(".")
+                # Early check to see if the project has already been loaded 
+                # from FS based on the entry point name.
+                # If the name defined in the project is different, this will
+                # not work.
+                if self._name2prj.get(name) is not None:
+                    raise ProjectDuplicateError(name)
                 prefix = ".".join(prefix)
                 if prefix == "":
                     prefix = "fuddly.projects"
