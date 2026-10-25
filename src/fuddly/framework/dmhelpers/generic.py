@@ -104,6 +104,7 @@ class MH(object):
             FrozenCopy = NonTermCusto.FrozenCopy
             CollapsePadding = NonTermCusto.CollapsePadding
             DelayCollapsing = NonTermCusto.DelayCollapsing
+            NotAlwaysByteAligned = NonTermCusto.NotAlwaysByteAligned
             FullCombinatory = NonTermCusto.FullCombinatory
             StickToDefault = NonTermCusto.StickToDefault
 

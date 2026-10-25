@@ -1451,6 +1451,7 @@ class TestMisc(unittest.TestCase):
         print('*** after extension')
 
         bf.reset_state()
+        bf.freeze()
         bf.value_type.extend_right(vt2)
         bf.show()
 
@@ -1485,6 +1486,7 @@ class TestMisc(unittest.TestCase):
         print('*** after extension')
 
         bf2.reset_state()
+        bf2.freeze()
         bf2.value_type.extend_left(vt4)
         bf2.show()
 

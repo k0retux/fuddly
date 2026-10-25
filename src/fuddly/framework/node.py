@@ -230,9 +230,16 @@ class SyncQtyFromObj(SyncObj):
 
 
 class SyncSizeObj(SyncObj):
-    def __init__(self, node, base_size=0, apply_to_enc_size=False):
-        assert node.is_typed_value()
-        self._node = node
+    def __init__(self, sz_node, base_size=0, apply_to_enc_size=False):
+        """
+
+        :param sz_node: Node that will exhibit the size value in the data
+        :param base_size:
+        :param apply_to_enc_size:
+        """
+
+        assert sz_node.is_typed_value()
+        self._node = sz_node
         self.base_size = base_size
         self.apply_to_enc_size = apply_to_enc_size
 
@@ -244,19 +251,32 @@ class SyncSizeObj(SyncObj):
 
     @property
     def size_for_absorption(self):
+        # print(f'\n***DBG sz_for_abs: {self._node.name}, {self._node.get_raw_value()}')
         return max(0, self._node.get_raw_value() - self.base_size)
 
-    def set_size_on_source_node(self, size):
+    def set_size_on_linked_node(self, size: int):
+        # the source node is the one that keep the size value
+        # ok = self._node.value_type.update_raw_value(size)
         ok = self._node.update_raw_value(size)
         if not ok:
             print(
                 "\n*** WARNING: The node '{:s}' is not compatible with the integer"
                 " '{:d}'".format(self._node.name, size)
             )
-        self._node.set_frozen_value(self._node.get_current_value())
+        # self._node.set_frozen_value(self._node.value_type.get_current_value())
 
     def _sync_nodes_specific(self, src_node):
-        if self.apply_to_enc_size:
+        if src_node.is_typed_value(subkind=fvt.BitString):
+            vt = src_node.get_value_type()
+            src_node.freeze()
+            if vt.letter_bit_sz is None:
+                raise DataModelDefinitionError(f'A BitString with size-constraint link '
+                                               f'shall have a @letter_bit_sz defined')
+            sz = vt.size // vt.letter_bit_sz
+
+            # print(f'\n***DBG Bitstring {src_node.name} - size:{vt.size}, letter:{vt.letter_bit_sz}, val:{val}')
+
+        elif self.apply_to_enc_size:
             sz = len(src_node.to_bytes())
         else:
             if src_node.is_typed_value(subkind=fvt.String):
@@ -272,8 +292,10 @@ class SyncSizeObj(SyncObj):
                         "size sync should not be used for fixed sized object!"
                     )
             sz = len(decoded_val)
+
         sz += self.base_size
-        self.set_size_on_source_node(
+        # print(f'\n***DBG sync "{src_node.name}" - size:{sz}, bs:{self.base_size}')
+        self.set_size_on_linked_node(
             NodeInternals_NonTerm.sizesync_corrupt_hook(src_node, sz)
         )
 
@@ -587,6 +609,7 @@ class NonTermCusto(NodeCustomization):
 
     CollapsePadding = 15
     DelayCollapsing = 16
+    NotAlwaysByteAligned = 17
 
     FullCombinatory = 20
     StickToDefault = 21
@@ -600,6 +623,7 @@ class NonTermCusto(NodeCustomization):
         FrozenCopy: True,
         CollapsePadding: False,
         DelayCollapsing: False,
+        NotAlwaysByteAligned: False,
         FullCombinatory: False,
         StickToDefault: False,
         SepDelOptionalTail: True
@@ -628,6 +652,10 @@ class NonTermCusto(NodeCustomization):
     @property
     def delay_collapsing(self):
         return self._custo_items[self.DelayCollapsing]
+
+    @property
+    def not_always_byte_aligned(self):
+        return self._custo_items[self.NotAlwaysByteAligned]
 
     @property
     def full_combinatory_mode(self):
@@ -752,13 +780,14 @@ class NodeInternals(object):
     def __hash__(self):
         return id(self)
 
-    def __init__(self, arg=None):
+    def __init__(self, arg=None, name=None):
         # if new attributes are added, set_contents_from() have to be updated
         self.private = None
         self.absorb_helper = None
         self.absorb_constraints = None
         self.custo = None
         self._env = None
+        self.name = name
 
         self.__attrs = {
             ### GENERIC ###
@@ -822,7 +851,21 @@ class NodeInternals(object):
     ):
         raise NotImplementedError
 
+    # .get_current_value() is defined by class VT, we intercept it otherwise the node won't be frozen
+    # and side effects may occur (e.g., next time the node is frozen it will walk to the next value while it should not).
+    def get_current_value(self):
+        val, _ = self._get_value()
+        return val
+
     def get_raw_value(self, **kwargs):
+        raise NotImplementedError
+
+    # .get_current_raw_val() is defined by class VT, we intercept it otherwise the node won't be frozen
+    # and side effects may occur (e.g., next time the node is frozen it will walk to the next value while it should not).
+    def get_current_raw_val(self, **kwargs):
+        return self.get_raw_value(**kwargs)
+
+    def update_raw_value(self, val):
         raise NotImplementedError
 
     def customize(self, custo):
@@ -2328,8 +2371,8 @@ class NodeInternals_Term(NodeInternals):
     def _get_value_specific(self, conf, recursive):
         raise NotImplementedError
 
-    def get_raw_value(self, **kwargs):
-        return self._get_value()
+    # def get_raw_value(self, **kwargs):
+    #     return self._get_value()
 
     def absorb(self, blob, constraints, conf, pending_postpone_desc=None):
         status = None
@@ -2360,6 +2403,10 @@ class NodeInternals_Term(NodeInternals):
                     blob, constraints=constraints, off=off, size=size
                 )
             except (ValueError, AssertionError) as e:
+                DEBUG_PRINT(f'[!] do_absorb() from "{self.name}" {type(self)}'
+                            f'\n    has raised the exception:'
+                            f'\n  [ {e} ]'
+                            f'\n  --> reject absorption!')
                 st = AbsorbStatus.Reject
                 self.frozen_node = b""
             else:
@@ -2528,6 +2575,11 @@ class NodeInternals_TypedValue(NodeInternals_Term):
         if not self.is_frozen():
             self._get_value()
         return self.value_type.get_current_raw_val(**kwargs)
+
+    def update_raw_value(self, val):
+        ok = self.value_type.update_raw_value(val)
+        self._set_frozen_value(self.value_type.get_current_value())
+        return ok
 
     def absorb_auto_helper(self, blob, constraints):
         return self.value_type.absorb_auto_helper(blob, constraints)
@@ -4496,12 +4548,12 @@ class NodeInternals_NonTerm(NodeInternals):
                             item2 = list_to_enc[i + 1]
                             c1 = (
                                 isinstance(item1, NodeInternals_TypedValue)
-                                and item1.get_current_subkind() == fvt.BitField
+                                and isinstance(item1.get_value_type(), fvt.BitField)
                                 and item1.get_value_type().padding_size != 0
                             )
                             c2 = (
                                 isinstance(item2, NodeInternals_TypedValue)
-                                and item2.get_current_subkind() == fvt.BitField
+                                and isinstance(item2.get_value_type(), fvt.BitField)
                             )
                             if c1 and c2:
                                 new_item = NodeInternals_TypedValue()
@@ -4511,9 +4563,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                 new_item2vt.make_private(forget_current_state=False)
                                 new_item1vt.extend_left(new_item2vt)
                                 new_item.import_value_type(new_item1vt)
-                                new_item.frozen_node = (
-                                    new_item.get_value_type().get_current_value()
-                                )
+                                new_item._set_frozen_value(new_item1vt.get_current_value())
                                 if i > 0:
                                     new_list = list_to_enc[:i]
                                     new_list.append(new_item)
@@ -4525,6 +4575,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                 list_to_enc = new_list
                                 break
                     else:
+                        # print(f'END collapsing with current list (sz:{list_sz})')
                         break
 
                 list_to_enc = list(map(tobytes_helper, list_to_enc))
@@ -5256,6 +5307,9 @@ class NodeInternals_NonTerm(NodeInternals):
         if self.absorb_constraints is not None:
             constraints = self.absorb_constraints
 
+        if self.custo.collapse_padding_mode:
+            constraints.set(AbsCsts.IgnorePadding)
+
         def _try_separator_absorption_with(blob, consumed_size):
             DEBUG = dbg.ABS_DEBUG
 
@@ -5366,7 +5420,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 if st == AbsorbStatus.Reject:
                     nb_absorbed = node_no - 1
                     if DEBUG:
-                        print("\nREJECT: %s, size: %d, blob: %r ..." % (node.name, len(blob), blob[:4]))
+                        print("\nREJECT: %s, size: %d, blob: %r..." % (node.name, len(blob), blob[:10]))
                     if min_node == 0:
                         # if DEBUG:
                         #     print(' --> min node == 0 (No abort)')
@@ -5539,6 +5593,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 pending_postponed_to_send_back,
             )
 
+
         postponed_to_send_back = None
 
         self.custo.clear_items(NonTermCusto.SepDelOptionalTail)
@@ -5577,6 +5632,7 @@ class NodeInternals_NonTerm(NodeInternals):
             if self.custo.collapse_padding_mode:
                 if hasattr(self, "_private_collapse_mode"):  # TODO: remove ugliness
                     consumed_bits, byte_aligned = self._private_collapse_mode
+                    # print(f'\n!!! DBG _private_collapse_mode: {consumed_bits} {byte_aligned}')
                 else:
                     consumed_bits = 0
                     byte_aligned = True
@@ -5591,11 +5647,19 @@ class NodeInternals_NonTerm(NodeInternals):
             for delim, sublist in self.__iter_csts(node_list):
                 blob_update_pending = False  # reserved for collapse_padding_mode usage
                 blob_sz = len(blob)
+                sublist_sz = len(sublist)
 
                 if delim[1] == ">":
                     for idx, node_desc in enumerate(sublist):
+                        is_last_child_node = idx == sublist_sz - 1
                         abort = False
                         base_node, min_node, max_node = self._parse_node_desc(node_desc)
+
+                        size_to_sync = self._size_from_node(base_node)
+                        if size_to_sync is not None:
+                            base_node.set_size_from_constraints(size=size_to_sync)
+                        else:
+                            pass
 
                         vt = base_node.get_value_type() if base_node.is_typed_value() else None
                         if (isinstance(vt, fvt.BitField)
@@ -5606,10 +5670,10 @@ class NodeInternals_NonTerm(NodeInternals):
                         #     DEBUG_PRINT(f'[{id(self)}] ABS_0 [{base_node.name}]: '
                         #                 f'padding_size: {vt.padding_size}, '
                         #                 f'byte_aligned: {byte_aligned}, '
-                        #                 f'consumed_bits: {consumed_bits}, '
+                        #                 f'\nconsumed_bits: {consumed_bits}, '
                         #                 f'consumed_size {consumed_size}, '
                         #                 f'partial_blob_shift: {blob_shift}, '
-                        #                 f'blob_update_pending: {blob_update_pending}, '
+                        #                 f'\nblob_update_pending: {blob_update_pending}, '
                         #                 f'blob: {blob}')
 
                         if (self.custo.collapse_padding_mode and isinstance(vt, fvt.BitField)
@@ -5638,6 +5702,17 @@ class NodeInternals_NonTerm(NodeInternals):
                                     last_idx = blob_shift + int(math.ceil(bits_to_be_consumed / 8.0))
 
                                     partial_blob = blob[blob_shift:last_idx]
+
+                                    # DEBUG_PRINT(f'\nABS[collapse]#1 [{base_node.name}]: '
+                                    #             f'\nbit_length: {vt.bit_length}, '
+                                    #             f'consumed_bits: {consumed_bits}, '
+                                    #             f'padding_size: {vt.padding_size}, '
+                                    #             f'byte_aligned: {byte_aligned}, '
+                                    #             f'consumed_size {consumed_size}, '
+                                    #             f'\npartial_blob_shift: {blob_shift}, '
+                                    #             f'blob_update_pending: {blob_update_pending}, '
+                                    #             f'\npartial_blob: {partial_blob}', level=2)
+
                                     if partial_blob != b"":
                                         nb_bytes = len(partial_blob)
                                         values = list(
@@ -5673,6 +5748,17 @@ class NodeInternals_NonTerm(NodeInternals):
                                         partial_blob = struct.pack(
                                             "{:d}s".format(nb_bytes), bytes(l)
                                         )
+
+                                    # DEBUG_PRINT(f'\nABS[collapse]#2 [{base_node.name}]: '
+                                    #             f'\nbit_length: {vt.bit_length}, '
+                                    #             f'consumed_bits: {consumed_bits}, '
+                                    #             f'padding_size: {vt.padding_size}, '
+                                    #             f'byte_aligned: {byte_aligned}, '
+                                    #             f'consumed_size {consumed_size}, '
+                                    #             f'\npartial_blob_shift: {blob_shift}, '
+                                    #             f'blob_update_pending: {blob_update_pending}, '
+                                    #             f'\npartial_blob: {partial_blob}', level=2)
+
                                 else:
                                     partial_blob = blob[blob_shift:last_idx]
                                     last_byte = blob[last_idx : last_idx + 1]
@@ -5691,6 +5777,17 @@ class NodeInternals_NonTerm(NodeInternals):
                                     else:
                                         byte_aligned = True
 
+                                    # DEBUG_PRINT(f'\nABS[collapse]#3 [{base_node.name}]: '
+                                    #             f'\nbit_length: {vt.bit_length}, '
+                                    #             f'padding_size: {vt.padding_size}, '
+                                    #             f'curr byte_aligned: {byte_aligned}, '
+                                    #             f'curr consumed_bits: {consumed_bits}, '
+                                    #             f'curr consumed_size {consumed_size}, '
+                                    #             f'\ncurr partial_blob_shift: {blob_shift}, '
+                                    #             f'curr blob_update_pending: {blob_update_pending}, '
+                                    #             f'\nblob: {blob}', level=2)
+
+
                             else:
                                 partial_blob = blob[blob_shift : blob_shift + bytelen]
                                 byte_aligned = True
@@ -5702,6 +5799,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                 #             f'partial_blob_shift: {blob_shift}, '
                                 #             f'blob: {blob}, '
                                 #             f'partial_blob: {partial_blob}')
+
 
                             (abort,
                              remaining_blob,
@@ -5725,26 +5823,62 @@ class NodeInternals_NonTerm(NodeInternals):
 
                             elif abort is not None and not abort:
                                 consumed_bits = consumed_bits + vt.bit_length
-                                consumed_bits = 0 if consumed_bits == 8 else consumed_bits % 8
-                                byte_aligned = consumed_bits == 0
+                                new_consumed_bits = 0 if consumed_bits == 8 else consumed_bits % 8
+                                byte_aligned = new_consumed_bits == 0
 
                                 # DEBUG_PRINT(f'[{id(self)}] ABS_3.1 [{base_node.name}]: '
                                 #             f'padding_size: {vt.padding_size}, '
+                                #             f'bit_length: {vt.bit_length}, '
+                                #             f'\nlen_bits(blob): {blob_sz*8}, '
                                 #             f'consumed_bits: {consumed_bits}, '
-                                #             f'partial_blob_shift: {blob_shift}, '
+                                #             f'new_consumed_bits: {new_consumed_bits}, '
+                                #             f'\npartial_blob_shift: {blob_shift}, '
                                 #             f'consumed_size {consumed_size}')
 
-                                # if vt is byte-aligned, then the consumed_size is correct
-                                # otherwise we decrease it
-                                if vt.padding_size != 0 and consumed_bits > 0:
-                                    blob_shift -= 1
+                                # is_last_child_node = idx == sublist_sz - 1
+                                remaining_bits = (blob_sz - blob_shift) * 8 - new_consumed_bits
+                                if (self.custo.not_always_byte_aligned
+                                        and is_last_child_node
+                                        and 8 > remaining_bits > 0):
+                                    padding_value = blob[-1] & ((1<<remaining_bits)-1)
+                                    # print(f'\n $$$0 DBG pad_val: {padding_value}, mask:{((1<<remaining_bits)-1)},'
+                                    #       f' blob[-1]:{blob[-1]}, rem_b:{remaining_bits}')
+                                    if vt.padding == 0 and padding_value == 0:
+                                        byte_aligned = True
+                                        new_consumed_bits = 0
+                                        blob_shift += 1
+                                    elif vt.padding == 1 and fvt.BitField.padding_one[remaining_bits] == padding_value:
+                                        byte_aligned = True
+                                        new_consumed_bits = 0
+                                        blob_shift += 1
+                                    else:
+                                        pass
+
+                                elif new_consumed_bits > 0: #and vt.padding_size != 0 and
+                                    # if vt is byte-aligned, then the consumed_size is correct
+                                    # otherwise we decrease it
+                                    fully_consumed_bytes = consumed_bits // 8
+                                    if fully_consumed_bytes > 0:
+                                        pass
+                                        # print(f'\n$$$1 DBG increase shift:{blob_shift}')
+                                    else:
+                                        blob_shift -= 1
+                                        # print(f'\n$$$2 DBG decrease shift:{blob_shift}')
                                     assert blob_shift >= 0
+
+                                consumed_bits = new_consumed_bits
 
                                 blob_update_pending = True
                                 # if we reach the end we shall update the blob
-                                if idx == len(sublist) - 1:
+                                if is_last_child_node:
                                     blob_update_pending = False
                                     blob = blob[blob_shift:]
+                                    self._private_collapse_mode = (
+                                        consumed_bits,
+                                        byte_aligned,
+                                    )
+                                    # print(f'\nDBG last_child [{base_node.name}]: register in NT:{self.name}'
+                                    #       f'\nconsumed_bits:{consumed_bits}, aligned:{byte_aligned}')
 
                                 # DEBUG_PRINT(f'[{id(self)}] ABS_3.2 [{base_node.name}]: '
                                 #             f'padding_size: {vt.padding_size}, '
@@ -5766,6 +5900,8 @@ class NodeInternals_NonTerm(NodeInternals):
                                 #             f'blob: {blob}, '
                                 #             f'partial_blob: {partial_blob}')
 
+                            # print(f'\n ### DBG NTafter_try_absorb({base_node.name})5: partial_blob:{partial_blob},'
+                            #       f'\nshift:{blob_shift}, cons_b:{consumed_bits}, cons_sz:{consumed_size}, byte_aligned: {byte_aligned}')
 
                         elif (base_node.is_attr_set(NodeInternals.Abs_Postpone)
                               or (idx < len(sublist) - 1
@@ -5816,8 +5952,8 @@ class NodeInternals_NonTerm(NodeInternals):
                                     #             )
                                 else:
                                     pass
-                                    # DEBUG_PRINT(f'[{id(self)}] ABS_5.3 [{base_node.name}]: '
-                                    #             f'consumed_bits: {consumed_bits}, '
+                                    # DEBUG_PRINT(f'[{id(self)}] ABS_5.3 [{base_node.name}] from NT node "{self.name}"'
+                                    #             f'\nconsumed_bits: {consumed_bits}, '
                                     #             f'consumed_size {consumed_size}, '
                                     #             f'partial_blob_shift: {blob_shift}, '
                                     #             f'blob_update_pending: {blob_update_pending}'
@@ -5833,6 +5969,9 @@ class NodeInternals_NonTerm(NodeInternals):
                                                       consumed_size,
                                                       postponed_node_desc,
                                                       pending_upper_postpone=pending_postpone_desc)
+
+                            if hasattr(base_node, "_private_collapse_mode"):
+                                consumed_bits, byte_aligned = base_node._private_collapse_mode
 
                             # DEBUG_PRINT(f'[{id(self)}] ABS_6 [{base_node.name}]: '
                             #             f'consumed_bits: {consumed_bits}, '
@@ -5856,14 +5995,21 @@ class NodeInternals_NonTerm(NodeInternals):
                                 bnode_to_be_cleaned = False
                                 del base_node.c[conf]._private_collapse_mode
 
+
                         # In this case max_node is 0
                         if abort is None:
                             continue
 
-                        if (isinstance(vt, fvt.BitField)
-                                and self.custo.collapse_padding_mode and byte_aligned):
-                            consumed_size += blob_shift
-                            blob_shift = 0
+                        # print(f'\n ### DBG NTafter_try_absorb({base_node.name})7: shift:{blob_shift},'
+                        #       f'cons_b:{consumed_bits}, cons_sz:{consumed_size}, byte_aligned: {byte_aligned}')
+
+                        if isinstance(vt, fvt.BitField) and self.custo.collapse_padding_mode:
+                            if byte_aligned or (self.custo.not_always_byte_aligned and is_last_child_node):
+                                consumed_size += blob_shift
+                                blob_shift = 0
+
+                                # print(f'\n ### DBG NTafter_try_absorb({base_node.name})8 [UPDATE]: shift:{blob_shift},'
+                                #       f'cons_b:{consumed_bits}, cons_sz:{consumed_size}, byte_aligned: {byte_aligned}')
 
                         # if _try_absorption_with() return a
                         # tuple, then the postponed node is
@@ -7169,6 +7315,7 @@ class Node(object):
 
             self.internals[conf] = new_internals
             self.internals[conf].env = self.env
+            self.internals[conf].name = self.name
 
             if base_node.is_nonterm(conf):
                 self.internals[conf].import_subnodes_full_format(
@@ -7601,7 +7748,7 @@ class Node(object):
     ):
         conf = self._check_conf(conf)
 
-        new_internals = NodeInternals_NonTerm()
+        new_internals = NodeInternals_NonTerm(name=self.name)
         if preserve_node:
             new_internals.set_contents_from(self.internals[conf])
         self.internals[conf] = new_internals
@@ -7629,7 +7776,7 @@ class Node(object):
     ):
         conf = self._check_conf(conf)
 
-        new_internals = NodeInternals_NonTerm()
+        new_internals = NodeInternals_NonTerm(name=self.name)
         if preserve_node:
             new_internals.set_contents_from(self.internals[conf])
         self.internals[conf] = new_internals
@@ -7657,7 +7804,7 @@ class Node(object):
     ):
         conf = self._check_conf(conf)
 
-        new_internals = NodeInternals_NonTerm()
+        new_internals = NodeInternals_NonTerm(name=self.name)
         if preserve_node:
             new_internals.set_contents_from(self.internals[conf])
         self.internals[conf] = new_internals
@@ -7678,7 +7825,7 @@ class Node(object):
     ):
         conf = self._check_conf(conf)
 
-        new_internals = NodeInternals_TypedValue()
+        new_internals = NodeInternals_TypedValue(name=self.name)
         if preserve_node:
             new_internals.set_contents_from(self.internals[conf])
         self.internals[conf] = new_internals
@@ -7716,7 +7863,7 @@ class Node(object):
     ):
         conf = self._check_conf(conf)
 
-        new_internals = NodeInternals_Func()
+        new_internals = NodeInternals_Func(name=self.name)
         if preserve_node:
             new_internals.set_contents_from(self.internals[conf])
         self.internals[conf] = new_internals
@@ -7749,7 +7896,7 @@ class Node(object):
     ):
         conf = self._check_conf(conf)
 
-        new_internals = NodeInternals_GenFunc()
+        new_internals = NodeInternals_GenFunc(name=self.name)
         if preserve_node:
             new_internals.set_contents_from(self.internals[conf])
         self.internals[conf] = new_internals
@@ -7774,7 +7921,7 @@ class Node(object):
                            ignore_entanglement=False, preserve_node=True):
         conf = self._check_conf(conf)
 
-        new_internals = NodeInternals_Recursive()
+        new_internals = NodeInternals_Recursive(name=self.name)
         if preserve_node:
             new_internals.set_contents_from(self.internals[conf])
         self.internals[conf] = new_internals
@@ -7809,6 +7956,10 @@ class Node(object):
         if postpone_sent_back is not None:
             self.abs_postpone_sent_back = postpone_sent_back
 
+        # DEBUG_PRINT(f'\n# [{self.name}] Node.absorb(): {blob[:20]}...'
+        #             f'\n   - len(blob):{len(blob)}'
+        #             f'\n   - absorbed size:{sz}'
+        #             f'\n   - status:{status}')
         if len(blob) == sz and status == AbsorbStatus.Absorbed:
             status = AbsorbStatus.FullyAbsorbed
             self.internals[conf].confirm_absorb()

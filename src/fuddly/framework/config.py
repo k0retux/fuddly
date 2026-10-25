@@ -227,7 +227,7 @@ class SectionProxyWrapper(configparser.SectionProxy):
         line_start = f"{tab}{name}: {val}"
         description = ""
         try:
-            description = f"{self.parser[self.name + ".doc"][name]}".replace("\n", "\n" + " " * middle)
+            description = f"{self.parser[self.name + '.doc'][name]}".replace("\n", "\n" + " " * middle)
         except Exception:
             # Ignore missing docs
             pass

@@ -2422,8 +2422,7 @@ class INT_str(INT):
 
         fuzzed_vals = []
         def handle_size(self, v):
-            sz = 1 if v == 0 else math.ceil(math.log(abs(v), self._base))
-            if v == 0:
+            if v < self._base:
                 sz = 1
             else:
                 sz_estimation = math.ceil(math.log(abs(v), self._base))
@@ -2580,6 +2579,9 @@ class BitField(VT_Alt):
         self.lsb_padding = lsb_padding
         self.show_padding = show_padding
 
+        self._size = None # size in bits (excluding padding to byte-align)
+        self._nb_bytes = None # size in bytes
+
         self.subfield_descs = None
         self.subfield_value_descs = None
         self.subfield_limits = []
@@ -2603,6 +2605,26 @@ class BitField(VT_Alt):
             sf_val_descs=subfield_value_descs,
             sf_defaults=defaults,
         )
+
+    @property
+    def size(self):
+        """
+        :return: number of bits (without padding)
+        """
+        return self._size
+
+    @size.setter
+    def size(self, sz_in_bits):
+        self._size = sz_in_bits
+        self._nb_bytes = int(math.ceil(sz_in_bits / 8.0))
+
+    @property
+    def nb_bytes(self):
+        """
+        :return: number of bytes (including padding)
+        """
+
+        return self._nb_bytes
 
     def make_private(self, forget_current_state):
         # subfield_defaults, subfield_descs and subfield_value_descs are not made private
@@ -2806,7 +2828,7 @@ class BitField(VT_Alt):
             self.subfield_value_descs = copy.copy(sf_val_descs)
 
         self.size = self.subfield_limits[-1]
-        self.nb_bytes = int(math.ceil(self.size / 8.0))
+        # self.nb_bytes = int(math.ceil(self.size / 8.0))
 
         if self.size % 8 == 0:
             self.padding_size = 0
@@ -2911,25 +2933,13 @@ class BitField(VT_Alt):
 
         self.__count_of_possible_values = None
 
-        if self.lsb_padding:
-            term1 = self.drawn_val >> self.padding_size
-        else:
-            term1 = self.drawn_val
-
-        if bitfield.lsb_padding:
-            term2 = bitfield.drawn_val >> bitfield.padding_size
-        else:
-            term2 = bitfield.drawn_val
+        term1 = self.drawn_val
+        term2 = bitfield.drawn_val
 
         if rightside:
             self.drawn_val = (term2 << self.size) + term1
         else:
             self.drawn_val = (term1 << bitfield.size) + term2
-        sz_mod = (self.size + bitfield.size) % 8
-        new_padding_sz = 8 - sz_mod if sz_mod != 0 else 0
-
-        if self.lsb_padding:
-            self.drawn_val <<= new_padding_sz
 
         self.current_val_update_pending = False
         if rightside:
@@ -3003,7 +3013,6 @@ class BitField(VT_Alt):
             )
 
         self.size = self.subfield_limits[-1]
-        self.nb_bytes = int(math.ceil(self.size / 8.0))
 
         if self.size % 8 == 0:
             self.padding_size = 0
@@ -3080,10 +3089,12 @@ class BitField(VT_Alt):
         else:
             string += " |-)"
 
-        if not self.show_padding and self.lsb_padding:
-            current_raw_val = current_raw_val >> self.padding_size
+        string += f' [{self.size}b]'
 
-        return string + " " + str(current_raw_val)
+        # if not self.show_padding and self.lsb_padding:
+        #     current_raw_val = current_raw_val >> self.padding_size
+
+        return string + f" {current_raw_val}"
 
     def is_compatible(self, integer, size):
         return 0 <= integer <= (1 << size) - 1
@@ -3287,7 +3298,7 @@ class BitField(VT_Alt):
 
         # values from LSB to MSB
 
-        if self.padding_size != 0:
+        if not constraints[AbsCsts.IgnorePadding] and self.padding_size != 0:
             if self.lsb_padding:
                 mask = self.padding_one[self.padding_size]
                 if constraints[AbsCsts.Contents]:
@@ -3310,24 +3321,24 @@ class BitField(VT_Alt):
                     recompute_padding(masked_val, mask)
 
         values_sz = len(values)
-        result = 0
+        int_value = 0
         for v, i in zip(values, range(values_sz)):
-            result += v << (i * 8)
+            int_value += v << (i * 8)
 
-        decoded_val = result
+        padded_int_value = int_value
 
         if self.padding_size != 0:
             if self.lsb_padding:
-                result >>= self.padding_size
+                int_value >>= self.padding_size
             else:
                 shift = (values_sz - 1) * 8
-                result &= (
+                int_value &= (
                     (((1 << (8 - self.padding_size)) - 1) << shift) + (1 << shift) - 1
                 )
 
         # We return the decoded integer
         # (1: taking padding into consideration, 2: ignoring padding)
-        return decoded_val, result
+        return padded_int_value, int_value
 
     def absorb_auto_helper(self, blob, constraints):
         if len(blob) < self.nb_bytes:
@@ -3347,9 +3358,10 @@ class BitField(VT_Alt):
 
         blob = blob[off : self.nb_bytes]
 
-        self.drawn_val, orig_val = self._read_value_from(
+        _, orig_val = self._read_value_from(
             blob, self.nb_bytes, self.endian, constraints
         )
+        self.drawn_val = orig_val
 
         limits = self.subfield_limits[:-1]
         limits.insert(0, 0)
@@ -3622,35 +3634,22 @@ class BitField(VT_Alt):
                     else:
                         break
 
+        # drawn_val store the integer value of the BitField ignoring any padding
+        self.drawn_val = val
+
         return self._encode_bitfield(val)
 
     # Does not affect the state of the BitField
     def get_current_value(self):
-        val = 0
-        prev_lim = 0
+        if self.drawn_val is None:
+            encoded_val = self.get_value()
+        else:
+            encoded_val = self._encode_bitfield(self.drawn_val)
 
-        for lim, values, extrems, i in zip(
-            self.subfield_limits,
-            self.subfield_vals,
-            self.subfield_extrems,
-            range(len(self.subfield_limits)),
-        ):
-            if values is None:
-                mini, maxi = extrems
-                v = mini + self.idx_inuse[i]
-                val += v << prev_lim
-            else:
-                if len(values) == 1:
-                    index = 0
-                else:
-                    index = self.idx_inuse[i]
-                val += values[index] << prev_lim
-
-            prev_lim = lim
-
-        return self._encode_bitfield(val)
+        return encoded_val
 
     def _encode_bitfield(self, val):
+
         if self.padding_size != 0:
             if self.lsb_padding:
                 val = val << self.padding_size
@@ -3659,8 +3658,6 @@ class BitField(VT_Alt):
             else:
                 if self.padding == 1:
                     val = val + (self.padding_one[self.padding_size] << self.size)
-
-        self.drawn_val = val
 
         # bigendian-encoded
         l = []
@@ -3687,6 +3684,583 @@ class BitField(VT_Alt):
 
     def is_exhausted(self):
         return self.exhausted
+
+
+class BitString(BitField):
+    """
+    ...
+    """
+
+
+    def nb_bits_for(self, intvalue: int):
+
+        if intvalue < 2:
+            nb_bits = 1
+        else:
+            nb_bits_estimate = math.ceil(math.log2(intvalue))
+            if intvalue == 2 ** nb_bits_estimate:
+                nb_bits = nb_bits_estimate + 1
+            else:
+                nb_bits = nb_bits_estimate
+
+        return nb_bits
+
+    def _check_nb_bits_compliance(self):
+        if self.intvalues is not None:
+            pass
+
+        if self.binvalues is not None:
+            pass
+
+        return True
+
+
+    def _update_size_attributes(self, size: int | None = None, from_value=None, force=False):
+        if not force and not self.variable_size:
+            raise DataModelDefinitionError
+
+        if size is not None:
+            nb_bits = size * self.letter_bit_sz
+        elif from_value is not None:
+            nb_bits = self.nb_bits_for(from_value)
+        else:
+            raise ValueError
+
+        if not force:
+            assert nb_bits >= 1
+            if self.max_nb_bits != -1:
+                assert nb_bits <= self.max_nb_bits
+
+        self.size = nb_bits
+        self.subfield_limits[0] = self.size
+        self.subfield_sizes[0] = self.size
+
+        # self.nb_bytes = int(math.ceil(self.size / 8.0))
+
+        if self.size % 8 == 0:
+            self.padding_size = 0
+        else:
+            self.padding_size = 8 - (self.size % 8)
+
+
+    def __init__(
+            self, min_intvalue=None, max_intvalue=None, intvalues=None,
+            variable_size: bool | None = None, delta_minmax_mode: bool | None = None,
+            binvalues: list[bytes] | None = None, letter_bit_sz: int | None = None,
+            bindefault = None, intdefault = None,
+            fixed_nb_bits: int | None = None, min_nb_bits: int | None = None, max_nb_bits: int | None = None,
+            padding= 0, lsb_padding= True, show_padding= False,
+            endian=VT.BigEndian, determinist=True,
+            value_descs: dict|None = None,
+    ):
+
+        def convert_to_intval(bval):
+            int_val = 0
+            shift = 0
+            max_val = (1 << letter_bit_sz) - 1
+            if endian == VT.LittleEndian:
+                bval = bval[::-1]
+            for b in bval:
+                b = b % max_val
+                int_val += b << shift
+                shift += letter_bit_sz
+
+            return int_val
+
+        def convert_to_intval_list(bval_list):
+            intval_list = []
+            default_found = False
+            for bval in bval_list:
+                # int_val = 0
+                # shift = 0
+                # if endian == VT.LittleEndian:
+                #     bval = bval[::-1]
+                # for b in bval:
+                #     int_val += b << shift
+                #     shift += letter_bit_sz
+                int_val = convert_to_intval(bval)
+                intval_list.append(int_val)
+
+                if self.intdefault is not None and int_val == self.intdefault:
+                    default_found = True
+
+            if self.intdefault is not None and not default_found:
+                raise DataModelDefinitionError(f'Default value shall exists in value list')
+
+            return intval_list
+
+        if max_intvalue is not None:
+            if max_intvalue < 0 or (min_intvalue is not None and max_intvalue < min_intvalue):
+                raise DataModelDefinitionError
+
+        if min_intvalue is not None and min_intvalue < 0:
+            raise DataModelDefinitionError
+
+        if intvalues is not None:
+            for iv in intvalues:
+                if iv < 0:
+                    raise DataModelDefinitionError
+
+        if bindefault is not None and intdefault is not None:
+            raise DataModelDefinitionError
+
+        if (fixed_nb_bits is not None and (min_nb_bits is not None or max_nb_bits is not None)):
+            raise DataModelDefinitionError
+
+        if fixed_nb_bits is not None:
+            assert variable_size is None or variable_size == False
+            self.variable_size = False
+        elif min_nb_bits is not None and max_nb_bits is not None:
+            self.variable_size = max_nb_bits - min_nb_bits != 0
+            assert variable_size is None or self.variable_size == variable_size
+        else:
+            self.variable_size = variable_size
+
+        self.letter_bit_sz = letter_bit_sz
+
+        self.delta_minmax_mode = delta_minmax_mode
+        if bindefault is not None:
+            self.intdefault = convert_to_intval(bindefault)
+        else:
+            self.intdefault = intdefault
+
+        if binvalues is not None:
+            if intvalues is not None:
+                raise DataModelDefinitionError
+
+            if bindefault is not None and bindefault not in binvalues:
+                raise DataModelDefinitionError
+
+            if letter_bit_sz is None:
+                raise DataModelDefinitionError
+
+            self.binvalues = copy.copy(binvalues)
+            self.intvalues = convert_to_intval_list(self.binvalues)
+
+        else:
+            self.binvalues = None
+            self.intvalues = copy.copy(intvalues)
+
+        self.min_intvalue = None
+        self.max_intvalue = None
+
+        if min_nb_bits is not None and max_nb_bits is not None:
+
+            self.min_nb_bits = min_nb_bits
+            self.max_nb_bits = max_nb_bits
+            self.fixed_nb_bits = None
+
+            if self.intvalues is None:
+                if self.min_intvalue is None:
+                    self.min_intvalue = (1<<self.min_nb_bits)-1
+
+                if self.max_intvalue is None:
+                    self.max_intvalue = (1<<self.max_nb_bits)-1
+
+        elif fixed_nb_bits is None:
+
+            assert self.variable_size is not None
+
+            if self.variable_size:
+                assert self.letter_bit_sz is not None
+
+                self.fixed_nb_bits = None
+
+                if min_intvalue is not None:
+                    self.min_nb_bits = self.nb_bits_for(min_intvalue)
+                    self.min_intvalue = min_intvalue
+                elif self.intvalues is not None:
+                    self.min_intvalue = min(self.intvalues)
+                    self.min_nb_bits = self.nb_bits_for(self.min_intvalue)
+                # elif self.intsamples is not None:
+                #     assert min_nb_bits is not None
+                #     self.min_intvalue = 0
+                #     self.min_nb_bits = min_nb_bits
+                else:
+                    self.min_nb_bits = 1
+
+                if max_intvalue is not None:
+                    self.max_nb_bits = self.nb_bits_for(max_intvalue)
+                    self.max_intvalue = max_intvalue
+                elif self.intvalues is not None:
+                    self.max_intvalue = max(self.intvalues)
+                    self.max_nb_bits = self.nb_bits_for(self.max_intvalue)
+                # elif self.intsamples is not None:
+                #     assert max_nb_bits is not None
+                #     self.max_intvalue = (1<<max_nb_bits)-1
+                #     self.max_nb_bits = max_nb_bits
+                else:
+                    self.max_nb_bits = -1
+
+            else:
+
+                if min_intvalue is not None:
+                    self.min_intvalue = min_intvalue
+                elif self.intvalues is not None:
+                    self.min_intvalue = min(self.intvalues)
+                else:
+                    raise DataModelDefinitionError
+
+                if max_intvalue is not None:
+                    self.max_intvalue = max_intvalue
+                elif self.intvalues is not None:
+                    self.max_intvalue = max(self.intvalues)
+                else:
+                    raise DataModelDefinitionError
+
+                if self.delta_minmax_mode and (
+                        (self.intvalues is not None and len(self.intvalues) > 1) or self.intvalues is None
+                ):
+                    # TODO: update values, etc. with "- min"
+                    delta = abs(self.max_intvalue - self.min_intvalue)
+                    self.fixed_nb_bits = self.min_nb_bits = self.max_nb_bits = self.nb_bits_for(delta)
+                    if self.intdefault is not None:
+                        assert self.min_intvalue is not None
+                        self.intdefault -= self.min_intvalue
+
+                else:
+                    self.fixed_nb_bits = self.min_nb_bits = self.max_nb_bits = self.nb_bits_for(self.max_intvalue)
+
+        else:
+            self.fixed_nb_bits = fixed_nb_bits
+            self.min_nb_bits = fixed_nb_bits
+            self.max_nb_bits = fixed_nb_bits
+
+        self._check_nb_bits_compliance()
+
+        if self.min_intvalue is None and self.max_intvalue is None:
+            subfield_val_extremums = None
+        else:
+            if self.delta_minmax_mode:
+                subfield_val_extremums = [[0, self.max_intvalue-self.min_intvalue]]
+            else:
+                subfield_val_extremums = [[self.min_intvalue, self.max_intvalue]]
+
+        BitField.__init__(
+            self,
+            subfield_limits=None,
+            subfield_sizes=[self.max_nb_bits],
+            subfield_values=None if self.intvalues is None else [self.intvalues],
+            subfield_val_extremums=subfield_val_extremums,
+            padding=padding,
+            lsb_padding=lsb_padding,
+            show_padding=show_padding,
+            endian=endian,
+            determinist=determinist,
+            subfield_descs=None,
+            subfield_value_descs=None if value_descs is None else {0: value_descs},
+            defaults=None if self.intdefault is None else [self.intdefault],
+        )
+
+    def set_bitfield(
+        self,
+        sf_values=None,
+        sf_val_extremums=None,
+        sf_limits=None,
+        sf_sizes=None,
+        sf_descs=None,
+        sf_val_descs=None,
+        sf_defaults=None,
+    ):
+        self.subfield_limits.append(sf_sizes[0])
+
+        if sf_values is None:
+            sf_values = [None]
+
+        if sf_val_extremums is None:
+            sf_val_extremums = [None]
+
+        if sf_descs is not None:
+            self.subfield_descs = copy.copy(sf_descs)
+
+        if sf_val_descs is not None:
+            self.subfield_value_descs = copy.copy(sf_val_descs)
+
+        self.size = sf_sizes[0]
+        # self.nb_bytes = int(math.ceil(self.size / 8.0))
+
+        if self.size % 8 == 0:
+            self.padding_size = 0
+        else:
+            self.padding_size = 8 - (self.size % 8)
+
+        self.subfield_vals = []
+        self.subfield_extrems = []
+
+        prev_lim = 0
+        # provided limits are not included in the subfields
+        # for idx, lim in enumerate(self.subfield_limits):
+        values = sf_values[0]
+        extrems = sf_val_extremums[0]
+
+        self.subfield_sizes.append(self.size)
+
+        if values is not None:
+            l = []
+            for v in values:
+                if self.is_compatible(v, self.size):
+                    l.append(v)
+                else:
+                    s = f'value "{v}" is out of range [size: {self.size} bit(s)]'
+                    raise ValueError(s)
+            self.subfield_vals.append(l)
+            self.subfield_extrems.append(None)
+        else:
+            if extrems is not None:
+                mini, maxi = extrems
+                if self.is_compatible(mini, self.size) and self.is_compatible(
+                    maxi, self.size
+                ):
+                    assert mini != maxi
+                    self.subfield_extrems.append([mini, maxi])
+                else:
+                    s = f"builtins.min({mini}) / builtins.max({maxi}) values are out of range"
+                    raise ValueError(s)
+                self.subfield_vals.append(None)
+            else:
+                mini, maxi = 0, (1 << self.size) - 1
+                self.subfield_extrems.append([mini, maxi])
+                self.subfield_vals.append(None)
+
+        self.subfield_fuzzy_vals.append(None)
+
+        if sf_defaults is not None:
+            self._check_constraints(sf_defaults)
+            self.subfield_defaults = copy.copy(sf_defaults)
+        else:
+            self.subfield_defaults = [None]
+
+        self._reset_idx()
+
+    def _reset_idx(self, reset_idx_inuse=True):
+        self.current_subfield = 0
+        self._first_pass = {0: True}
+        if self._fuzzy_mode:
+            self.idx = [1]
+        else:
+            self.idx = [0]
+            default = self.subfield_defaults[0]
+            if default is not None:
+                if self.subfield_extrems[0] is None:
+                    self.idx[0] = self.subfield_vals[0].index(default)
+                else:
+                    mini, _ = self.subfield_extrems[0]
+                    self.idx[0] = default - mini
+        # initially we don't make copy, as it will be copied anyway
+        # during .get_value()
+        if reset_idx_inuse:
+            self.idx_inuse = self.idx
+
+    def set_size_from_constraints(self, size=None, encoded_size=None):
+        # This method is used only for absorption purpose, thus no modification
+        # is performed on self.values. To be reconsidered in the case the method
+        # has to be used for another purpose.
+        assert size is not None
+        self._update_size_attributes(size=size, force=False)
+
+    def set_default_value(self, value):
+        dv = [value]
+        self._check_constraints(dv)
+        self.subfield_defaults = dv
+        self.reset_state()
+
+    def get_value(self):
+        if self.current_val_update_pending:
+            self.current_val_update_pending = False
+            return self.get_current_value()
+
+        self.exhausted = False
+
+        val = 0
+        self.idx_inuse = copy.copy(self.idx)
+
+        values = self.subfield_vals[0]
+        extrems = self.subfield_extrems[0]
+
+        if self.determinist:
+            index = self.idx[0]
+
+            if values is None:
+                mini, maxi = extrems
+                val = mini + index
+
+                if val == maxi:
+                    self.idx[0] = 0
+                    self.exhausted = True
+                else:
+                    self.idx[0] += 1
+
+                self.idx_inuse[0] = index
+
+            else:
+                idx_max = len(values) - 1
+                val = values[index]
+
+                if index == idx_max:
+                    self.idx[0] = 0
+                    self.exhausted = True
+                else:
+                    self.idx[0] += 1
+
+                self.idx_inuse[0] = index
+
+        else:
+            if values is None:
+                mini, maxi = extrems
+                drawn_val = random.randint(mini, maxi)
+                self.idx[0] = self.idx_inuse[0] = drawn_val - mini
+            else:
+                drawn_val = random.choice(values)
+                self.idx[0] = self.idx_inuse[0] = values.index(drawn_val)
+
+            val = drawn_val
+
+        if not self.determinist:
+            # We make an artificial count to trigger exhaustion in
+            # case the BitField is in Finite & Random mode. An exact
+            # implementation (like the INT() one) does not seem to be
+            # worth the memory cost. We use the same count as if the
+            # BitField is in determinist mode
+            self.exhaustion_cpt += 1
+            if self.exhaustion_cpt >= self.count_of_possible_values:
+                self.exhausted = True
+                self.exhaustion_cpt = 0
+            else:
+                self.exhausted = False
+
+        if self.variable_size:
+            self._update_size_attributes(from_value=val, force=False)
+
+        self.drawn_val = val
+
+        # if self.delta_minmax_mode:
+        #     val -= self.min_intvalue
+
+        return self._encode_bitfield(val)
+
+    def do_absorb(self, blob, constraints, off=0, size=None):
+        self.orig_idx = copy.deepcopy(self.idx)
+        self.orig_subfield_vals = copy.deepcopy(self.subfield_vals)
+        self.orig_drawn_val = self.drawn_val
+        self.orig_subfield_defaults = copy.copy(self.subfield_defaults)
+        self.orig_padding = self.padding
+        self.padding_one = self.__class__.padding_one
+
+        self.reset_state()
+
+        blob = blob[off : self.nb_bytes]
+
+        _, orig_val = self._read_value_from(
+            blob, self.nb_bytes, self.endian, constraints
+        )
+        self.drawn_val = orig_val
+
+        values = self.subfield_vals[0]
+        extrems = self.subfield_extrems[0]
+
+        val = orig_val
+
+        if values is None:
+            mini, maxi = extrems
+            if constraints[AbsCsts.Contents] and (mini > val or maxi < val):
+                raise ValueError(f"Value '{val}' does not match the constraints!")
+            self.idx[0] = val - mini
+            if not constraints[AbsCsts.Contents]:  # update extremums if necessary
+                extrems[0] = builtins.min(extrems[0], val)
+                extrems[1] = builtins.max(extrems[1], val)
+        else:
+            if constraints[AbsCsts.Contents] and val not in values:
+                raise ValueError(f"Value '{val}' does not match the constraints!")
+            if val in values:
+                self.idx[0] = values.index(val)
+            else:
+                values.insert(self.idx[0], val)
+
+        self.subfield_defaults[0] = val
+
+        # print(f'\n***DBG absorb1, blob:{blob}, off:{off}, nb_bytes:{self.nb_bytes}, val:{val}, '
+        #       f'stored:{self.get_current_raw_val()}, drawn_val:{self.drawn_val}')
+
+        return blob, off, self.nb_bytes
+
+
+    def _enable_fuzz_mode(self, fuzz_magnitude=1.0,
+                          only_corner_cases=False,
+                          only_corner_cases_and_extra = False,
+                          only_invalid_cases=False,
+                          node_is_optional=False):
+
+        l = []
+        self.subfield_fuzzy_vals[0] = l
+
+        curr_idx = self.idx_inuse[0]
+
+        curr_values = self.subfield_vals[0]
+        if curr_values is not None:
+            current = curr_values[curr_idx]
+        else:
+            mini, maxi = self.subfield_extrems[0]
+            current = mini + curr_idx
+
+        # append first a normal value, as it will be used as a
+        # reference when the other fields are fuzzed.
+        # self._reset_idx() will init self.idx accordingly to avoid nominal value in fuzz mode
+        l.append(current)
+
+        if self.subfield_extrems[0] is not None:
+            mini, maxi = self.subfield_extrems[0]
+            MM = maxi + 1
+            mm = mini - 1
+            if MM not in l and self.is_compatible(MM, self.max_nb_bits):
+                l.append(MM)
+            if mm not in l and self.is_compatible(mm, self.min_nb_bits):
+                l.append(mm)
+
+        M = (1 << self.max_nb_bits) - 1
+        m = 0
+        a = l[0] + 1
+        b = l[0] - 1
+        if M not in l and self.is_compatible(M, self.max_nb_bits):
+            l.append(M)
+        if m not in l and self.is_compatible(m, self.min_nb_bits):
+            l.append(m)
+        if a not in l and self.is_compatible(a, self.max_nb_bits):
+            l.append(a)
+        if b not in l and self.is_compatible(b, self.max_nb_bits):
+            l.append(b)
+
+        if curr_values is not None:
+            orig_set = set(curr_values)
+            max_oset = builtins.max(orig_set)
+            min_oset = builtins.min(orig_set)
+            if min_oset != max_oset:
+                diff_sorted = sorted(set(range(min_oset, max_oset + 1)) - orig_set)
+                if diff_sorted:
+                    item1 = diff_sorted[0]
+                    item2 = diff_sorted[-1]
+                    if item1 not in l and self.is_compatible(item1, self.max_nb_bits):
+                        l.append(item1)
+                    if item2 not in l and self.is_compatible(item2, self.max_nb_bits):
+                        l.append(item2)
+                beyond_max_oset = max_oset + 1
+                if beyond_max_oset not in l and self.is_compatible(
+                    beyond_max_oset, self.max_nb_bits
+                ):
+                    l.append(beyond_max_oset)
+                below_min_oset = min_oset - 1
+                if below_min_oset not in l and self.is_compatible(
+                    below_min_oset, self.max_nb_bits
+                ):
+                    l.append(below_min_oset)
+
+        self.determinist_save = self.determinist
+        self.determinist = True
+
+        self.subfield_vals_save = self.subfield_vals
+        self.subfield_vals = self.subfield_fuzzy_vals
+        self.subfield_extrems_save = self.subfield_extrems
+        self.subfield_extrems = [None for i in range(len(self.subfield_fuzzy_vals))]
+        self.exhausted = False
 
 
 class INT8(INT):
