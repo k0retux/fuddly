@@ -2,8 +2,6 @@ from textual import events
 from textual.css.query import NoMatches
 from typing import Iterable
 
-from xdg.Locale import update
-
 from fuddly.framework.logger import Logger
 from fuddly.framework.plumbing import FmkPlumbing
 import fuddly.cli.argparse_wrapper as argparse
@@ -24,6 +22,7 @@ from textual.widgets import RichLog, TabbedContent, TabPane, DirectoryTree
 from textual.app import App
 from textual.containers import Horizontal, Vertical, VerticalScroll, HorizontalGroup
 from textual.widgets import Input, Static, Button, Select, Label, Footer
+from textual.widget import Widget
 from textual.geometry import Size
 from rich.text import Text
 
@@ -115,7 +114,17 @@ fuddly_tui_tcss = """
     content-align: left middle;
 }
 
+#placeholder_middle_panel{
+    width: 1fr;
+}
+
+#main_splitter {
+    width: auto;
+    content-align: right middle;
+}
+
 #button_panel {
+    width: 1fr;
     content-align: left middle;
 }
 
@@ -237,6 +246,10 @@ fuddly_tui_tcss = """
     height: 3fr;
 }
 
+#right_panel {
+    scrollbar-size: 1 1;
+}
+
 .box {
     scrollbar-size: 1 1;
     height: 50%;
@@ -293,24 +306,27 @@ if write_tcss:
     with open(tcss_fname, 'w') as f:
         f.write(fuddly_tui_tcss)
 
-class AltLogger(RichLog):
 
-    def on_focus(self, event: events.Focus) -> None:
-        # self.styles.border = ('solid', 'green')
-        self.remove_class('hl_box')
-        self.add_class('box', update=True)
+class RawDisplay(VerticalScroll):
+    DEFAULT_CSS = """
+    RawDisplay {
+        overflow-y: auto;
+        /* Reserve scrollbar space so text does not jump when lines are added */
+        scrollbar-gutter: stable;
+    }
 
-    def watch_scroll_y(self, old_value, new_value) -> None:
-        super().watch_scroll_y(old_value, new_value)
+    RawDisplay > #log_content {
+        width: 100%;
+        /* auto, so the child expands beyond the container as text is added */
+        height: auto;
+    }
+    """
 
-        if self.auto_scroll and new_value > 0 and new_value - old_value < 0:
-            self.auto_scroll = False
-
-        elif not self.auto_scroll and self.is_vertical_scroll_end and self.max_scroll_y > 0:
-            self.auto_scroll = True
-
-
-class RawDisplay(RichLog):
+    def __init__(self, max_lines=None, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._text_buffer = Text()
+        self.auto_scroll = True
+        # TODO: limit self._text_buffer with provided max_lines
 
     def watch_scroll_y(self, old_value, new_value) -> None:
         super().watch_scroll_y(old_value, new_value)
@@ -323,6 +339,39 @@ class RawDisplay(RichLog):
             # Note: self.max_scroll_y == 0 if not enough text to allow scrolling
             self.auto_scroll = True
             # self.app.notify(f"Auto scroll enabled ({old_value} --> {new_value})")
+
+    def compose(self):
+        yield Static(id="log_content")
+
+    def write(self, text: Text | str, scroll_to_end: bool = True) -> None:
+        if isinstance(text, Text):
+            self._text_buffer.append_text(text)
+        else:
+            self._text_buffer.append(text)
+
+        self._text_buffer.append("\n")
+
+        content = self.query_one("#log_content", Static)
+        content.update(self._text_buffer)
+
+        # Wait until Textual recalculates container size before scrolling
+        if self.auto_scroll and scroll_to_end:
+            self.call_after_refresh(self.scroll_end, animate=False)
+
+    def clear(self) -> None:
+        self._text_buffer = Text()
+        self.query_one("#log_content", Static).update(self._text_buffer)
+
+
+class AltLogger(RawDisplay):
+
+    def on_focus(self, event: events.Focus) -> None:
+        # self.styles.border = ('solid', 'green')
+        self.remove_class('hl_box')
+        self.add_class('box', update=True)
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
 
 
 class MainDisplay(RichLog):
@@ -339,6 +388,82 @@ class MainDisplay(RichLog):
         if (not self.app._main_display_auto_scroll
                 and self.is_vertical_scroll_end and self.max_scroll_y > 0):
             self.app._main_display_auto_scroll = True
+
+class VerticalSplitter(Static):
+    """A draggable vertical divider that dynamically resizes a target widget."""
+
+    DEFAULT_CSS = """
+    VerticalSplitter {
+        border: none;
+        width: auto;
+        height: 1;
+    }
+    VerticalSplitter:hover {
+        background: $accent;
+    }
+    VerticalSplitter.dragging {
+        background: $accent-lighten-1;
+    }
+    """
+
+    def __init__(
+            self,
+            target: str,
+            parent_ref_sz = None,
+            min_size: int = 10,
+            max_size: int | None = None,
+            **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+        self.target_selector = target
+        self.parent_ref_sz = parent_ref_sz
+        self.min_size = min_size
+        self.max_size = max_size
+        self._dragging = False
+        self._start_y = 0
+        self._start_height = 0
+
+    def on_mouse_down(self, event: events.MouseDown) -> None:
+        if event.button != 1:  # Left-click only
+            return
+        self._dragging = True
+        self.add_class("dragging")
+        self.capture_mouse()
+
+        self._start_y = event.screen_y
+        target_widget = self.screen.query_one(self.target_selector)
+        if self.parent_ref_sz:
+            parent_ref_size_widget = self.screen.query_one(self.parent_ref_sz)
+            self.parent_height = parent_ref_size_widget.size.height
+        else:
+            self.parent_height = self.screen.size.height
+
+        self._start_height = target_widget.size.height
+        event.stop()
+
+    def on_mouse_move(self, event: events.MouseMove) -> None:
+        if not self._dragging:
+            return
+
+        delta = event.screen_y - self._start_y
+        target_widget = self.screen.query_one(self.target_selector)
+
+        # Reserve space for the right panel and the splitter handle itself
+        effective_max = self.parent_height - self.min_size - 1
+        if self.max_size is not None:
+            effective_max = min(self.max_size, effective_max)
+
+        # Clamp height within allowable boundaries
+        new_height = max(self.min_size, min(effective_max, self._start_height + delta))
+        target_widget.styles.height = new_height
+        event.stop()
+
+    def on_mouse_up(self, event: events.MouseUp) -> None:
+        if self._dragging:
+            self._dragging = False
+            self.remove_class("dragging")
+            self.release_mouse()
+            event.stop()
 
 
 class ButtonPanel(HorizontalGroup):
@@ -468,9 +593,13 @@ class FuddlyTUI(App):
     ANSICODE = 1
     BBCODE = 2
 
+    # Textual configuration
+
     CSS_PATH = os.path.join(config_folder, "fuddly_tui.tcss")
     # DEFAULT_CSS = """
     # """
+
+    ALLOW_SELECT = True
 
     BINDINGS = [
         ("a", "enable_autoscroll_rpanel", "auto-scroll enabled on right panel"),
@@ -639,12 +768,15 @@ class FuddlyTUI(App):
                                         max_lines=20000,
                                         wrap=True, auto_scroll=False),
                                 Horizontal(
+                                    Static('', id='placeholder_middle_panel'),
+                                    VerticalSplitter(target='#main_display', parent_ref_sz='#main_area',
+                                                     content=Text.from_markup(f' :arrow_backward:[bold]-[/]:arrow_forward: '),
+                                                     id='main_splitter'),
                                     ButtonPanel(id="button_panel"),
                                     id="middle_panel"
                                 ),
                                 RawDisplay(id='raw_display', classes='raw_display_hidden_mode',
-                                           max_lines=50000,
-                                           wrap=True, auto_scroll=True),
+                                           max_lines=50000),
                                 id="main_area"
                             ),
                             id='global_area'
@@ -817,15 +949,21 @@ class FuddlyTUI(App):
         self._raw_display_hidden = True
 
     def show_main_display(self):
-        self._main_display.remove_class('main_display_hidden_mode')
-        self._main_display.add_class('main_display_visible_mode', update=True)
+        # self._main_display.remove_class('main_display_hidden_mode')
+        # self._main_display.add_class('main_display_visible_mode', update=True)
         self._main_display_hidden = False
         self._main_display_hidden_by_user = False
+        # TODO: clean this up
+        #  Because of VerticalSplitter using the reactive attribute height
+        #  the remove_class()/add_class() actions does not work anymore.
+        #  We are stuck with using the reactive attribute height
+        self._main_display.styles.height = '3fr'
 
     def hide_main_display(self):
-        self._main_display.remove_class('main_display_visible_mode')
-        self._main_display.add_class('main_display_hidden_mode', update=True)
+        # self._main_display.remove_class('main_display_visible_mode')
+        # self._main_display.add_class('main_display_hidden_mode', update=True)
         self._main_display_hidden = True
+        self._main_display.styles.height = 0
 
     def show_help_zone(self):
         self._help_zone.remove_class('help_hidden_mode')
@@ -950,7 +1088,7 @@ class FuddlyTUI(App):
                                 if not self._right_area:
                                     self._right_area = Vertical()
                                     await self._global_area.mount(self._right_area)
-                                    self._right_panel = VerticalScroll(id="loggers")
+                                    self._right_panel = VerticalScroll(id="right_panel")
                                     await self._right_area.mount(self._right_panel)
                                     await self._right_area.mount(RightButtonPanel(id="right_button_panel"))
                                     # self._main_area.styles.width = '60%'
@@ -959,7 +1097,7 @@ class FuddlyTUI(App):
                                 try:
                                     rlog = self.query_one(w_id)
                                 except NoMatches:
-                                    rlog = AltLogger(highlight=True, max_lines=10000,
+                                    rlog = AltLogger(max_lines=10000,
                                                      id=w_id[1:], classes='box')
                                     rlog.border_title = title
                                     await self._right_panel.mount(rlog)
