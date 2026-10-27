@@ -39,7 +39,7 @@ from fuddly.framework.data import Data, DataAttr
 from fuddly.framework.global_resources import *
 from fuddly.framework.database import Database
 from fuddly.framework.knowledge.feedback_collector import FeedbackSource
-from fuddly.libs.utils import ExternalDisplay, Accumulator
+from fuddly.libs.utils import ExternalDisplay, Accumulator, format_byte_string
 from fuddly.framework import global_resources as gr
 
 class Logger(object):
@@ -451,6 +451,9 @@ class Logger(object):
                                 traceback.print_exc()
 
                             if self._ext_disp.is_enabled:
+                                if debug:
+                                    bs = format_byte_string(data.to_bytes(), hexa=True, binary=True)
+                                    self._ext_disp.disp.print_markup(bs)
                                 self._ext_disp.disp.print_main('\n' + accu.content)
                             else:
                                 sys.stdout.write('\n' + accu.content)

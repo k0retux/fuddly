@@ -51,7 +51,7 @@ from fuddly.framework import value_types as fvt
 from fuddly.framework import encoders as enc
 
 from fuddly.libs import debug_facility as dbg
-from fuddly.libs.utils import chunk_lines
+from fuddly.libs.utils import chunk_lines, print_byte_string
 
 DEBUG = dbg.DM_DEBUG
 DEBUG_PRINT = dbg.DEBUG_PRINT
@@ -5434,8 +5434,9 @@ class NodeInternals_NonTerm(NodeInternals):
                         break
                 elif st == AbsorbStatus.Absorbed or st == AbsorbStatus.FullyAbsorbed:
                     if DEBUG:
-                        print("\nABSORBED: %s, abort: %r, off: %d, consumed_sz: %d, blob: %r..."
+                        print("\nABSORBED: %s, abort: %r, off: %d, byte_consumed: %d, blob: %r..."
                               % (node.name, abort, off, sz, blob[off : off + sz][:100]))
+                        print_byte_string(blob[off : off + sz][:10], binary=True, hexa=True)
                         print(f'\nPostpone Node: {postponed.name if postponed else "N/A"} '
                               f'({postponed!r})')
 
@@ -5507,7 +5508,8 @@ class NodeInternals_NonTerm(NodeInternals):
                                 break
                             elif node_no <= min_node:  # reject in this case
                                 if DEBUG:
-                                    print("\n--> Ignore previous absorption!")
+                                    print(f"\n--> Ignore previous absorption! "
+                                          f"node_no:{node_no}, min_node:{min_node}")
                                 abort = True
                                 node.cancel_absorb()
                                 break
@@ -5643,6 +5645,8 @@ class NodeInternals_NonTerm(NodeInternals):
             blob_shift = 0
             last_idx = 0
 
+            last_absorption_with_collapse = False
+
             # Iterate over all sub-components of the component node_list
             for delim, sublist in self.__iter_csts(node_list):
                 blob_update_pending = False  # reserved for collapse_padding_mode usage
@@ -5662,9 +5666,11 @@ class NodeInternals_NonTerm(NodeInternals):
                             pass
 
                         vt = base_node.get_value_type() if base_node.is_typed_value() else None
-                        if (isinstance(vt, fvt.BitField)
-                                and self.custo.collapse_padding_mode and byte_aligned):
-                            byte_aligned = (vt.padding_size == 0 and consumed_bits == 0)
+                        if isinstance(vt, fvt.BitField) and self.custo.collapse_padding_mode:
+                            if byte_aligned:
+                                byte_aligned = (vt.padding_size == 0 and consumed_bits == 0)
+                            else:
+                                byte_aligned = (consumed_bits + vt.bit_length) % 8 == 0
 
                         # if isinstance(vt, fvt.BitField) and self.custo.collapse_padding_mode:
                         #     DEBUG_PRINT(f'[{id(self)}] ABS_0 [{base_node.name}]: '
@@ -5678,6 +5684,12 @@ class NodeInternals_NonTerm(NodeInternals):
 
                         if (self.custo.collapse_padding_mode and isinstance(vt, fvt.BitField)
                                 and (not byte_aligned or consumed_bits != 0)):
+                            # We enter this case if the BitField is not byte aligned, thus we have
+                            # to perform bits processing, and we maintain the current data consumption
+                            # thanks to the variables: blob_shift and consumed_bits
+                            # When we finish blob_shift is reset to 0, and we update the blob
+
+                            last_absorption_with_collapse = True
 
                             if (min_node != 1
                                     or max_node != 1
@@ -5696,7 +5708,8 @@ class NodeInternals_NonTerm(NodeInternals):
                                 last_idx = blob_shift + (bytelen - 1)
 
                                 if consumed_bits != 0:
-                                    byte_aligned = consumed_bits + vt.padding_size == 8
+                                    # byte_aligned = consumed_bits + vt.padding_size == 8
+                                    byte_aligned = consumed_bits + vt.bit_length == 8
 
                                     bits_to_be_consumed = consumed_bits + vt.bit_length
                                     last_idx = blob_shift + int(math.ceil(bits_to_be_consumed / 8.0))
@@ -5835,7 +5848,6 @@ class NodeInternals_NonTerm(NodeInternals):
                                 #             f'\npartial_blob_shift: {blob_shift}, '
                                 #             f'consumed_size {consumed_size}')
 
-                                # is_last_child_node = idx == sublist_sz - 1
                                 remaining_bits = (blob_sz - blob_shift) * 8 - new_consumed_bits
                                 if (self.custo.not_always_byte_aligned
                                         and is_last_child_node
@@ -5918,6 +5930,11 @@ class NodeInternals_NonTerm(NodeInternals):
                             continue
 
                         else:
+                            # In this case base_node is either a non-terminal node or
+                            # a terminal node byte-aligned
+
+                            last_absorption_with_collapse = False
+
                             if self.custo.collapse_padding_mode:
                                 bnode_to_be_cleaned = False
                                 aligned = consumed_bits % 8 == 0
@@ -5961,7 +5978,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
                             # pending_upper_postpone = pending_postpone_desc
                             (abort,
-                             blob,
+                             blob, # blob is updated if it absorption succeed
                              consumed_size,
                              consumed_nb,
                              postponed_sent_back
@@ -6006,6 +6023,8 @@ class NodeInternals_NonTerm(NodeInternals):
                         if isinstance(vt, fvt.BitField) and self.custo.collapse_padding_mode:
                             if byte_aligned or (self.custo.not_always_byte_aligned and is_last_child_node):
                                 consumed_size += blob_shift
+                                if last_absorption_with_collapse:
+                                    blob = blob[blob_shift:]
                                 blob_shift = 0
 
                                 # print(f'\n ### DBG NTafter_try_absorb({base_node.name})8 [UPDATE]: shift:{blob_shift},'
@@ -6324,6 +6343,10 @@ class NodeInternals_NonTerm(NodeInternals):
 
         self._clone_node_cleanup()
         self._clone_separator_cleanup()
+
+        # DEBUG_PRINT(f'[{self.name}] NT absorb() return: '
+        #             f'\nabort: {abort}, '
+        #             f'consumed_size {consumed_size}')
 
         return status, 0, consumed_size, postponed_to_send_back
 

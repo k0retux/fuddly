@@ -2144,7 +2144,9 @@ class TestNodeFeatures(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        pass
+        # fmk.run_project(name='tuto', tg_ids=0, dm_name='mydf')
+        # fmk.prj.reset_target_mappings()
+        fmk.disable_fmkdb()
 
     def setUp(self):
         pass
@@ -2783,7 +2785,7 @@ class TestNodeFeatures(unittest.TestCase):
 
         self.assertEqual(result, raw)
 
-    def test_collapse_padding(self):
+    def test_collapse_padding_01(self):
 
         padding_desc = \
             {'name': 'padding',
@@ -2947,6 +2949,115 @@ class TestNodeFeatures(unittest.TestCase):
               len(raw))
 
         self.assertEqual(result, raw)
+
+
+    @ddt.data(
+        {'byte-aligned': True, 'wrong_custo': False},
+        {'byte-aligned': False, 'wrong_custo': False},
+        {'byte-aligned': False, 'wrong_custo': True},
+    )
+    def test_collapse_padding_02(self, params):
+
+        test_desc = {
+            'name': 'test',
+            'custo_set': MH.Custo.NTerm.CollapsePadding,
+            'contents': [
+                {'name': 'timestamp',
+                 'qty': (0, 1),
+                 'custo_set': [MH.Custo.NTerm.CollapsePadding, MH.Custo.NTerm.DelayCollapsing,
+                               MH.Custo.NTerm.NotAlwaysByteAligned],
+                 'description': 'Timestamp [OPTIONAL]',
+                 'contents': [
+                     {'name': 'hours',
+                      'description': 'Timehours',
+                      'contents': BitString(min_intvalue=0, max_intvalue=23, variable_size=False),
+                      'default': 16},
+                     {'name': 'minutes',
+                      'description': 'Timeminutes',
+                      'contents': BitString(min_intvalue=0, max_intvalue=59, variable_size=False),
+                      'default': 36},
+                     {'name': 'seconds',
+                      'description': 'Timeseconds',
+                      'contents': BitString(min_intvalue=0, max_intvalue=59, variable_size=False),
+                      'default': 46},
+                 ]},
+
+                {'name': 'hdr',
+                 'description': 'ATCmessageheader',
+                 'custo_set': [MH.Custo.NTerm.CollapsePadding, MH.Custo.NTerm.DelayCollapsing,
+                               MH.Custo.NTerm.NotAlwaysByteAligned],
+                 'contents': [
+                     {'name': 'msg_id',
+                      'description': 'Msgidentificationnumber',
+                      'contents': BitString(min_intvalue=0, max_intvalue=63, variable_size=False),
+                      'default': 23},
+
+                     {'name': 'ICAOfn_len',
+                      'private': 1,  # tag
+                      'description': 'ICAOfacilityname length',
+                      'contents': BitString(fixed_nb_bits=4, min_intvalue=0, max_intvalue=15)},
+
+                     {'name': 'ICAOfacilityname',
+                      'sync_size_with': ('ICAOfn_len', -3),
+                      'private': 1,  # tag
+                      'contents': BitString(letter_bit_sz=7, min_nb_bits=3 * 7, max_nb_bits=18 * 7,
+                                            bindefault=b'AAAAAAAAA')},
+
+                     # Place holder for the padding node
+                 ]},
+            ]}
+
+        if params['byte-aligned']:
+            padding = {
+                'name': 'padding',
+                'contents': BitString(fixed_nb_bits=6, min_intvalue=0, max_intvalue=31)
+            }
+            # add a new node to test/hdr to make it byte-aligned
+            test_desc['contents'][1]['contents'].append(padding)
+
+        if params['wrong_custo']:
+            # make the custo of test/hdr wrong
+            test_desc['contents'][1]['custo_set'].remove(MH.Custo.NTerm.NotAlwaysByteAligned)
+
+        mb = NodeBuilder()
+        node = mb.create_graph_from_desc(test_desc)
+        node_abs = node.get_clone()
+
+        raw = node.to_bytes()
+        node.show()
+
+        print_byte_string(raw, hexa=True, binary=True, raw=True)
+
+        result = b'\x84\x97.\xd0`\xc1\x83\x06\x0c\x180@'
+        self.assertEqual(result, raw)
+
+        print('\n*** Absorption test ***')
+
+        abs_result = node_abs.absorb(result)
+        print(f'\n--> Absorption status: {abs_result!r}\n')
+        if params['wrong_custo']:
+            self.assertEqual(abs_result[0], AbsorbStatus.Absorbed)
+        else:
+            self.assertEqual(abs_result[0], AbsorbStatus.FullyAbsorbed)
+            raw = node_abs.to_bytes()
+            node_abs.show()
+
+            print_byte_string(raw, hexa=True, binary=True, raw=True)
+
+            self.assertEqual(result, raw)
+
+
+    def test_collapse_padding_03(self):
+
+        data = fmk.dm.get_external_atom(dm_name='mydf', data_id='bitstring')
+        bs = data.to_bytes()
+
+        data.show()
+        print_byte_string(bs, binary=True, hexa=True, raw=True)
+        node, desc_str = fmk.dm.decode(bs, atom_name='bitstring')
+        print(desc_str)
+        self.assertNotEqual(node, None)
+
 
     def test_node_search_primitive_01(self):
 

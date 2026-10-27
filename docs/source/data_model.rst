@@ -212,6 +212,12 @@ custo_set, custo_clear
     will be merged in order to remove any padding in-between. This is done
     "recursively" until any inner padding is removed.
 
+  - ``MH.Custo.NTerm.NotAlwaysByteAligned``: By default, this mode is *disabled*.
+    This mode is only relevant when ``MH.Custo.NTerm.CollapsePadding``is enabled. In such context, if enabled, it
+    allows the non-terminal node, customized this way, to contain ``BitField`` or derivative objects
+    whose the cumulative size in bits is not a multiple of 8. It allows to describe bit-oriented data model like
+    ASN.1 UPER. This customization is only relevant for absorption/decoding operations.
+
     .. note::
       To be compatible with an *absorption* operation, the non-terminal set with this
       customization should comply with the following requirements:
@@ -963,6 +969,7 @@ Below the different currently defined string types:
   a prefix and/or a suffix, without defining specific *nodes* for that (meaning you
   don't need to model that part and want to simplify your data description).
 
+.. _dm:bitfield:
 
 BitField
 --------
@@ -1005,6 +1012,10 @@ parameters:
   significant bit if this parameter is set to ``True``, otherwise next
   to the most significant bit. This operation is performed *before*
   endianness encoding.
+
+``show_padding`` [default value: **False**]
+  Change the behavior of :func:`fuddly.framework.value_types.BitField.pretty_print`.
+  If ``True``, padding of the ``BitField`` object will be displayed, if it is not byte-aligned.
 
 ``endian`` [default value: **VT.LittleEndian**]
   Endianness for *encoding* the BitField.
@@ -1108,6 +1119,83 @@ the first example. We additionally specify the parameter
              - :func:`fuddly.framework.value_types.BitField.extend_right`
              - :func:`fuddly.framework.value_types.BitField.reset_state`, :func:`fuddly.framework.value_types.BitField.rewind`
              - :func:`fuddly.framework.value_types.VT_Alt.enable_fuzz_mode` (used currently by the operator ``tTYPE``)
+
+
+BitString
+---------
+
+The type :class:`fuddly.framework.value_types.BitString` inherits from :class:`fuddly.framework.value_types.BitField`.
+It is essentially a ``BitField`` with only one subfield which may have its size variable and taking different
+initialization parameters. Depending on the provided parameters, some will be automatically filled based on a conservative
+criteria by avoiding to put additional constraints and keeping as much freedom as possible.
+
+``padding`` [default value: **0**]
+  Same parameter than :ref:`dm:bitfield` type.
+
+``lsb_padding`` [default value: **True**]
+  Same parameter than :ref:`dm:bitfield` type.
+
+``show_padding`` [default value: **False**]
+  Same parameter than :ref:`dm:bitfield` type.
+
+``endian`` [default value: **VT.LittleEndian**]
+  Same parameter than :ref:`dm:bitfield` type.
+
+``determinist`` [default value: **True**]
+  Same parameter than :ref:`dm:bitfield` type.
+
+``value_descs`` [optional, default value: **None**]
+  Same parameter than ``subfield_value_descs`` of :ref:`dm:bitfield` type.
+
+``min_intvalue`` [optional, default value: **None**]
+  Minimum integer value the ``BitString`` can have.
+
+``max_intvalue`` [optional, default value: **None**]
+  Maximum integer value the ``BitString`` can have.
+
+``intvalues`` [optional, default value: **None**]
+  Exhaustive list of integer values the ``BitString`` may have. It cannot be provided if ``binvalues`` is provided.
+
+``variable_size`` [optional, default value: **None**]
+  If ``True`` the size of the ``BitString`` is variable. The need for this parameter depends on the other parameters provided.
+
+``delta_minmax_mode`` [default value: **False**]
+  When set to True, minimal encoding will be done regarding the values that needs to be represented.
+  It is relevant when the minimal integer values is not 0, and the set of the described integer values is continuous.
+  In this case, a shift to 0 is performed by subtracting the minimum integer value. It allows to minimize the
+  the attribute ``max_nb_bits`` when this one is automatically computed.
+  This is basically what is performed by ASN.1 UPER in such context.
+
+``binvalues`` [optional, default value: **None**]
+  Exhaustive list of binary values the ``BitString`` may have. It cannot be provided if ``intvalues`` is provided.
+  If this parameter is provided, the parameter ``letter_bit_sz`` shall also be provided.
+
+``letter_bit_sz`` [optional, default value: **None**]
+  When provided, it has to be the size in bits used to represent a letter in the ``BitString``. Especially relevant
+  in conjunction with ``binvalues`` or ``bindefault``. For instance, to represent an ASN.1 ``IA5String`` in UPER
+  the ``letter_bit_sz`` has to be set to 7.
+
+``bindefault`` [optional, default value: **None**]
+  If not None, it should be the default byte string that will be returned by default
+  when :meth:`fuddly.framework.value_types.BitField.get_value()` is first called
+
+``intdefault`` [optional, default value: **None**]
+  If not None, it should be the default integer value that will be used by default
+  when :meth:`fuddly.framework.value_types.BitField.get_value()` is first called
+
+``fixed_nb_bits`` [optional, default value: **None**]
+  When provided, it fixes the size in bits of the ``BitString``.
+  The ``variable_size`` attribute is thus automatically set to ``False``.
+
+``min_nb_bits`` [optional, default value: **None**]
+  Provided the minimum number of bits the ``BitString`` may have.
+
+``max_nb_bits`` [optional, default value: **None**]
+  Provided the maximum number of bits the ``BitString`` may have.
+
+.. note::
+
+  ``BitString`` nodes are compatible with the ``sync_size_with`` keyword. Refer to :ref:`dm:node_prop_keywords`.
 
 
 Helpers
@@ -2177,3 +2265,43 @@ exception will be raised.
    name in the data description). Refer to ``namespace`` keyword for more details, and to the ``csp_ns`` node
    description in the data model ``mydf`` (in ``tuto/dm.py``).
 
+
+How to Describe a TLV Structure
+-------------------------------
+
+**TBD**
+
+example provided in tuto.py -- tlv_rec* descriptors
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 20
+
+    tlv_rec0b_desc = {
+        'name': 'rec0b',
+        'contents': [
+            {'name': 'type', 'contents': String(values=['SA','SB','TLV']),
+             'default': 'TLV'},
+            {'name': 'length', 'contents': LEN(vt=INT_str),
+             # 'mutable': False,
+             'node_args': 'value'},
+            {'name': 'value',
+             'custo_clear': MH.Custo.NTerm.MutableClone,
+             'custo_set': MH.Custo.NTerm.CycleClone,
+             'contents': [
+                 {'name': 'str_a',
+                  'exists_if': (RawCondition('SA'), 'type'),
+                  'contents': String(values=['my_string'])},
+                 {'name': 'str_b',
+                  'exists_if': (RawCondition('SB'), 'type'),
+                  'contents': String(values=['your_string'])},
+                 {'name': 'tlv_a',
+                  'qty': 3,
+                  'exists_if': (RawCondition('TLV'), 'type'),
+                  'contents': MH.RecursiveLink('rec0b', recursion_threshold=5),
+                  'default_node': {'name': 'def_node_a',
+                                   'contents': String(values=['SA7our_str',
+                                                              'SA11another_str',
+                                                              'SA9their_str'])}},
+             ]},
+        ]}

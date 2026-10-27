@@ -1349,6 +1349,61 @@ class MyDF_DataModel(DataModel):
         }
 
 
+        bitstring_desc = {
+            'name': 'bitstring',
+            'custo_set': MH.Custo.NTerm.CollapsePadding,
+            'contents': [
+                {'name': 'timestamp',
+                 'qty': (0, 1),
+                 'custo_set': [MH.Custo.NTerm.CollapsePadding, MH.Custo.NTerm.DelayCollapsing,
+                               MH.Custo.NTerm.NotAlwaysByteAligned],
+                 'description': 'Timestamp [OPTIONAL]',
+                 'contents': [
+                     {'name': 'hours',
+                      'description': 'Timehours',
+                      'contents': BitString(intvalues=[4,8,16,23], variable_size=False,
+                                            delta_minmax_mode=True,
+                                            value_descs={16: 'sixteen hour'}),
+                      'default': 16},
+                     {'name': 'minutes',
+                      'description': 'Timeminutes',
+                      'contents': BitString(min_intvalue=0, max_intvalue=59, variable_size=False),
+                      'default': 36},
+                     {'name': 'seconds',
+                      'description': 'Timeseconds',
+                      'contents': BitString(min_intvalue=0, max_intvalue=59, variable_size=False),
+                      'default': 46},
+                 ]},
+
+                {'name': 'hdr',
+                 'description': 'ATCmessageheader',
+                 'custo_set': [MH.Custo.NTerm.CollapsePadding, MH.Custo.NTerm.DelayCollapsing,
+                               MH.Custo.NTerm.NotAlwaysByteAligned],
+                 'contents': [
+                     {'name': 'msg_id',
+                      'description': 'Msgidentificationnumber',
+                      'contents': BitString(min_intvalue=20, max_intvalue=60, variable_size=False,
+                                            delta_minmax_mode=True,
+                                            value_descs={23: 'documented ID'}),
+                      'default': 23},
+
+                     {'name': 'ICAOfn_len',
+                      'private': 1,  # tag
+                      'description': 'ICAOfacilityname length',
+                      'contents': BitString(fixed_nb_bits=4, min_intvalue=0, max_intvalue=15)},
+
+                     {'name': 'ICAOfacilityname',
+                      'sync_size_with': ('ICAOfn_len', -3),
+                      'private': 1,  # tag
+                      'contents': BitString(letter_bit_sz=7, min_nb_bits=3 * 7, max_nb_bits=18 * 7,
+                                            bindefault=b'AAAAAAAAA')},
+                     # {'name': 'padding',
+                     #  'contents': BitString(fixed_nb_bits=6, min_intvalue=0, max_intvalue=31)},
+
+                 ]},
+            ]}
+
+
         self.register(test_node_desc, abstest_desc, abstest2_desc,
                       separator_desc, separator_2_desc, separator_3_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
@@ -1361,7 +1416,7 @@ class MyDF_DataModel(DataModel):
                       shape_type_1_desc, shape_type_2_desc, ns_desc, nested_nt_desc, def_qty_desc,
                       tlv_rec0_desc, tlv_rec0b_desc, tlv_rec1_desc, tlv_rec2_desc, tlv_rec3_desc,
                       tlv_rec4_desc, recbig_desc,
-                      optional_desc, fragment_desc)
+                      optional_desc, fragment_desc, bitstring_desc)
 
 
     def validation_tests(self):

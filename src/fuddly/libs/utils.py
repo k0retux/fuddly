@@ -28,6 +28,11 @@ import re
 import inspect
 import uuid
 
+from rich.console import Console
+console = Console(record=True, width=200)
+rprint_exception = console.print_exception
+rprint = console.print
+
 from fuddly.framework.global_resources import config_folder
 from fuddly.framework.config import config
 import shlex
@@ -424,3 +429,28 @@ def retrieve_app_handler(filename):
 def get_caller_object(stack_frame=2):
     caller_frame_record = inspect.stack()[stack_frame]
     return caller_frame_record.frame.f_locals["self"]
+
+
+def format_byte_string(byte_string: bytes,
+                      hexa: bool = True, binary: bool = False, raw = False,
+                      prefix: str = '', delim: str = ''):
+    raw = f'\n{byte_string}' if raw else ''
+    hs = '\n' if hexa else ''
+    bs = '\n' if binary else ''
+    tag_s1, tag_s2 = '[blue]', '[yellow]'
+    tag_e = '[/]'
+    for idx, b in enumerate(byte_string):
+        tag_s = tag_s1 if idx % 2 == 0 else tag_s2
+        if hexa:
+            hs += f'{tag_s}{b:08x}{tag_e}{delim}'
+        if binary:
+            bs += f'{tag_s}{b:08b}{tag_e}{delim}'
+
+    return prefix + raw + hs + bs
+
+def print_byte_string(byte_string: bytes,
+                      hexa: bool = True, binary: bool = False, raw = False,
+                      prefix: str = '', delim: str = ''):
+
+    rprint(format_byte_string(byte_string=byte_string, hexa=hexa, binary=binary, raw=raw,
+                              prefix=prefix, delim=delim))

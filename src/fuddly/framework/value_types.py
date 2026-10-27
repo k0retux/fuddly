@@ -3388,6 +3388,7 @@ class BitField(VT_Alt):
                     extrems[1] = builtins.max(extrems[1], val)
             else:
                 if constraints[AbsCsts.Contents] and val not in values:
+                    # print(f'\nDBG {values} {val}')
                     raise ValueError(
                         "Value for subfield number {:d} does not match the constraints!".format(
                             i + 1
@@ -3745,7 +3746,7 @@ class BitString(BitField):
 
     def __init__(
             self, min_intvalue=None, max_intvalue=None, intvalues=None,
-            variable_size: bool | None = None, delta_minmax_mode: bool | None = None,
+            variable_size: bool | None = None, delta_minmax_mode: bool = False,
             binvalues: list[bytes] | None = None, letter_bit_sz: int | None = None,
             bindefault = None, intdefault = None,
             fixed_nb_bits: int | None = None, min_nb_bits: int | None = None, max_nb_bits: int | None = None,
@@ -3771,13 +3772,6 @@ class BitString(BitField):
             intval_list = []
             default_found = False
             for bval in bval_list:
-                # int_val = 0
-                # shift = 0
-                # if endian == VT.LittleEndian:
-                #     bval = bval[::-1]
-                # for b in bval:
-                #     int_val += b << shift
-                #     shift += letter_bit_sz
                 int_val = convert_to_intval(bval)
                 intval_list.append(int_val)
 
@@ -3806,6 +3800,8 @@ class BitString(BitField):
 
         if (fixed_nb_bits is not None and (min_nb_bits is not None or max_nb_bits is not None)):
             raise DataModelDefinitionError
+
+        self.sorted_intvalues = None
 
         if fixed_nb_bits is not None:
             assert variable_size is None or variable_size == False
@@ -3908,15 +3904,29 @@ class BitString(BitField):
                 else:
                     raise DataModelDefinitionError
 
-                if self.delta_minmax_mode and (
-                        (self.intvalues is not None and len(self.intvalues) > 1) or self.intvalues is None
-                ):
-                    # TODO: update values, etc. with "- min"
-                    delta = abs(self.max_intvalue - self.min_intvalue)
-                    self.fixed_nb_bits = self.min_nb_bits = self.max_nb_bits = self.nb_bits_for(delta)
-                    if self.intdefault is not None:
-                        assert self.min_intvalue is not None
-                        self.intdefault -= self.min_intvalue
+                if self.delta_minmax_mode:
+                    if self.intvalues is not None:
+                        group_sz = len(self.intvalues)
+                        nb_bits = math.ceil(math.log2(group_sz))
+                        self.fixed_nb_bits = self.min_nb_bits = self.max_nb_bits = nb_bits
+                        self.min_intvalue = 0
+                        self.max_intvalue = group_sz-1
+
+                        self.sorted_intvalues = sorted(self.intvalues)
+                        if self.intdefault is not None:
+                            self.intdefault = self.sorted_intvalues.index(self.intdefault)
+                        if value_descs is not None:
+                            new_val_descs = {}
+                            for idx, val in enumerate(self.sorted_intvalues):
+                                new_val_descs[idx] = value_descs.get(val)
+                            value_descs = new_val_descs
+
+                        self.intvalues = list(range(group_sz))
+                    else:
+                        self.fixed_nb_bits = self.min_nb_bits = self.max_nb_bits = self.nb_bits_for(self.max_intvalue)
+                        if self.intdefault is not None:
+                            assert self.min_intvalue is not None
+                            self.intdefault -= self.min_intvalue
 
                 else:
                     self.fixed_nb_bits = self.min_nb_bits = self.max_nb_bits = self.nb_bits_for(self.max_intvalue)
@@ -3933,6 +3943,12 @@ class BitString(BitField):
         else:
             if self.delta_minmax_mode:
                 subfield_val_extremums = [[0, self.max_intvalue-self.min_intvalue]]
+                if value_descs is not None:
+                    new_val_descs = {}
+                    for i in range(self.max_intvalue-self.min_intvalue):
+                        new_val_descs[i] = value_descs.get(i+self.min_intvalue)
+                    value_descs = new_val_descs
+
             else:
                 subfield_val_extremums = [[self.min_intvalue, self.max_intvalue]]
 
@@ -4059,6 +4075,12 @@ class BitString(BitField):
         self._update_size_attributes(size=size, force=False)
 
     def set_default_value(self, value):
+        if self.delta_minmax_mode:
+            if self.sorted_intvalues is not None:
+                value = self.sorted_intvalues.index(value)
+            else:
+                value -= self.min_intvalue
+
         dv = [value]
         self._check_constraints(dv)
         self.subfield_defaults = dv
