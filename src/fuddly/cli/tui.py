@@ -289,7 +289,7 @@ fuddly_tui_tcss = """
 """
 
 new_tcss_selectors = [
-    '#error_selector'
+    '#main_splitter'
 ]
 tcss_fname = os.path.join(config_folder, FUDDLY_TUI_FNAME)
 write_tcss = False

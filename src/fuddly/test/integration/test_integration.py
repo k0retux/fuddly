@@ -3049,6 +3049,8 @@ class TestNodeFeatures(unittest.TestCase):
 
     def test_collapse_padding_03(self):
 
+        bs_ref = b'\xa4\xb86\x83\x06\x0c\x180`\xc1\x82'
+
         data = fmk.dm.get_external_atom(dm_name='mydf', data_id='bitstring')
         bs = data.to_bytes()
 
@@ -3056,8 +3058,27 @@ class TestNodeFeatures(unittest.TestCase):
         print_byte_string(bs, binary=True, hexa=True, raw=True)
         node, desc_str = fmk.dm.decode(bs, atom_name='bitstring')
         print(desc_str)
-        self.assertNotEqual(node, None)
 
+        self.assertEqual(bs, bs_ref)
+        self.assertNotEqual(node, None)
+        self.assertEqual(node.to_bytes(), bs_ref)
+
+
+    def test_collapse_padding_04(self):
+
+        bs_ref = b'G\x00\x01{'
+
+        data = fmk.dm.get_external_atom(dm_name='mydf', data_id='bf_nested')
+        bs = data.to_bytes()
+
+        data.show()
+        print_byte_string(bs, binary=True, hexa=True, raw=True)
+        node, desc_str = fmk.dm.decode(bs, atom_name='bf_nested')
+        print(desc_str)
+
+        self.assertEqual(bs, bs_ref)
+        self.assertNotEqual(node, None)
+        self.assertEqual(node.to_bytes(), bs_ref)
 
     def test_node_search_primitive_01(self):
 

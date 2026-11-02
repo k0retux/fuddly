@@ -1403,6 +1403,51 @@ class MyDF_DataModel(DataModel):
                  ]},
             ]}
 
+        bf_nested_desc = {
+            'name': 'bf_nested',
+            'custo_set': MH.Custo.NTerm.CollapsePadding,
+            'contents': [
+                {'name': 'header',
+                 'contents': BitField(subfield_sizes=[3,1], endian=VT.BigEndian,
+                                      subfield_val_extremums=[[0,7], [0,1]],
+                                      defaults=[0b100,0],
+                                      subfield_descs=['wtype', 'parity'],
+                                      subfield_value_descs={0:{0b100: 'proto'}} )},
+                {'name': 'protoID',
+                 'exists_if': (BitFieldCondition(sf=0, val=[0b100]), 'header'),
+                 'contents': BitField(subfield_sizes=[4], endian=VT.BigEndian,
+                                      subfield_val_extremums=[[1,9]],
+                                      defaults=[7],
+                                      subfield_value_descs={0:{7:'nested'}} ) },
+
+                {'name': 'wt_ext',
+                 'exists_if': (BitFieldCondition(sf=0, val=[0b001]), 'header'),
+                 'contents': BitField(subfield_sizes=[4], endian=VT.BigEndian,
+                                      subfield_val_extremums =[[8,11]]) },
+
+                {'name': 'nested',
+                 'exists_if/and': [(BitFieldCondition(sf=0, val=[0b100]), 'header'),
+                                   (BitFieldCondition(sf=0, val=[7,8]), 'protoID')],
+                 'contents': [
+                     {'name': 'invert_addr_wrapper',
+                      'exists_if': (BitFieldCondition(sf=0, val=[7]), 'protoID'),
+                      'encoder': BitInverter_Enc(),
+                      'contents': [
+                          {'name': 'addr',
+                           'contents': UINT8()}
+                      ]},
+                     {'name': 'reserved',
+                      'exists_if': (BitFieldCondition(sf=0, val=[8]), 'protoID'),
+                      'contents': UINT8(values=[0])},
+                     {'name': 'version',
+                      'contents': BitField(subfield_sizes=[4,4], endian=VT.BigEndian,
+                                           subfield_values=[[0,1,2,3],[0]],
+                                           defaults=[1, 0]) }
+                 ]},
+
+                {'name': 'SAL',
+                 'contents': UINT8(min=0, max=255, default=123)}
+            ]}
 
         self.register(test_node_desc, abstest_desc, abstest2_desc,
                       separator_desc, separator_2_desc, separator_3_desc,
@@ -1416,7 +1461,7 @@ class MyDF_DataModel(DataModel):
                       shape_type_1_desc, shape_type_2_desc, ns_desc, nested_nt_desc, def_qty_desc,
                       tlv_rec0_desc, tlv_rec0b_desc, tlv_rec1_desc, tlv_rec2_desc, tlv_rec3_desc,
                       tlv_rec4_desc, recbig_desc,
-                      optional_desc, fragment_desc, bitstring_desc)
+                      optional_desc, fragment_desc, bitstring_desc, bf_nested_desc)
 
 
     def validation_tests(self):

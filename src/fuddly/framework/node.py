@@ -5672,15 +5672,21 @@ class NodeInternals_NonTerm(NodeInternals):
                             else:
                                 byte_aligned = (consumed_bits + vt.bit_length) % 8 == 0
 
-                        # if isinstance(vt, fvt.BitField) and self.custo.collapse_padding_mode:
-                        #     DEBUG_PRINT(f'[{id(self)}] ABS_0 [{base_node.name}]: '
-                        #                 f'padding_size: {vt.padding_size}, '
-                        #                 f'byte_aligned: {byte_aligned}, '
-                        #                 f'\nconsumed_bits: {consumed_bits}, '
-                        #                 f'consumed_size {consumed_size}, '
-                        #                 f'partial_blob_shift: {blob_shift}, '
-                        #                 f'\nblob_update_pending: {blob_update_pending}, '
-                        #                 f'blob: {blob}')
+                            DEBUG_PRINT(f'\n[{id(self):x}]#collapse ABS_0 [{base_node.name}]: '
+                                        f'\n padding_size: {vt.padding_size}, '
+                                        f'byte_aligned: {byte_aligned}, '
+                                        f'\n consumed_bits: {consumed_bits}, '
+                                        f'consumed_size {consumed_size}, '
+                                        f'partial_blob_shift: {blob_shift}, '
+                                        f'\n blob_update_pending: {blob_update_pending}, '
+                                        f'blob: {blob}',
+                                        level=1)
+
+                        else:
+                            DEBUG_PRINT(f'\n[{id(self):x}] ABS_0 [{base_node.name}]: '
+                                        f'\n consumed_size {consumed_size}, '
+                                        f'\n blob: {blob}',
+                                        level=1)
 
                         if (self.custo.collapse_padding_mode and isinstance(vt, fvt.BitField)
                                 and (not byte_aligned or consumed_bits != 0)):
@@ -5762,15 +5768,15 @@ class NodeInternals_NonTerm(NodeInternals):
                                             "{:d}s".format(nb_bytes), bytes(l)
                                         )
 
-                                    # DEBUG_PRINT(f'\nABS[collapse]#2 [{base_node.name}]: '
-                                    #             f'\nbit_length: {vt.bit_length}, '
-                                    #             f'consumed_bits: {consumed_bits}, '
-                                    #             f'padding_size: {vt.padding_size}, '
-                                    #             f'byte_aligned: {byte_aligned}, '
-                                    #             f'consumed_size {consumed_size}, '
-                                    #             f'\npartial_blob_shift: {blob_shift}, '
-                                    #             f'blob_update_pending: {blob_update_pending}, '
-                                    #             f'\npartial_blob: {partial_blob}', level=2)
+                                    DEBUG_PRINT(f'[{id(self):x}]#collapse ABS_2.1.1 (BF before try_absorb) [{base_node.name}]: '
+                                                f'\nbit_length: {vt.bit_length}, '
+                                                f'consumed_bits: {consumed_bits}, '
+                                                f'padding_size: {vt.padding_size}, '
+                                                f'byte_aligned: {byte_aligned}, '
+                                                f'consumed_size {consumed_size}, '
+                                                f'\npartial_blob_shift: {blob_shift}, '
+                                                f'blob_update_pending: {blob_update_pending}, '
+                                                f'\npartial_blob: {partial_blob}', level=3)
 
                                 else:
                                     partial_blob = blob[blob_shift:last_idx]
@@ -5790,28 +5796,29 @@ class NodeInternals_NonTerm(NodeInternals):
                                     else:
                                         byte_aligned = True
 
-                                    # DEBUG_PRINT(f'\nABS[collapse]#3 [{base_node.name}]: '
-                                    #             f'\nbit_length: {vt.bit_length}, '
-                                    #             f'padding_size: {vt.padding_size}, '
-                                    #             f'curr byte_aligned: {byte_aligned}, '
-                                    #             f'curr consumed_bits: {consumed_bits}, '
-                                    #             f'curr consumed_size {consumed_size}, '
-                                    #             f'\ncurr partial_blob_shift: {blob_shift}, '
-                                    #             f'curr blob_update_pending: {blob_update_pending}, '
-                                    #             f'\nblob: {blob}', level=2)
+                                    DEBUG_PRINT(f'[{id(self):x}]#collapse ABS_2.1.2 (BF before try_absorb) [{base_node.name}]: '
+                                                f'\nbit_length: {vt.bit_length}, '
+                                                f'padding_size: {vt.padding_size}, '
+                                                f'curr byte_aligned: {byte_aligned}, '
+                                                f'curr consumed_bits: {consumed_bits}, '
+                                                f'curr consumed_size {consumed_size}, '
+                                                f'\ncurr partial_blob_shift: {blob_shift}, '
+                                                f'curr blob_update_pending: {blob_update_pending}, '
+                                                f'\nblob: {blob}', level=3)
 
 
                             else:
                                 partial_blob = blob[blob_shift : blob_shift + bytelen]
                                 byte_aligned = True
-                                # DEBUG_PRINT(f'[{id(self)}] ABS_2 [{base_node.name}]: '
-                                #             f'padding_size: {vt.padding_size}, '
-                                #             f'consumed_bits: {consumed_bits}, '
-                                #             f'consumed_size {consumed_size}, '
-                                #             f'bytelen: {bytelen}\n'
-                                #             f'partial_blob_shift: {blob_shift}, '
-                                #             f'blob: {blob}, '
-                                #             f'partial_blob: {partial_blob}')
+                                DEBUG_PRINT(f'[{id(self):x}]#collapse ABS_2.2 (BF before try_absorb) [{base_node.name}]: '
+                                            f'padding_size: {vt.padding_size}, '
+                                            f'consumed_bits: {consumed_bits}, '
+                                            f'consumed_size {consumed_size}, '
+                                            f'bytelen: {bytelen}\n'
+                                            f'partial_blob_shift: {blob_shift}, '
+                                            f'blob: {blob}, '
+                                            f'partial_blob: {partial_blob}',
+                                            level=2)
 
 
                             (abort,
@@ -5828,10 +5835,11 @@ class NodeInternals_NonTerm(NodeInternals):
                                 abort = True
                                 consumed_bits = 0
                                 byte_aligned = True
-                                # DEBUG_PRINT(f'[{id(self)}] ABS_3.0 [{base_node.name}]: '
-                                #             f'padding_size: {vt.padding_size}, '
-                                #             f'consumed_bits: {consumed_bits}, '
-                                #             f'consumed_size {consumed_size}')
+                                DEBUG_PRINT(f'[{id(self):x}]#collapse ABS_3.1 (BF after try_absorb) [{base_node.name}]: '
+                                            f'padding_size: {vt.padding_size}, '
+                                            f'consumed_bits: {consumed_bits}, '
+                                            f'consumed_size {consumed_size}',
+                                            level=2)
                                 break
 
                             elif abort is not None and not abort:
@@ -5839,14 +5847,15 @@ class NodeInternals_NonTerm(NodeInternals):
                                 new_consumed_bits = 0 if consumed_bits == 8 else consumed_bits % 8
                                 byte_aligned = new_consumed_bits == 0
 
-                                # DEBUG_PRINT(f'[{id(self)}] ABS_3.1 [{base_node.name}]: '
+                                # DEBUG_PRINT(f'[{id(self):x}] ABS_3.2.0 [{base_node.name}]: '
                                 #             f'padding_size: {vt.padding_size}, '
                                 #             f'bit_length: {vt.bit_length}, '
                                 #             f'\nlen_bits(blob): {blob_sz*8}, '
                                 #             f'consumed_bits: {consumed_bits}, '
                                 #             f'new_consumed_bits: {new_consumed_bits}, '
                                 #             f'\npartial_blob_shift: {blob_shift}, '
-                                #             f'consumed_size {consumed_size}')
+                                #             f'consumed_size {consumed_size}',
+                                #             level=3)
 
                                 remaining_bits = (blob_sz - blob_shift) * 8 - new_consumed_bits
                                 if (self.custo.not_always_byte_aligned
@@ -5889,31 +5898,29 @@ class NodeInternals_NonTerm(NodeInternals):
                                         consumed_bits,
                                         byte_aligned,
                                     )
-                                    # print(f'\nDBG last_child [{base_node.name}]: register in NT:{self.name}'
-                                    #       f'\nconsumed_bits:{consumed_bits}, aligned:{byte_aligned}')
 
-                                # DEBUG_PRINT(f'[{id(self)}] ABS_3.2 [{base_node.name}]: '
-                                #             f'padding_size: {vt.padding_size}, '
-                                #             f'consumed_bits: {consumed_bits}, '
-                                #             f'partial_blob_shift: {blob_shift}, '
-                                #             f'consumed_size {consumed_size}, '
-                                #             f'blob_update_pending: {blob_update_pending}, '
-                                #             f'blob: {blob}, '
-                                #             f'partial_blob: {partial_blob}')
+                                DEBUG_PRINT(f'[{id(self):x}]#collapse ABS_3.2 (BF after try_absorb) [{base_node.name}]: '
+                                            f'padding_size: {vt.padding_size}, '
+                                            f'consumed_bits: {consumed_bits}, '
+                                            f'partial_blob_shift: {blob_shift}, '
+                                            f'consumed_size {consumed_size}, '
+                                            f'blob_update_pending: {blob_update_pending}, '
+                                            f'blob: {blob}, '
+                                            f'partial_blob: {partial_blob}',
+                                            level=2)
 
                             else:
-                                pass
-                                # DEBUG_PRINT(f'[{id(self)}] ABS_4 [{base_node.name}]: '
-                                #             f'padding_size: {vt.padding_size}, '
-                                #             f'consumed_bits: {consumed_bits}, '
-                                #             f'consumed_size {consumed_size}, '
-                                #             f'partial_blob_shift: {blob_shift}, '
-                                #             f'blob_update_pending: {blob_update_pending}, '
-                                #             f'blob: {blob}, '
-                                #             f'partial_blob: {partial_blob}')
+                                # pass
+                                DEBUG_PRINT(f'[{id(self)}]#collapse ABS_3.3 (BF after try_absorb) [{base_node.name}]: '
+                                            f'padding_size: {vt.padding_size}, '
+                                            f'consumed_bits: {consumed_bits}, '
+                                            f'consumed_size {consumed_size}, '
+                                            f'partial_blob_shift: {blob_shift}, '
+                                            f'blob_update_pending: {blob_update_pending}, '
+                                            f'blob: {blob}, '
+                                            f'partial_blob: {partial_blob}',
+                                            level=2)
 
-                            # print(f'\n ### DBG NTafter_try_absorb({base_node.name})5: partial_blob:{partial_blob},'
-                            #       f'\nshift:{blob_shift}, cons_b:{consumed_bits}, cons_sz:{consumed_size}, byte_aligned: {byte_aligned}')
 
                         elif (base_node.is_attr_set(NodeInternals.Abs_Postpone)
                               or (idx < len(sublist) - 1
@@ -5948,12 +5955,13 @@ class NodeInternals_NonTerm(NodeInternals):
                                     consumed_bits = 0
                                     byte_aligned = True
                                     blob_shift = 0
-                                    # DEBUG_PRINT(f'[{id(self)}] ABS_5.1 [{base_node.name}]: '
-                                    #             f'consumed_bits: {consumed_bits}, '
-                                    #             f'consumed_size {consumed_size}, '
-                                    #             f'partial_blob_shift: {blob_shift}, '
-                                    #             f'blob_update_pending: {blob_update_pending}, '
-                                    #             f'blob: {blob}')
+                                    DEBUG_PRINT(f'[{id(self):x}]#collapse ABS_5.1 (NT before_absorb) [{base_node.name}]: '
+                                                f'consumed_bits: {consumed_bits}, '
+                                                f'consumed_size {consumed_size}, '
+                                                f'partial_blob_shift: {blob_shift}, '
+                                                f'blob_update_pending: {blob_update_pending}, '
+                                                f'blob: {blob}',
+                                                level=2)
                                 elif not aligned:
                                     bnode_to_be_cleaned = True
                                     conf = base_node._check_conf(conf)
@@ -5961,20 +5969,20 @@ class NodeInternals_NonTerm(NodeInternals):
                                         consumed_bits,
                                         byte_aligned,
                                     )
-                                    # DEBUG_PRINT(f'[{id(self)}] ABS_5.2 [{base_node.name}]: '
-                                    #             f'consumed_bits: {consumed_bits}, '
-                                    #             f'consumed_size {consumed_size}, '
-                                    #             f'partial_blob_shift: {blob_shift}, '
-                                    #             f'blob_update_pending: {blob_update_pending}'
-                                    #             )
+                                    DEBUG_PRINT(f'[{id(self):x}]#collapse ABS_5.2 (NT before_absorb) [{base_node.name}]: '
+                                                f'consumed_bits: {consumed_bits}, '
+                                                f'consumed_size {consumed_size}, '
+                                                f'partial_blob_shift: {blob_shift}, '
+                                                f'blob_update_pending: {blob_update_pending}',
+                                                level=2)
                                 else:
                                     pass
-                                    # DEBUG_PRINT(f'[{id(self)}] ABS_5.3 [{base_node.name}] from NT node "{self.name}"'
-                                    #             f'\nconsumed_bits: {consumed_bits}, '
-                                    #             f'consumed_size {consumed_size}, '
-                                    #             f'partial_blob_shift: {blob_shift}, '
-                                    #             f'blob_update_pending: {blob_update_pending}'
-                                    #             )
+                                    DEBUG_PRINT(f'[{id(self):x}]#collapse ABS_5.3 (NT before_absorb) [{base_node.name}] from NT node "{self.name}"'
+                                                f'\nconsumed_bits: {consumed_bits}, '
+                                                f'consumed_size {consumed_size}, '
+                                                f'partial_blob_shift: {blob_shift}, '
+                                                f'blob_update_pending: {blob_update_pending}',
+                                                level=2)
 
                             # pending_upper_postpone = pending_postpone_desc
                             (abort,
@@ -5987,10 +5995,15 @@ class NodeInternals_NonTerm(NodeInternals):
                                                       postponed_node_desc,
                                                       pending_upper_postpone=pending_postpone_desc)
 
-                            if hasattr(base_node, "_private_collapse_mode"):
-                                consumed_bits, byte_aligned = base_node._private_collapse_mode
+                            if hasattr(base_node.cc, "_private_collapse_mode"):
+                                bnode_to_be_cleaned = True
+                                consumed_bits, byte_aligned = base_node.cc._private_collapse_mode
+                                # DEBUG_PRINT(f'[{id(self)}] ABS_6.0 from [{base_node.name}._private_collapse_mode]: '
+                                #             f'byte_aligned: {byte_aligned}, '
+                                #             f'consumed_bits: {consumed_bits}, ')
 
-                            # DEBUG_PRINT(f'[{id(self)}] ABS_6 [{base_node.name}]: '
+
+                            # DEBUG_PRINT(f'[{id(self)}] ABS_6.1 [{base_node.name}]: '
                             #             f'consumed_bits: {consumed_bits}, '
                             #             f'consumed_size {consumed_size}, '
                             #             f'partial_blob_shift: {blob_shift}, '
@@ -6010,25 +6023,32 @@ class NodeInternals_NonTerm(NodeInternals):
                                 #             f'blob_update_pending: {blob_update_pending}, '
                                 #             f'consumed_bits: {consumed_bits}, ')
                                 bnode_to_be_cleaned = False
+                                conf = base_node._check_conf(conf)
                                 del base_node.c[conf]._private_collapse_mode
 
+
+                        DEBUG_PRINT(f'[{id(self):x}] ABS_8 (NT after try_absorb) ({base_node.name}):'
+                                    f'\n abort:{abort},'
+                                    f'\n shift:{blob_shift}, cons_b:{consumed_bits}, cons_sz:{consumed_size},'
+                                    f'byte_aligned: {byte_aligned}',
+                                    level=1)
 
                         # In this case max_node is 0
                         if abort is None:
                             continue
 
-                        # print(f'\n ### DBG NTafter_try_absorb({base_node.name})7: shift:{blob_shift},'
-                        #       f'cons_b:{consumed_bits}, cons_sz:{consumed_size}, byte_aligned: {byte_aligned}')
-
                         if isinstance(vt, fvt.BitField) and self.custo.collapse_padding_mode:
                             if byte_aligned or (self.custo.not_always_byte_aligned and is_last_child_node):
                                 consumed_size += blob_shift
                                 if last_absorption_with_collapse:
+                                    blob_update_pending = False
                                     blob = blob[blob_shift:]
                                 blob_shift = 0
 
-                                # print(f'\n ### DBG NTafter_try_absorb({base_node.name})8 [UPDATE]: shift:{blob_shift},'
-                                #       f'cons_b:{consumed_bits}, cons_sz:{consumed_size}, byte_aligned: {byte_aligned}')
+                                DEBUG_PRINT(f'[{id(self):x}]#collapse ABS_8.1 NT_after_try_absorb({base_node.name}) [UPDATE]:'
+                                            f'\n shift:{blob_shift},'
+                                            f'\n cons_b:{consumed_bits}, cons_sz:{consumed_size}, byte_aligned: {byte_aligned}',
+                                            level=2)
 
                         # if _try_absorption_with() return a
                         # tuple, then the postponed node is
