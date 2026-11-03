@@ -311,7 +311,7 @@ class DataModel(object):
         if isinstance(atom, (Node, dict)):
             return self.node_backend
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f'{atom} is neither a Node nor a dict')
 
     def __str__(self):
         return self.name if self.name is not None else 'Unnamed'

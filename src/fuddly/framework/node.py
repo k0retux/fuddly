@@ -153,6 +153,7 @@ class SyncScope(Enum):
     Existence = 10
     Inexistence = 11
     Size = 20
+    Shape = 25
 
 
 class SyncObj(object):
@@ -227,6 +228,35 @@ class SyncQtyFromObj(SyncObj):
     @property
     def qty(self):
         return max(0, self._node.get_raw_value() + self._base_qty)
+
+
+class SyncShapeObj(SyncObj):
+    def __init__(self, node, shape_id_shift=0):
+        assert node.is_typed_value()
+        self._node = node
+        self._shape_id_shift = shape_id_shift
+
+    def get_node_containers(self):
+        return self._node
+
+    def put_node_containers(self, new_containers):
+        self._node = new_containers
+
+    def _sync_nodes_specific(self, src_nodeinternals: NodeInternals):
+        if isinstance(src_nodeinternals, NodeInternals_NonTerm):
+            chosen_id = src_nodeinternals.current_shape_idx
+            # we shift the value following the
+            chosen_id += self._shape_id_shift
+
+            self._node.update_raw_value(chosen_id)
+
+            # print(f'\nDBG SyncObj: {self._node.name}, chosen_id:{chosen_id}')
+        else:
+            raise DataModelDefinitionError(f'node "{src_nodeinternals}" shall be a Non Terminal Node')
+
+    @property
+    def shape_id_for_absorption(self):
+        return max(0, self._node.get_raw_value() - self._shape_id_shift)
 
 
 class SyncSizeObj(SyncObj):
@@ -3860,6 +3890,20 @@ class NodeInternals_NonTerm(NodeInternals):
             return current_comp, current_idx
 
     @staticmethod
+    def _get_component_by_id(comp_list, comp_id: int):
+        current_comp = []
+        current_idx = None
+
+        for idx, weight, comp in split_verbose_with(
+            lambda x: isinstance(x, int), comp_list
+        ):
+            if idx // 2 == comp_id:
+                current_idx = idx
+                current_comp = comp[0]
+
+        return current_comp, current_idx
+
+    @staticmethod
     def _get_next_random_component(comp_list, excluded_idx, seed=None):
         total_weight = 0
         for idx, weight, comp in split_verbose_with(
@@ -4154,6 +4198,28 @@ class NodeInternals_NonTerm(NodeInternals):
     def _uninitialized_scheme_cases(self):
         return (self.exhausted_pick_cases == -1 and self.exhausted_unordered_cases == -1)
 
+    @property
+    def current_shape_idx(self):
+        # print(f'\n {self.name}, excluded_ids:{self.excluded_components}')
+
+        # the last excluded component are the one which has been selected when
+        # compute_next_shape() is called
+        sh_idx = self.excluded_components[-1]
+
+        # IDs are always even and starts at 0. Indeed, when iterating with:
+        #    "for idx, weight, component in split_verbose_with(
+        #         lambda x: isinstance(x, int), self.subnodes_order
+        #     )"
+        # the idx returned is the idx of the weight in the self.subnodes_order list
+        #   ex: [30, component0, 10, component1, 60, component2, ...]
+        # Thus, we divide by 2 in order to have the correct ID
+        sh_idx = sh_idx // 2
+
+        return sh_idx
+
+    @property
+    def number_of_shapes(self):
+        return len(self.subnodes_order) // 2
 
     def get_subnodes_with_csts(self):
         """
@@ -4194,6 +4260,10 @@ class NodeInternals_NonTerm(NodeInternals):
                 self.exhausted_shapes = exhausted_shape and self._exhausted_scheme_cases()
             else:
                 self.exhausted_shapes = exhausted_shape
+
+            obj = self.get_node_sync(SyncScope.Shape)
+            if obj is not None:
+                obj.synchronize_nodes(self)
 
             return node_list
 
@@ -5605,9 +5675,20 @@ class NodeInternals_NonTerm(NodeInternals):
             consumed_size = 0
             tmp_list = []
 
-            node_list, idx = NodeInternals_NonTerm._get_next_heavier_component(
-                self.subnodes_order, excluded_idx=abs_excluded_components
-            )
+            obj = self.get_node_sync(SyncScope.Shape)
+            if obj is not None:
+                selected_shape_id = obj.shape_id_for_absorption
+                if selected_shape_id >= self.number_of_shapes:
+                    status = AbsorbStatus.Reject
+                    break
+
+                node_list, idx = NodeInternals_NonTerm._get_component_by_id(self.subnodes_order,
+                                                                            comp_id=selected_shape_id)
+
+            else:
+                node_list, idx = NodeInternals_NonTerm._get_next_heavier_component(
+                    self.subnodes_order, excluded_idx=abs_excluded_components
+                )
 
             abs_excluded_components.append(idx)
             # 'len(self.subnodes_order)' is always even

@@ -32,11 +32,11 @@ from fuddly.framework.dmhelpers.generic import MH
 from fuddly.framework.error_handling import DataModelDefinitionError, CharsetError, \
     InitialStateNotFoundError, QuantificationError, StructureError, InconvertibilityError, \
     EscapeError, InvalidRangeError, EmptyAlphabetError
-from fuddly.framework.node import Node,\
+from fuddly.framework.node import Node, \
     NodeInternals_Empty, NodeInternals_NonTerm, NodeInternals_GenFunc, NodeInternals_Func, \
     GenFuncCusto, NonTermCusto, FuncCusto, \
     NodeSemantics, SyncScope, SyncQtyFromObj, SyncSizeObj, NodeCondition, SyncExistenceObj, Env, \
-    NodeInternalsCriteria, NodeInternals
+    NodeInternalsCriteria, NodeInternals, SyncShapeObj
 from fuddly.framework.constraint_helpers import CSP
 
 from fuddly.framework import value_types as fvt
@@ -78,6 +78,7 @@ class NodeBuilder(object):
         'exists_if', 'exists_if_not',
         'exists_if/and', 'exists_if/or',
         'sync_size_with', 'sync_enc_size_with',
+        'sync_shape_with',
         'post_freeze', 'charset',
         # Used for debugging purpose
         'debug'
@@ -720,6 +721,11 @@ class NodeBuilder(object):
                                 args=(qty_from, SyncScope.QtyFrom, conf, None, ns),
                                 unpack_args=True)
 
+        sync_shape_with = desc.get('sync_shape_with', None)
+        if sync_shape_with is not None:
+            self._register_todo(node, self._set_sync_node,
+                                args=(sync_shape_with, SyncScope.Shape, conf, None, ns),
+                                unpack_args=True)
         sync_size_with = desc.get('sync_size_with', None)
         sync_enc_size_with = desc.get('sync_enc_size_with', None)
         assert sync_size_with is None or sync_enc_size_with is None
@@ -826,12 +832,21 @@ class NodeBuilder(object):
 
         elif scope == SyncScope.Size:
             if isinstance(comp, (tuple,list)):
-                node_ref, base_size = comp
+                node_ref, base_choice = comp
             else:
-                node_ref, base_size = comp, 0
+                node_ref, base_choice = comp, 0
             sync_with = self.__get_node_from_db(node_ref, namespace=from_ns)
-            sync_obj = SyncSizeObj(sync_with, base_size=base_size,
+            sync_obj = SyncSizeObj(sync_with, base_size=base_choice,
                                    apply_to_enc_size=private)
+
+        elif scope == SyncScope.Shape:
+            if isinstance(comp, (tuple, list)):
+                node_ref, shape_id_shift = comp
+            else:
+                node_ref, shape_id_shift = comp, 0
+            sync_with = self.__get_node_from_db(node_ref, namespace=from_ns)
+            sync_obj = SyncShapeObj(sync_with, shape_id_shift=shape_id_shift)
+
         else:
             if isinstance(comp, (tuple,list)):
                 if issubclass(comp[0].__class__, NodeCondition):

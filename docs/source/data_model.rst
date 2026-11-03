@@ -373,6 +373,51 @@ weight
 	    ``weight`` and ``contents``.
 
 
+sync_shape_with
+  This keyword is relevant for non-terminal nodes which defines different shapes whose position index needs to be
+  synchronised in value with another node specified by reference (which should be an
+  :class:`fuddly.framework.value_types.INT`-based typed-node).
+  The position index of a shape is defined as the position (starting at 0) of the shape in the list associated
+  to the ``contents`` keyword.
+
+  The following example illustrates that:
+
+  .. code-block:: python
+
+        {'name': 'shape_id',
+         'contents': INT8()}
+
+        {'name': 'test',
+         'sync_shape_with': 'shape_id',
+         'contents': [
+
+              # SHAPE 0
+              {'weight': 20,
+               'contents': [ ... ] }
+
+              # SHAPE 1
+              {'weight': 30,
+               'contents': [ ... ] }
+
+               ...
+
+              # SHAPE N
+              {'weight': 10,
+               'contents': [ ... ] }
+
+         ]}
+
+
+  Generation and absorption deal with this keyword differently, in order to achieve the expected
+  behavior. For generation, the synchronization goes from the non-terminal node using this keyword
+  to the referenced node (meaning that a shape is first chosen, then the referenced node is
+  set with the position index of the selected shape). Whereas for the absorption it goes the other way around.
+
+  Note also that you can provide an optional *shape_id_shift* that will be added to the position index
+  before synchronization in the case of generation, and removed from the position index in the case
+  of absorption. In this case, you shall provide a ``list``/``tuple`` with first the node reference
+  then the *shape_id_shift*.
+
 
 section_type
   Similar to ``shape_type`` keyword. But only valid for describing a
@@ -653,8 +698,9 @@ sync_size_with, sync_enc_size_with
   Allow to synchronize the length of the described node (the one where this keyword is used)
   with the *value* of the node specified by reference (which should be an
   :class:`fuddly.framework.value_types.INT`-based typed-node). These keywords are useful for size-variable
-  node types. They are currently supported for typed-nodes which are
-  :class:`fuddly.framework.value_types.String`-based with or without an encoding.
+  node types. They are currently supported by typed-nodes which are
+  :class:`fuddly.framework.value_types.String`-based with or without an encoding, and
+  :class:`fuddly.framework.value_types.BitString`.
   Non-terminal nodes are not supported (for absorption).
   The distinction between ``sync_size_with`` and ``sync_enc_size_with`` is that the synchronization
   will be performed:
