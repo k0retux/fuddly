@@ -5670,10 +5670,12 @@ class NodeInternals_NonTerm(NodeInternals):
 
         self.custo.clear_items(NonTermCusto.SepDelOptionalTail)
 
+        orig_blob = blob
+
         while not abs_exhausted and status == AbsorbStatus.Reject:
             abort = False
             consumed_size = 0
-            tmp_list = []
+            blob = copy.copy(orig_blob)
 
             obj = self.get_node_sync(SyncScope.Shape)
             if obj is not None:
