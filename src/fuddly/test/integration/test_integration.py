@@ -2988,18 +2988,14 @@ class TestNodeFeatures(unittest.TestCase):
                                MH.Custo.NTerm.NotAlwaysByteAligned],
                  'contents': [
                      {'name': 'msg_id',
-                      'description': 'Msgidentificationnumber',
                       'contents': BitString(min_intvalue=0, max_intvalue=63, variable_size=False),
                       'default': 23},
 
                      {'name': 'ICAOfn_len',
-                      'private': 1,  # tag
-                      'description': 'ICAOfacilityname length',
                       'contents': BitString(fixed_nb_bits=4, min_intvalue=0, max_intvalue=15)},
 
                      {'name': 'ICAOfacilityname',
                       'sync_size_with': ('ICAOfn_len', -3),
-                      'private': 1,  # tag
                       'contents': BitString(letter_bit_sz=7, min_nb_bits=3 * 7, max_nb_bits=18 * 7,
                                             bindefault=b'AAAAAAAAA')},
 
@@ -3079,6 +3075,140 @@ class TestNodeFeatures(unittest.TestCase):
         self.assertEqual(bs, bs_ref)
         self.assertNotEqual(node, None)
         self.assertEqual(node.to_bytes(), bs_ref)
+
+
+    @ddt.data(
+        {'weight': 60, 'sync_opt': True},
+        {'weight': 40, 'sync_opt': True},
+        {'weight': 60, 'sync_opt': False},  # to check successful absorption of shape 1 with bs_ref_60 or bs_ref40
+    )
+    def test_sync_shape(self, params):
+
+        test2_desc = {
+            'name': 'test2',
+            'custo_set': MH.Custo.NTerm.CollapsePadding,
+            'contents': [
+
+                {'name': 'shape_selector',
+                 'contents': BitString(fixed_nb_bits=2, min_intvalue=0, max_intvalue=1)},
+
+                {'name': 'shape_shop',
+                 'custo_set': [MH.Custo.NTerm.CollapsePadding, MH.Custo.NTerm.NotAlwaysByteAligned,
+                               MH.Custo.NTerm.DelayCollapsing],
+                 'sync_shape_with': 'shape_selector' if params['sync_opt'] else None,
+                 'contents': [
+                     # shape 0
+                     {'weight': params['weight'],
+                      'contents': [
+                          {'name': 'len',
+                           'contents': BitString(fixed_nb_bits=4, min_intvalue=0, max_intvalue=15)},
+
+                          {'name': 'my_name',
+                           'sync_size_with': ('len', -3),
+                           'contents': BitString(letter_bit_sz=7, min_nb_bits=3 * 7, max_nb_bits=18 * 7,
+                                                 bindefault=b'AAAAAAAAA')},
+                      ]},
+
+                     # shape 1
+                     {'weight': 50,
+                      'contents': [
+                          {'section_type': MH.Ordered,
+                           'contents': [
+                               {'name': 'facility_designation',
+                                'contents': BitString(letter_bit_sz=7, fixed_nb_bits=4 * 7,
+                                                      bindefault=b'DDDD')},
+                           ]},
+
+                          {'section_type': MH.Ordered,
+                           'contents': [
+                               {'name': 'minutes',
+                                'contents': BitString(min_intvalue=0, max_intvalue=59, variable_size=False),
+                                'default': 36},
+                               {'name': 'seconds',
+                                'contents': BitString(min_intvalue=0, max_intvalue=59, variable_size=False),
+                                'default': 46},
+                           ]}
+
+                      ]},
+                 ]},
+            ]}
+
+
+        mb = NodeBuilder()
+        node = mb.create_graph_from_desc(test2_desc)
+        node_abs_ok = node.get_clone()
+        node_abs_ok2 = node.get_clone()
+        node_abs_ko = node.get_clone()
+
+        raw = node.to_bytes()
+        node.show()
+
+        print_byte_string(raw, hexa=True, binary=True, raw=True)
+
+        # these references are created with the sync_shape_with (meaning the shape_selector is at 1 for ref40
+        # and at 0 for ref60)
+        bs_ref_60 = b'\x1a\x0c\x180`\xc1\x83\x06\x08'
+        bs_ref_40 = b'bD\x89\x12K\x80'
+
+        # reference with a shape1 selected and with a selector == 0 (violating the sync_shape_with constraint)
+        bs_ref_selector0_shape1 = b'"D\x89\x12K\x80'
+
+        if params['sync_opt']:
+
+            if params['weight'] == 60:
+                bs_ref = bs_ref_60
+                abs_ko = bs_ref_selector0_shape1
+
+            elif params['weight'] == 40:
+                bs_ref = bs_ref_40
+                abs_ko = bs_ref_selector0_shape1
+
+            else:
+                raise NotImplementedError
+
+            self.assertEqual(bs_ref, raw)
+
+            print('\n### Successfull Absorption Test ###')
+
+            abs_result = node_abs_ok.absorb(bs_ref)
+            print(f'\n--> Absorption status:\n{abs_result!r}\n')
+            self.assertEqual(abs_result[0], AbsorbStatus.FullyAbsorbed)
+
+            raw = node_abs_ok.to_bytes()
+            node_abs_ok.show()
+            print_byte_string(raw, hexa=True, binary=True, raw=True)
+            self.assertEqual(bs_ref, raw)
+
+            print('\n### Unsuccessfull Absorption Test ###')
+
+            abs_result = node_abs_ko.absorb(abs_ko)
+            print(f'\n--> Absorption status:\n{abs_result!r}\n')
+            self.assertEqual(abs_result[0], AbsorbStatus.Reject)
+
+        else:
+            print('\n### Successfull Absorption Test without sync_shape_with ###')
+
+            print('\n#### TC 1 ####')
+
+            abs_result = node_abs_ok.absorb(bs_ref_40)
+            print(f'\n--> Absorption status:\n{abs_result!r}\n')
+            self.assertEqual(abs_result[0], AbsorbStatus.FullyAbsorbed)
+
+            raw = node_abs_ok.to_bytes()
+            node_abs_ok.show()
+            print_byte_string(raw, hexa=True, binary=True, raw=True)
+            self.assertEqual(bs_ref_40, raw)
+
+            print('\n#### TC 2 ####')
+
+            abs_result = node_abs_ok2.absorb(bs_ref_60)
+            print(f'\n--> Absorption status:\n{abs_result!r}\n')
+            self.assertEqual(abs_result[0], AbsorbStatus.FullyAbsorbed)
+
+            raw = node_abs_ok2.to_bytes()
+            node_abs_ok2.show()
+            print_byte_string(raw, hexa=True, binary=True, raw=True)
+            self.assertEqual(bs_ref_60, raw)
 
     def test_node_search_primitive_01(self):
 

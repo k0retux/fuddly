@@ -1355,21 +1355,20 @@ class MyDF_DataModel(DataModel):
             'contents': [
                 {'name': 'timestamp',
                  'qty': (0, 1),
-                 'custo_set': [MH.Custo.NTerm.CollapsePadding, MH.Custo.NTerm.DelayCollapsing,
-                               MH.Custo.NTerm.NotAlwaysByteAligned],
+                 'custo_set': [MH.Custo.NTerm.CollapsePadding, MH.Custo.NTerm.DelayCollapsing],
                  'description': 'Timestamp [OPTIONAL]',
                  'contents': [
-                     {'name': 'hours',
+                     {'name': 'hours',  # 2 bits
                       'description': 'Timehours',
                       'contents': BitString(intvalues=[4,8,16,23], variable_size=False,
                                             delta_minmax_mode=True,
                                             value_descs={16: 'sixteen hour'}),
                       'default': 16},
-                     {'name': 'minutes',
+                     {'name': 'minutes',  # 6 bits
                       'description': 'Timeminutes',
                       'contents': BitString(min_intvalue=0, max_intvalue=59, variable_size=False),
                       'default': 36},
-                     {'name': 'seconds',
+                     {'name': 'seconds',  # 6 bits
                       'description': 'Timeseconds',
                       'contents': BitString(min_intvalue=0, max_intvalue=59, variable_size=False),
                       'default': 46},
@@ -1380,19 +1379,19 @@ class MyDF_DataModel(DataModel):
                  'custo_set': [MH.Custo.NTerm.CollapsePadding, MH.Custo.NTerm.DelayCollapsing,
                                MH.Custo.NTerm.NotAlwaysByteAligned],
                  'contents': [
-                     {'name': 'msg_id',
+                     {'name': 'msg_id',  # 6 bits
                       'description': 'Msgidentificationnumber',
                       'contents': BitString(min_intvalue=20, max_intvalue=60, variable_size=False,
                                             delta_minmax_mode=True,
                                             value_descs={23: 'documented ID'}),
                       'default': 23},
 
-                     {'name': 'ICAOfn_len',
+                     {'name': 'ICAOfn_len',  # 4 bits
                       'private': 1,  # tag
                       'description': 'ICAOfacilityname length',
                       'contents': BitString(fixed_nb_bits=4, min_intvalue=0, max_intvalue=15)},
 
-                     {'name': 'ICAOfacilityname',
+                     {'name': 'ICAOfacilityname',  # 63 bits
                       'sync_size_with': ('ICAOfn_len', -3),
                       'private': 1,  # tag
                       'contents': BitString(letter_bit_sz=7, min_nb_bits=3 * 7, max_nb_bits=18 * 7,

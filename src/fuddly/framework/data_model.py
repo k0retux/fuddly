@@ -239,6 +239,7 @@ class DataModel(object):
             accumulate('\n')
             atom.show(log_func=accumulate, display_title=False, pretty_print=colorized,
                       verbose=verbose, debug=debug)
+            accumulate(f'\nAbsorption Status: {status}')
 
         return atom, a.content
 

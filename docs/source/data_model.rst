@@ -412,6 +412,9 @@ sync_shape_with
   behavior. For generation, the synchronization goes from the non-terminal node using this keyword
   to the referenced node (meaning that a shape is first chosen, then the referenced node is
   set with the position index of the selected shape). Whereas for the absorption it goes the other way around.
+  Moreover, this keyword impose a constraint that will force the shape to use for absorption. Thus, if the
+  absorption do not succeed with this shape, the other shapes won't be attempted, contrary to the case
+  where the constraint is not added.
 
   Note also that you can provide an optional *shape_id_shift* that will be added to the position index
   before synchronization in the case of generation, and removed from the position index in the case

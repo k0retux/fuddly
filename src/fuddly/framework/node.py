@@ -5435,6 +5435,9 @@ class NodeInternals_NonTerm(NodeInternals):
 
             consumed_nb = 0
 
+            if DEBUG:
+                print(f'\n # _try_absorption_with >> provided consumed_size: {consumed_size}')
+
             if constraints[AbsCsts.Structure]:
                 qty = self._qty_from_node(base_node)
                 if qty is not None:
@@ -5454,6 +5457,9 @@ class NodeInternals_NonTerm(NodeInternals):
                         max_node = min_node = 0
 
             if max_node == 0:
+                if DEBUG:
+                    print(f'\n # _try_absorption_with (fail) >> consumed_size not changed!\n')
+
                 return None, blob, consumed_size, consumed_nb, None
 
             orig_blob = blob
@@ -5549,7 +5555,7 @@ class NodeInternals_NonTerm(NodeInternals):
                             or st2 == AbsorbStatus.FullyAbsorbed
                         ):
                             if DEBUG:
-                                print('\nABSORBED (of postponed): %s, off: %d, consumed_sz: %d, blob: %r ...' \
+                                print('\nABSORBED (of postponed): %s, off: %d, byte_consumed: %d, blob: %r ...' \
                                     % (postponed.name, off2, sz2, blob[off2:sz2][:150]))
 
                             if (
@@ -5657,6 +5663,9 @@ class NodeInternals_NonTerm(NodeInternals):
                     pending_postponed_to_send_back = None
                 self.frozen_node_list += tmp_list
 
+            if DEBUG:
+                print(f'\n # _try_absorption_with >> returned consumed_size: {consumed_size}\n')
+
             return (
                 abort,
                 blob,
@@ -5671,8 +5680,9 @@ class NodeInternals_NonTerm(NodeInternals):
         self.custo.clear_items(NonTermCusto.SepDelOptionalTail)
 
         orig_blob = blob
+        selected_shape_id = None
 
-        while not abs_exhausted and status == AbsorbStatus.Reject:
+        while not abs_exhausted and status == AbsorbStatus.Reject and selected_shape_id is None:
             abort = False
             consumed_size = 0
             blob = copy.copy(orig_blob)
@@ -5730,15 +5740,18 @@ class NodeInternals_NonTerm(NodeInternals):
 
             last_absorption_with_collapse = False
 
+            blob_sz = len(blob)
+            last_node = None
+            for _, sublist in self.__iter_csts(node_list):
+                last_node = sublist[-1]
+
             # Iterate over all sub-components of the component node_list
             for delim, sublist in self.__iter_csts(node_list):
                 blob_update_pending = False  # reserved for collapse_padding_mode usage
-                blob_sz = len(blob)
-                sublist_sz = len(sublist)
 
                 if delim[1] == ">":
                     for idx, node_desc in enumerate(sublist):
-                        is_last_child_node = idx == sublist_sz - 1
+                        is_last_child_node = node_desc == last_node
                         abort = False
                         base_node, min_node, max_node = self._parse_node_desc(node_desc)
 
@@ -5904,6 +5917,8 @@ class NodeInternals_NonTerm(NodeInternals):
                                             level=2)
 
 
+                            previous_blob_shift = blob_shift
+
                             (abort,
                              remaining_blob,
                              blob_shift,
@@ -5930,45 +5945,58 @@ class NodeInternals_NonTerm(NodeInternals):
                                 new_consumed_bits = 0 if consumed_bits == 8 else consumed_bits % 8
                                 byte_aligned = new_consumed_bits == 0
 
-                                # DEBUG_PRINT(f'[{id(self):x}] ABS_3.2.0 [{base_node.name}]: '
-                                #             f'padding_size: {vt.padding_size}, '
-                                #             f'bit_length: {vt.bit_length}, '
-                                #             f'\nlen_bits(blob): {blob_sz*8}, '
-                                #             f'consumed_bits: {consumed_bits}, '
-                                #             f'new_consumed_bits: {new_consumed_bits}, '
-                                #             f'\npartial_blob_shift: {blob_shift}, '
-                                #             f'consumed_size {consumed_size}',
-                                #             level=3)
-
-                                remaining_bits = (blob_sz - blob_shift) * 8 - new_consumed_bits
                                 if (self.custo.not_always_byte_aligned
                                         and is_last_child_node
-                                        and 8 > remaining_bits > 0):
+                                        and new_consumed_bits > 0):
+
+                                    remaining_bits = 8 - new_consumed_bits
                                     padding_value = blob[-1] & ((1<<remaining_bits)-1)
-                                    # print(f'\n $$$0 DBG pad_val: {padding_value}, mask:{((1<<remaining_bits)-1)},'
-                                    #       f' blob[-1]:{blob[-1]}, rem_b:{remaining_bits}')
+
+                                    DEBUG_PRINT(
+                                        f'[{id(self):x}]#collapse ABS_3.2.0_A (BF after try_absorb) [{base_node.name}]: '
+                                        f'\nconsumed_bits: {consumed_bits}, '
+                                        f'\nnew_consumed_bits: {new_consumed_bits}, '
+                                        f'\nprevious_blob_shift {previous_blob_shift}, '
+                                        f'blob_shift {blob_shift}'
+                                        f'\npad_val: {padding_value}, mask:{((1<<remaining_bits)-1)},'
+                                        f' blob[-1]:0x{blob[-1]:x}, rem_b:{remaining_bits}',
+                                        level=3)
+
                                     if vt.padding == 0 and padding_value == 0:
                                         byte_aligned = True
                                         new_consumed_bits = 0
-                                        blob_shift += 1
+                                        blob_shift = previous_blob_shift + math.ceil(consumed_bits / 8.0)
                                     elif vt.padding == 1 and fvt.BitField.padding_one[remaining_bits] == padding_value:
                                         byte_aligned = True
                                         new_consumed_bits = 0
-                                        blob_shift += 1
+                                        blob_shift = previous_blob_shift + math.ceil(consumed_bits / 8.0)
                                     else:
                                         pass
 
                                 elif new_consumed_bits > 0: #and vt.padding_size != 0 and
-                                    # if vt is byte-aligned, then the consumed_size is correct
-                                    # otherwise we decrease it
-                                    fully_consumed_bytes = consumed_bits // 8
-                                    if fully_consumed_bytes > 0:
-                                        pass
-                                        # print(f'\n$$$1 DBG increase shift:{blob_shift}')
-                                    else:
-                                        blob_shift -= 1
-                                        # print(f'\n$$$2 DBG decrease shift:{blob_shift}')
+                                    blob_shift = previous_blob_shift + (consumed_bits // 8)
+
+                                    DEBUG_PRINT(
+                                        f'[{id(self):x}]#collapse ABS_3.2.0_B (BF after try_absorb) [{base_node.name}]: '
+                                        f'\nconsumed_bits: {consumed_bits}, '
+                                        f'\nnew_consumed_bits: {new_consumed_bits}, '
+                                        f'\nprevious_blob_shift {previous_blob_shift}, '
+                                        f'blob_shift {blob_shift}',
+                                        level=3)
+
                                     assert blob_shift >= 0
+
+                                else:
+                                    # byte_aligned, blob_shift is correct
+                                    DEBUG_PRINT(
+                                        f'[{id(self):x}]#collapse ABS_3.2.0_C (BF after try_absorb) [{base_node.name}]: '
+                                        f'\nconsumed_bits: {consumed_bits}, '
+                                        f'\nnew_consumed_bits: {new_consumed_bits}, '
+                                        f'\nprevious_blob_shift {previous_blob_shift}, '
+                                        f'blob_shift {blob_shift}',
+                                        level=3)
+
+
 
                                 consumed_bits = new_consumed_bits
 
