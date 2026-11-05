@@ -416,11 +416,15 @@ sync_shape_with
   absorption do not succeed with this shape, the other shapes won't be attempted, contrary to the case
   where the constraint is not added.
 
-  Note also that you can provide an optional *shape_id_shift* that will be added to the position index
-  before synchronization in the case of generation, and removed from the position index in the case
-  of absorption. In this case, you shall provide a ``list``/``tuple`` with first the node reference
-  then the *shape_id_shift*.
+  Note that you can also provide a tuple with first the node reference then a *shape_id_shift* parameter
+  that can be used in the following ways:
 
+  - It can be an integer and in this case it will be added to the position index before synchronization in the case of
+    generation, and removed from the position index in the case of absorption.
+
+  - It can be a dictionary and in this case it will be used as a translation table that shall provide
+    an arbitrary integer for each possible shape index. This arbitrary integer will be used for synchronisation
+    with the referenced node.
 
 section_type
   Similar to ``shape_type`` keyword. But only valid for describing a

@@ -231,10 +231,16 @@ class SyncQtyFromObj(SyncObj):
 
 
 class SyncShapeObj(SyncObj):
-    def __init__(self, node, shape_id_shift=0):
+    def __init__(self, node, shape_id_shift: int | dict = 0):
         assert node.is_typed_value()
         self._node = node
         self._shape_id_shift = shape_id_shift
+        if isinstance(shape_id_shift, dict):
+            self._shape_id_reverse = {}
+            for k, v in shape_id_shift.items():
+                self._shape_id_reverse[v] = k
+        else:
+            self._shape_id_reverse = None
 
     def get_node_containers(self):
         return self._node
@@ -242,21 +248,32 @@ class SyncShapeObj(SyncObj):
     def put_node_containers(self, new_containers):
         self._node = new_containers
 
-    def _sync_nodes_specific(self, src_nodeinternals: NodeInternals):
-        if isinstance(src_nodeinternals, NodeInternals_NonTerm):
-            chosen_id = src_nodeinternals.current_shape_idx
-            # we shift the value following the
-            chosen_id += self._shape_id_shift
+    def _sync_nodes_specific(self, src_node: NodeInternals):
+        if isinstance(src_node, NodeInternals_NonTerm):
+            chosen_id = src_node.current_shape_idx
+            # we shift the value following self._shape_id_shift
+            if isinstance(self._shape_id_shift, int):
+                chosen_id += self._shape_id_shift
+            elif isinstance(self._shape_id_shift, dict):
+                # in this case _shape_id_shift is used as a translation table
+                chosen_id = self._shape_id_shift[chosen_id]
+            else:
+                raise ValueError
 
             self._node.update_raw_value(chosen_id)
 
             # print(f'\nDBG SyncObj: {self._node.name}, chosen_id:{chosen_id}')
         else:
-            raise DataModelDefinitionError(f'node "{src_nodeinternals}" shall be a Non Terminal Node')
+            raise DataModelDefinitionError(f'node "{src_node}" shall be a Non Terminal Node')
 
     @property
     def shape_id_for_absorption(self):
-        return max(0, self._node.get_raw_value() - self._shape_id_shift)
+        if isinstance(self._shape_id_shift, int):
+            delta = self._node.get_raw_value() - self._shape_id_shift
+            assert delta >= 0
+            return delta
+        else:
+            return self._shape_id_reverse.get(self._node.get_raw_value(), None)
 
 
 class SyncSizeObj(SyncObj):
