@@ -3923,7 +3923,9 @@ class BitString(BitField):
 
                         self.intvalues = list(range(group_sz))
                     else:
-                        self.fixed_nb_bits = self.min_nb_bits = self.max_nb_bits = self.nb_bits_for(self.max_intvalue)
+                        group_sz = self.max_intvalue - self.min_intvalue + 1
+                        nb_bits = math.ceil(math.log2(group_sz))
+                        self.fixed_nb_bits = self.min_nb_bits = self.max_nb_bits = nb_bits
                         if self.intdefault is not None:
                             assert self.min_intvalue is not None
                             self.intdefault -= self.min_intvalue
