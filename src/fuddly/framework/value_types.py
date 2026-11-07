@@ -2596,6 +2596,13 @@ class BitField(VT_Alt):
         self.current_subfield = None
         self.idx = None
         self.idx_inuse = None
+
+        self._previous_first_pass = None
+        self.previous_current_subfield = None
+        self.previous_idx = None
+        self.previous_idx_inuse = None
+        self.previous_exhaustion_cpt = 0
+
         self.set_bitfield(
             sf_values=subfield_values,
             sf_val_extremums=subfield_val_extremums,
@@ -2641,9 +2648,15 @@ class BitField(VT_Alt):
             self.reset_state()
         else:
             self.idx = copy.deepcopy(self.idx)
+            self.previous_idx_inuse = copy.deepcopy(self.previous_idx_inuse)
             self.idx_inuse = copy.deepcopy(self.idx_inuse)
             self.subfield_fuzzy_vals = copy.deepcopy(self.subfield_fuzzy_vals)
             self._first_pass = copy.deepcopy(self._first_pass)
+
+        self._make_private_specific(forget_current_state=forget_current_state)
+
+    def _make_private_specific(self, forget_current_state):
+        pass
 
     def reset_state(self):
         self._reset_idx()
@@ -2660,6 +2673,12 @@ class BitField(VT_Alt):
         self.current_subfield = 0
         self._first_pass = {i: True for i in range(len(self.subfield_limits))}
         if self._fuzzy_mode:
+            # we never use the first value in fuzzy mode (because it is always a normal value)
+            # that's why it is set to 1. It allows to have nominal values for the field which
+            # are not supposed fuzzed. This is the role of idx_inuse which are used for keeping
+            # the current idx for the current_subfield fuzzed (because idx are update in advance),
+            # but also to keep a value 0 for the index of the other fields
+            # (to get a nominal reference value). idx_inuse is updated with value 0 within get_value().
             self.idx = [1 for i in self.subfield_limits]
         else:
             self.idx = [0 for i in self.subfield_limits]
@@ -2670,10 +2689,14 @@ class BitField(VT_Alt):
                     else:
                         mini, _ = self.subfield_extrems[i]
                         self.idx[i] = default - mini
+
         # initially we don't make copy, as it will be copied anyway
-        # during .get_value()
+        # during .get_value() and updated
         if reset_idx_inuse:
+            self._previous_first_pass = self._first_pass
+            self.previous_idx = self.idx
             self.idx_inuse = self.idx
+            self.previous_idx_inuse = self.idx
 
     def idx_from_desc(self, sf_desc):
         if self.subfield_descs is None:
@@ -2921,12 +2944,17 @@ class BitField(VT_Alt):
             self.exhausted = True
             self.exhaustion_cpt = 0
         else:
+            # These fields have been reset in anticipation when the last call to .get_value() lead
+            # to exhaustion. They should be restored to the previous value as the extended bitfield
+            # is no more exhausted.
             if bitfield.exhausted:
-                bitfield.rewind()  # side_effect clear 'drawn_val'
-                bitfield.get_current_value()  # to set 'drawn_val'
+                bitfield.idx = copy.copy(bitfield.previous_idx)
+                bitfield.idx_inuse = copy.copy(bitfield.previous_idx_inuse)
+                bitfield.exhaustion_cpt = bitfield.previous_exhaustion_cpt
             if self.exhausted:
-                self.rewind()
-                self.get_current_value()
+                self.idx = copy.copy(self.previous_idx_inuse)
+                self.idx_inuse = copy.copy(self.previous_idx_inuse)
+                self.exhaustion_cpt = self.previous_exhaustion_cpt
 
             self.exhausted = False
             self.exhaustion_cpt += bitfield.exhaustion_cpt
@@ -2945,9 +2973,21 @@ class BitField(VT_Alt):
         if rightside:
             self.idx += bitfield.idx
             self.idx_inuse += bitfield.idx_inuse
+            self.previous_idx += bitfield.previous_idx
+            self.previous_idx_inuse += bitfield.previous_idx_inuse
+            fp_len = len(self._previous_first_pass)
+            for k, v in bitfield._previous_first_pass.items():
+                self._previous_first_pass[k+fp_len] = v
         else:
             self.idx = bitfield.idx + self.idx
             self.idx_inuse = bitfield.idx_inuse + self.idx_inuse
+            self.previous_idx = bitfield.previous_idx + self.previous_idx
+            self.previous_idx_inuse = bitfield.previous_idx_inuse + self.previous_idx_inuse
+            new_first_pass = {k: v for k, v in bitfield._previous_first_pass.items()}
+            fp_len = len(bitfield._previous_first_pass)
+            for k, v in self._previous_first_pass.items():
+                new_first_pass[k+fp_len] = v
+            self._previous_first_pass = new_first_pass
 
         if self.subfield_descs is not None or bitfield.subfield_descs is not None:
             if self.subfield_descs is None and bitfield.subfield_descs is not None:
@@ -3089,12 +3129,13 @@ class BitField(VT_Alt):
         else:
             string += " |-)"
 
-        string += f' [{self.size}b]'
+        string += f' [{self.size}b] '
+        raw_val_str = self._pretty_format_raw_val(current_raw_val)
 
-        # if not self.show_padding and self.lsb_padding:
-        #     current_raw_val = current_raw_val >> self.padding_size
+        return string + raw_val_str
 
-        return string + f" {current_raw_val}"
+    def _pretty_format_raw_val(self, raw_val):
+        return f"{raw_val}"
 
     def is_compatible(self, integer, size):
         return 0 <= integer <= (1 << size) - 1
@@ -3201,6 +3242,8 @@ class BitField(VT_Alt):
         self.subfield_extrems = [None for i in range(len(self.subfield_fuzzy_vals))]
         self.exhausted = False
 
+        return True
+
     def make_determinist(self):
         self.determinist = True
 
@@ -3233,45 +3276,15 @@ class BitField(VT_Alt):
     count_of_possible_values = property(fget=__compute_total_possible_values)
 
     def rewind(self):
-        def sf_possible_values(sf_index):
-            vals = self.subfield_vals[sf_index]
-            if vals is not None:
-                return len(vals)
-            else:
-                mini, maxi = self.subfield_extrems[sf_index]
-                return maxi - mini + 1
+        # TODO: currently supports only one rewind().
+        #   When full rewind support will implemented again, TestMisc() should be updated
 
-        if not self.exhausted:
-            if self.idx[self.current_subfield] > 1:
-                self.idx[self.current_subfield] -= 1
-            elif self.idx[self.current_subfield] == 1:
-                if self.current_subfield > 0:
-                    self.current_subfield -= 1
-                    self.idx[self.current_subfield] = (
-                        sf_possible_values(self.current_subfield) - 1
-                    )
-            elif self.idx[self.current_subfield] == 0:
-                if self.current_subfield > 0:
-                    self.current_subfield -= 1
-                    self.idx[self.current_subfield] = (
-                        sf_possible_values(self.current_subfield) - 1
-                    )
-            else:
-                pass
-
-            if self.exhaustion_cpt > 0:
-                # meaning this is not the first value, thus the previous code had an effect
-                self.exhaustion_cpt = self.count_of_possible_values - 1
-
-        else:
-            assert self.current_subfield == 0
-            last_sf = len(self.subfield_limits) - 1
-            self.current_subfield = last_sf
-            self.idx[last_sf] = sf_possible_values(last_sf) - 1
-            self.exhausted = False
-            self.exhaustion_cpt = self.count_of_possible_values - 1
-            if sf_possible_values(self.current_subfield) == 1:
-                self.rewind()
+        self._first_pass = copy.copy(self._previous_first_pass)
+        self.current_subfield = self.previous_current_subfield  # only int
+        self.idx = copy.copy(self.previous_idx)
+        self.idx_inuse = copy.copy(self.previous_idx_inuse)
+        self.exhaustion_cpt = self.previous_exhaustion_cpt  # only int
+        self.exhausted = False
 
         self.drawn_val = None
 
@@ -3348,6 +3361,7 @@ class BitField(VT_Alt):
 
     def do_absorb(self, blob, constraints, off=0, size=None):
         self.orig_idx = copy.deepcopy(self.idx)
+        self.orig_idx_inuse = copy.deepcopy(self.idx_inuse)
         self.orig_subfield_vals = copy.deepcopy(self.subfield_vals)
         self.orig_drawn_val = self.drawn_val
         self.orig_subfield_defaults = copy.copy(self.subfield_defaults)
@@ -3382,7 +3396,7 @@ class BitField(VT_Alt):
                             i + 1
                         )
                     )
-                self.idx[i] = val - mini
+                self.idx_inuse[i] = self.idx[i] = val - mini
                 if not constraints[AbsCsts.Contents]:  # update extremums if necessary
                     extrems[0] = builtins.min(extrems[0], val)
                     extrems[1] = builtins.max(extrems[1], val)
@@ -3395,7 +3409,7 @@ class BitField(VT_Alt):
                         )
                     )
                 if val in values:
-                    self.idx[i] = values.index(val)
+                    self.idx_inuse[i] = self.idx[i] = values.index(val)
                 else:
                     values.insert(self.idx[i], val)
 
@@ -3407,11 +3421,11 @@ class BitField(VT_Alt):
         ok = True
         enc_sz = (val.bit_length() + 7) // 8
         if self.nb_bytes < enc_sz:
-            raise ValueError
+            ok = False
         if self.lsb_padding:
             val = val << self.padding_size
         endianess = "big" if self.endian == VT.BigEndian else "little"
-        blob = val.to_bytes(self.nb_bytes, endianess)
+        blob = val.to_bytes(self.nb_bytes, endianess, signed=val < 0)
         self.do_absorb(blob, AbsNoCsts())
 
         return ok
@@ -3422,6 +3436,7 @@ class BitField(VT_Alt):
         """
         if hasattr(self, "orig_drawn_val"):
             self.idx = self.orig_idx
+            self.idx_inuse = self.orig_idx_inuse
             self.subfield_vals = self.orig_subfield_vals
             self.drawn_val = self.orig_drawn_val
             self.subfield_defaults = self.orig_subfield_defaults
@@ -3434,6 +3449,7 @@ class BitField(VT_Alt):
         """
         if hasattr(self, "orig_drawn_val"):
             del self.orig_idx
+            del self.orig_idx_inuse
             del self.orig_subfield_vals
             del self.orig_drawn_val
             del self.orig_subfield_defaults
@@ -3451,8 +3467,15 @@ class BitField(VT_Alt):
         make sense for fuzzing purpose.
         """
 
+        self._previous_first_pass = copy.copy(self._first_pass)
+        self.previous_current_subfield = self.current_subfield  # only int
+        self.previous_idx = copy.copy(self.idx)
+        self.previous_idx_inuse = copy.copy(self.idx_inuse)
+        self.previous_exhaustion_cpt = self.exhaustion_cpt # only int
+
         if self.current_val_update_pending:
             self.current_val_update_pending = False
+            self.drawn_val = None
             return self.get_current_value()
 
         self.exhausted = False
@@ -3505,19 +3528,20 @@ class BitField(VT_Alt):
 
                         v = mini + index
                         if (curr_sf_default is None and v >= maxi) or (
-                            curr_sf_default is not None
-                            and (
-                                (curr_sf_default == maxi and v >= maxi - 1)
-                                or (curr_sf_default == mini and v >= maxi)
-                                or (
-                                    curr_sf_default != maxi
-                                    and curr_sf_default != mini
-                                    and v == curr_sf_default - 1
+                                curr_sf_default is not None
+                                and (
+                                        (curr_sf_default == maxi and v >= maxi - 1)
+                                        or (curr_sf_default == mini and v >= maxi)
+                                        or (
+                                                curr_sf_default != maxi
+                                                and curr_sf_default != mini
+                                                and v == curr_sf_default - 1
+                                        )
                                 )
-                            )
-                            and not self._first_pass[self.current_subfield]
-                        ):
+                                and not self._first_pass[self.current_subfield] ):
+
                             update_current_subfield = True
+
                         else:
                             if v == maxi:
                                 self.idx[self.current_subfield] = 0
@@ -3543,24 +3567,26 @@ class BitField(VT_Alt):
                             else 0
                         )
                         if (curr_sf_default is None and index >= idx_max) or (
-                            curr_sf_default is not None
-                            and (
-                                (idx_default == idx_max and index >= idx_max - 1)
-                                or (idx_default == 0 and index >= idx_max)
-                                or (
-                                    idx_default != idx_max
-                                    and idx_default != 0
-                                    and index == idx_default - 1
+                                curr_sf_default is not None
+                                and (
+                                        (idx_default == idx_max and index >= idx_max - 1)
+                                        or (idx_default == 0 and index >= idx_max)
+                                        or (
+                                                idx_default != idx_max
+                                                and idx_default != 0
+                                                and index == idx_default - 1
+                                        )
                                 )
-                            )
-                            and not self._first_pass[self.current_subfield]
-                        ):
+                                and not self._first_pass[self.current_subfield] ):
+
                             update_current_subfield = True
+
                         else:
                             if index == idx_max:
                                 self.idx[self.current_subfield] = 0
                             else:
                                 self.idx[self.current_subfield] = index + 1
+
                         self.idx_inuse[self.current_subfield] = index
                         val += values[index] << prev_lim
                 else:
@@ -3605,6 +3631,8 @@ class BitField(VT_Alt):
                 self.exhaustion_cpt = 0
             else:
                 self.exhausted = False
+        else:
+            self.exhaustion_cpt += 1
 
         if self._first_pass[self.current_subfield]:
             self._first_pass[self.current_subfield] = False
@@ -3616,6 +3644,7 @@ class BitField(VT_Alt):
             if self.current_subfield >= len(self.idx):
                 self._reset_idx(reset_idx_inuse=False)
                 self.exhausted = True
+                self.exhaustion_cpt = 0
             else:
                 while True:
                     if self.subfield_vals[self.current_subfield] is None:
@@ -3626,11 +3655,21 @@ class BitField(VT_Alt):
                     else:
                         last = len(self.subfield_vals[self.current_subfield]) - 1
 
-                    if self.idx[self.current_subfield] >= last:
+                    next_idx = self.idx[self.current_subfield]
+                    if self._fuzzy_mode:
+                        # we never use the first value in fuzzy mode (because it is always a normal value)
+                        # that's why it is set to 1. (refer to ._reset_idx() comment).
+                        # But we do not want to trigger exhaustion in the case
+                        # len(self.subfield_vals[self.current_subfield]) = 2, as the value at index 1
+                        # is a test case.
+                        next_idx -= 1
+
+                    if next_idx >= last:
                         self.current_subfield += 1
                         if self.current_subfield >= len(self.idx):
                             self._reset_idx(reset_idx_inuse=False)
                             self.exhausted = True
+                            self.exhaustion_cpt = 0
                             break
                     else:
                         break
@@ -3678,9 +3717,9 @@ class BitField(VT_Alt):
             self.get_value()
         return self.drawn_val
 
-    def set_default_value(self, sf_values):
-        self._check_constraints(sf_values)
-        self.subfield_defaults = sf_values
+    def set_default_value(self, val: list):
+        self._check_constraints(val)
+        self.subfield_defaults = val
         self.reset_state()
 
     def is_exhausted(self):
@@ -3689,9 +3728,9 @@ class BitField(VT_Alt):
 
 class BitString(BitField):
     """
-    ...
+    It is essentially a ``BitField`` with only one subfield which may have its size variable and taking different
+    initialization parameters.
     """
-
 
     def nb_bits_for(self, intvalue: int):
 
@@ -3736,18 +3775,20 @@ class BitString(BitField):
         self.subfield_limits[0] = self.size
         self.subfield_sizes[0] = self.size
 
-        # self.nb_bytes = int(math.ceil(self.size / 8.0))
-
         if self.size % 8 == 0:
             self.padding_size = 0
         else:
             self.padding_size = 8 - (self.size % 8)
 
+    def _make_private_specific(self, forget_current_state):
+        self.intvalues = copy.deepcopy(self.intvalues)
+        self.sorted_intvalues = copy.deepcopy(self.sorted_intvalues)
+        self.binvalues = copy.deepcopy(self.binvalues)
 
     def __init__(
             self, min_intvalue=None, max_intvalue=None, intvalues=None,
             variable_size: bool | None = None, delta_minmax_mode: bool = False,
-            binvalues: list[bytes] | None = None, letter_bit_sz: int | None = None,
+            binvalues: list[bytes] | None = None, letter_bit_sz: int | None = None, translator = None,
             bindefault = None, intdefault = None,
             fixed_nb_bits: int | None = None, min_nb_bits: int | None = None, max_nb_bits: int | None = None,
             padding= 0, lsb_padding= True, show_padding= False,
@@ -3801,6 +3842,7 @@ class BitString(BitField):
         if (fixed_nb_bits is not None and (min_nb_bits is not None or max_nb_bits is not None)):
             raise DataModelDefinitionError
 
+        self.translator = self.convert_intval_to_bytes if translator is None else translator
         self.sorted_intvalues = None
 
         if fixed_nb_bits is not None:
@@ -4050,25 +4092,6 @@ class BitString(BitField):
 
         self._reset_idx()
 
-    def _reset_idx(self, reset_idx_inuse=True):
-        self.current_subfield = 0
-        self._first_pass = {0: True}
-        if self._fuzzy_mode:
-            self.idx = [1]
-        else:
-            self.idx = [0]
-            default = self.subfield_defaults[0]
-            if default is not None:
-                if self.subfield_extrems[0] is None:
-                    self.idx[0] = self.subfield_vals[0].index(default)
-                else:
-                    mini, _ = self.subfield_extrems[0]
-                    self.idx[0] = default - mini
-        # initially we don't make copy, as it will be copied anyway
-        # during .get_value()
-        if reset_idx_inuse:
-            self.idx_inuse = self.idx
-
     def set_size_from_constraints(self, size=None, encoded_size=None):
         # This method is used only for absorption purpose, thus no modification
         # is performed on self.values. To be reconsidered in the case the method
@@ -4076,14 +4099,14 @@ class BitString(BitField):
         assert size is not None
         self._update_size_attributes(size=size, force=False)
 
-    def set_default_value(self, value):
+    def set_default_value(self, val: list):
         if self.delta_minmax_mode:
             if self.sorted_intvalues is not None:
-                value = self.sorted_intvalues.index(value)
+                val = self.sorted_intvalues.index(val)
             else:
-                value -= self.min_intvalue
+                val -= self.min_intvalue
 
-        dv = [value]
+        dv = [val]
         self._check_constraints(dv)
         self.subfield_defaults = dv
         self.reset_state()
@@ -4162,8 +4185,23 @@ class BitString(BitField):
 
         return self._encode_bitfield(val)
 
+    def update_raw_value(self, val):
+        ok = True
+        enc_sz = val.bit_length()
+        if self.max_nb_bits < enc_sz:
+            ok = False
+
+        if self.lsb_padding:
+            val = val << self.padding_size
+        endianess = "big" if self.endian == VT.BigEndian else "little"
+        blob = val.to_bytes(self.nb_bytes, endianess, signed=val < 0)
+        self.do_absorb(blob, AbsNoCsts())
+
+        return ok
+
     def do_absorb(self, blob, constraints, off=0, size=None):
         self.orig_idx = copy.deepcopy(self.idx)
+        self.orig_idx_inuse = copy.deepcopy(self.idx_inuse)
         self.orig_subfield_vals = copy.deepcopy(self.subfield_vals)
         self.orig_drawn_val = self.drawn_val
         self.orig_subfield_defaults = copy.copy(self.subfield_defaults)
@@ -4206,6 +4244,38 @@ class BitString(BitField):
         #       f'stored:{self.get_current_raw_val()}, drawn_val:{self.drawn_val}')
 
         return blob, off, self.nb_bytes
+
+
+    def convert_intval_to_bytes(self, intval):
+        if self.letter_bit_sz > 8:
+            return None
+
+        letter_mask = (1 << self.letter_bit_sz) - 1
+
+        bytes_l = []
+        b_len = intval.bit_length()
+        for i in range(b_len // self.letter_bit_sz):
+            letter_val = (intval >> (i*self.letter_bit_sz)) & letter_mask
+            bytes_l.append(letter_val)
+
+        if self.endian == VT.LittleEndian:
+            bytes_l = bytes_l[::-1]
+
+        return f'{bytes(bytes_l)}'
+
+
+    def _pretty_format_raw_val(self, raw_val):
+        if self.letter_bit_sz is not None:
+            pretty_raw_val = self.translator(raw_val)
+            if pretty_raw_val is None:
+                pretty_raw_val = raw_val
+            else:
+                pretty_raw_val += f' [letter:{self.letter_bit_sz}b]'
+
+        else:
+            pretty_raw_val = f"{raw_val}"
+
+        return pretty_raw_val
 
 
     def _enable_fuzz_mode(self, fuzz_magnitude=1.0,
@@ -4283,8 +4353,10 @@ class BitString(BitField):
         self.subfield_vals_save = self.subfield_vals
         self.subfield_vals = self.subfield_fuzzy_vals
         self.subfield_extrems_save = self.subfield_extrems
-        self.subfield_extrems = [None for i in range(len(self.subfield_fuzzy_vals))]
+        self.subfield_extrems = [None]
         self.exhausted = False
+
+        return True
 
 
 class INT8(INT):

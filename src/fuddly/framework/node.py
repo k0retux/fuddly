@@ -894,7 +894,7 @@ class NodeInternals(object):
         pass
 
     def _get_value(
-        self, conf=None, recursive=True, return_node_internals=False, restrict_csp=False
+        self, conf=None, recursive=True, after_encoding=True, return_node_internals=False, restrict_csp=False
     ):
         raise NotImplementedError
 
@@ -1524,7 +1524,7 @@ class DynNode_Helpers(object):
 
 class NodeInternals_Empty(NodeInternals):
     def _get_value(
-        self, conf=None, recursive=True, return_node_internals=False, restrict_csp=False
+        self, conf=None, recursive=True, after_encoding=True, return_node_internals=False, restrict_csp=False
     ):
         if return_node_internals:
             return (Node.DEFAULT_DISABLED_NODEINT, True)
@@ -1582,7 +1582,7 @@ class NodeInternals_Recursive(NodeInternals):
         self._recursion_threshold = threshold
 
 
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False, restrict_csp=False):
+    def _get_value(self, conf=None, recursive=True, after_encoding=True, return_node_internals=False, restrict_csp=False):
 
         if not self._stop_recursion:
             self._call_recursion_count += 1
@@ -2099,7 +2099,7 @@ class NodeInternals_GenFunc(NodeInternals):
         if generator_arg is not None:
             self.generator_arg = generator_arg
 
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False, restrict_csp=False):
+    def _get_value(self, conf=None, recursive=True, after_encoding=True, return_node_internals=False, restrict_csp=False):
         if self.custo.trigger_last_mode and not self._trigger_registered:
             assert self.env is not None
             self._trigger_registered = True
@@ -2387,7 +2387,7 @@ class NodeInternals_Term(NodeInternals):
         raise NotImplementedError
 
     def _get_value(
-        self, conf=None, recursive=True, return_node_internals=False, restrict_csp=False
+        self, conf=None, recursive=True, after_encoding=True, return_node_internals=False, restrict_csp=False
     ):
         def format_val(val):
             fval = (

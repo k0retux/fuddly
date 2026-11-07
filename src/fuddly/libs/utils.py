@@ -433,20 +433,23 @@ def get_caller_object(stack_frame=2):
 
 def format_byte_string(byte_string: bytes,
                       hexa: bool = True, binary: bool = False, raw = False,
-                      prefix: str = '', delim: str = ''):
+                      prefix: str = '', delim: str = '', display_cpt=True):
     raw = f'\n{byte_string}' if raw else ''
     hs = '\n' if hexa else ''
     bs = '\n' if binary else ''
+    cpt = '\n' if display_cpt else ''
     tag_s1, tag_s2 = '[blue]', '[yellow]'
     tag_e = '[/]'
     for idx, b in enumerate(byte_string):
         tag_s = tag_s1 if idx % 2 == 0 else tag_s2
+        if display_cpt:
+            cpt += f'{tag_s}[{idx}]{tag_e}{" ":5}{delim}'
         if hexa:
-            hs += f'{tag_s}{b:08x}{tag_e}{delim}'
+            hs += f'{tag_s}{" ":6}{b:02x}{tag_e}{delim}'
         if binary:
             bs += f'{tag_s}{b:08b}{tag_e}{delim}'
 
-    return prefix + raw + hs + bs
+    return prefix + raw + hs + bs + cpt
 
 def print_byte_string(byte_string: bytes,
                       hexa: bool = True, binary: bool = False, raw = False,

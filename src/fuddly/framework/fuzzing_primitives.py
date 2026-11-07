@@ -1013,7 +1013,9 @@ class TypedNodeDisruption(NodeConsumerStub):
         if self.current_fuzz_vt_list:
             vt_obj = self.current_fuzz_vt_list.pop(0)
 
-            DEBUG_PRINT(f' *** Test cases for node "{node.name}": {vt_obj.values}\n', level=0)
+            DEBUG_PRINT(f' *** Test cases for node "{node.name}": '
+                        f'{vt_obj.subfield_vals if isinstance(vt_obj, vtype.BitField) else vt_obj.values}\n',
+                        level=0)
 
             node.set_values(value_type=vt_obj, ignore_entanglement=True, preserve_node=True)
             node.make_finite()
