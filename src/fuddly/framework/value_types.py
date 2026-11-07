@@ -2934,7 +2934,7 @@ class BitField(VT_Alt):
     def byte_length(self):
         return self.nb_bytes
 
-    def extend(self, bitfield, rightside=True):
+    def extend(self, bitfield, rightside=True, full_merge=True):
         if self.drawn_val is None:
             self.get_current_value()
         if bitfield.drawn_val is None:
@@ -2973,58 +2973,59 @@ class BitField(VT_Alt):
         if rightside:
             self.idx += bitfield.idx
             self.idx_inuse += bitfield.idx_inuse
-            self.previous_idx += bitfield.previous_idx
-            self.previous_idx_inuse += bitfield.previous_idx_inuse
-            fp_len = len(self._previous_first_pass)
-            for k, v in bitfield._previous_first_pass.items():
-                self._previous_first_pass[k+fp_len] = v
+            if full_merge:
+                self.previous_idx += bitfield.previous_idx
+                self.previous_idx_inuse += bitfield.previous_idx_inuse
+                fp_len = len(self._previous_first_pass)
+                for k, v in bitfield._previous_first_pass.items():
+                    self._previous_first_pass[k+fp_len] = v
         else:
             self.idx = bitfield.idx + self.idx
             self.idx_inuse = bitfield.idx_inuse + self.idx_inuse
-            self.previous_idx = bitfield.previous_idx + self.previous_idx
-            self.previous_idx_inuse = bitfield.previous_idx_inuse + self.previous_idx_inuse
-            new_first_pass = {k: v for k, v in bitfield._previous_first_pass.items()}
-            fp_len = len(bitfield._previous_first_pass)
-            for k, v in self._previous_first_pass.items():
-                new_first_pass[k+fp_len] = v
-            self._previous_first_pass = new_first_pass
+            if full_merge:
+                self.previous_idx = bitfield.previous_idx + self.previous_idx
+                self.previous_idx_inuse = bitfield.previous_idx_inuse + self.previous_idx_inuse
+                new_first_pass = {k: v for k, v in bitfield._previous_first_pass.items()}
+                fp_len = len(bitfield._previous_first_pass)
+                for k, v in self._previous_first_pass.items():
+                    new_first_pass[k+fp_len] = v
+                self._previous_first_pass = new_first_pass
 
-        if self.subfield_descs is not None or bitfield.subfield_descs is not None:
-            if self.subfield_descs is None and bitfield.subfield_descs is not None:
-                self.subfield_descs = [None for i in self.subfield_limits]
-                desc_extension = bitfield.subfield_descs
-            elif self.subfield_descs is not None and bitfield.subfield_descs is None:
-                desc_extension = [None for i in bitfield.subfield_limits]
-            else:
-                desc_extension = bitfield.subfield_descs
-            if rightside:
-                self.subfield_descs += desc_extension
-            else:
-                self.subfield_descs = desc_extension + self.subfield_descs
+        if full_merge:
+            if self.subfield_descs is not None or bitfield.subfield_descs is not None:
+                if self.subfield_descs is None and bitfield.subfield_descs is not None:
+                    self.subfield_descs = [None for i in self.subfield_limits]
+                    desc_extension = bitfield.subfield_descs
+                elif self.subfield_descs is not None and bitfield.subfield_descs is None:
+                    desc_extension = [None for i in bitfield.subfield_limits]
+                else:
+                    desc_extension = bitfield.subfield_descs
+                if rightside:
+                    self.subfield_descs += desc_extension
+                else:
+                    self.subfield_descs = desc_extension + self.subfield_descs
 
-        if (
-            self.subfield_value_descs is not None
-            or bitfield.subfield_value_descs is not None
-        ):
-            if self.subfield_value_descs is None:
-                self.subfield_value_descs = {}
-            desc_ext = (
-                {}
-                if bitfield.subfield_value_descs is None
-                else bitfield.subfield_value_descs
-            )
+            if (self.subfield_value_descs is not None
+                    or bitfield.subfield_value_descs is not None):
+                if self.subfield_value_descs is None:
+                    self.subfield_value_descs = {}
+                desc_ext = (
+                    {}
+                    if bitfield.subfield_value_descs is None
+                    else bitfield.subfield_value_descs
+                )
 
-            if rightside:
-                offset = len(self.subfield_sizes)
-                for k, v in desc_ext.items():
-                    self.subfield_value_descs[k + offset] = v
-            else:
-                offset = len(bitfield.subfield_sizes)
-                new_dict = {}
-                for k, v in self.subfield_value_descs.items():
-                    new_dict[k + offset] = v
-                new_dict.update(desc_ext)
-                self.subfield_value_descs = new_dict
+                if rightside:
+                    offset = len(self.subfield_sizes)
+                    for k, v in desc_ext.items():
+                        self.subfield_value_descs[k + offset] = v
+                else:
+                    offset = len(bitfield.subfield_sizes)
+                    new_dict = {}
+                    for k, v in self.subfield_value_descs.items():
+                        new_dict[k + offset] = v
+                    new_dict.update(desc_ext)
+                    self.subfield_value_descs = new_dict
 
         if rightside:
             self.subfield_sizes += bitfield.subfield_sizes
@@ -3059,11 +3060,11 @@ class BitField(VT_Alt):
         else:
             self.padding_size = 8 - (self.size % 8)
 
-    def extend_right(self, bitfield):
-        self.extend(bitfield, rightside=True)
+    def extend_right(self, bitfield, full_merge=True):
+        self.extend(bitfield, rightside=True, full_merge=full_merge)
 
-    def extend_left(self, bitfield):
-        self.extend(bitfield, rightside=False)
+    def extend_left(self, bitfield, full_merge=True):
+        self.extend(bitfield, rightside=False, full_merge=full_merge)
 
     def set_size_from_constraints(self, size=None, encoded_size=None):
         raise DataModelDefinitionError
