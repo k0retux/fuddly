@@ -656,7 +656,7 @@ class NonTermCusto(NodeCustomization):
 
     CollapsePadding = 15
     DelayCollapsing = 16
-    NotAlwaysByteAligned = 17
+    # NotAlwaysByteAligned = 17
 
     FullCombinatory = 20
     StickToDefault = 21
@@ -669,8 +669,8 @@ class NonTermCusto(NodeCustomization):
         ResetClone: False,
         FrozenCopy: True,
         CollapsePadding: False,
-        DelayCollapsing: False,
-        NotAlwaysByteAligned: False,
+        DelayCollapsing: True,
+        # NotAlwaysByteAligned: False,
         FullCombinatory: False,
         StickToDefault: False,
         SepDelOptionalTail: True
@@ -700,9 +700,9 @@ class NonTermCusto(NodeCustomization):
     def delay_collapsing(self):
         return self._custo_items[self.DelayCollapsing]
 
-    @property
-    def not_always_byte_aligned(self):
-        return self._custo_items[self.NotAlwaysByteAligned]
+    # @property
+    # def not_always_byte_aligned(self):
+    #     return self._custo_items[self.NotAlwaysByteAligned]
 
     @property
     def full_combinatory_mode(self):
@@ -835,6 +835,7 @@ class NodeInternals(object):
         self.custo = None
         self._env = None
         self.name = name
+        self.root = False
 
         self.__attrs = {
             ### GENERIC ###
@@ -3164,7 +3165,19 @@ class NodeInternals_NonTerm(NodeInternals):
         self.current_unordered_section = None
         self.unordered_section_case_idx = None
 
+        self._bit_oriented = False
+        self.last_nt_node = False
         self.reset()
+
+    def make_bit_oriented(self):
+        self._bit_oriented = True
+
+    def make_non_bit_oriented(self):
+        self._bit_oriented = False
+
+    @property
+    def bit_oriented(self):
+        return self._bit_oriented
 
     def reset(
         self, nodes_drawn_qty=None, custo=None, exhaust_info=None, preserve_node=False
@@ -4622,7 +4635,8 @@ class NodeInternals_NonTerm(NodeInternals):
                 )[0]
 
         def handle_encoding(list_to_enc):
-            if self.custo.collapse_padding_mode and not self.custo.delay_collapsing:
+            if ((self.bit_oriented or self.custo.collapse_padding_mode)
+                    and (self.root or not self.custo.delay_collapsing)):
                 list_to_enc = list(flatten(list_to_enc))
                 if list_to_enc and isinstance(list_to_enc[0], bytes):
                     return list_to_enc
@@ -4648,7 +4662,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                 new_item1vt.make_private(forget_current_state=False)
                                 new_item2vt = copy.copy(item2.get_value_type())
                                 new_item2vt.make_private(forget_current_state=False)
-                                new_item1vt.extend_left(new_item2vt)
+                                new_item1vt.extend_left(new_item2vt, full_merge=False)
                                 new_item.import_value_type(new_item1vt)
                                 new_item._set_frozen_value(new_item1vt.get_current_value())
                                 if i > 0:
@@ -4668,7 +4682,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 list_to_enc = list(map(tobytes_helper, list_to_enc))
 
             if self.encoder and after_encoding:
-                if not self.custo.collapse_padding_mode:
+                if not (self.bit_oriented or self.custo.collapse_padding_mode):
                     list_to_enc = list(flatten(list_to_enc))
 
                 if list_to_enc:
@@ -5394,7 +5408,7 @@ class NodeInternals_NonTerm(NodeInternals):
         if self.absorb_constraints is not None:
             constraints = self.absorb_constraints
 
-        if self.custo.collapse_padding_mode:
+        if self.bit_oriented or self.custo.collapse_padding_mode:
             constraints.set(AbsCsts.IgnorePadding)
 
         def _try_separator_absorption_with(blob, consumed_size):
@@ -5741,7 +5755,7 @@ class NodeInternals_NonTerm(NodeInternals):
             postponed_node_desc = None
             first_pass = True
 
-            if self.custo.collapse_padding_mode:
+            if self.bit_oriented or self.custo.collapse_padding_mode:
                 if hasattr(self, "_private_collapse_mode"):  # TODO: remove ugliness
                     consumed_bits, byte_aligned = self._private_collapse_mode
                     # print(f'\n!!! DBG _private_collapse_mode: {consumed_bits} {byte_aligned}')
@@ -5779,7 +5793,8 @@ class NodeInternals_NonTerm(NodeInternals):
                             pass
 
                         vt = base_node.get_value_type() if base_node.is_typed_value() else None
-                        if isinstance(vt, fvt.BitField) and self.custo.collapse_padding_mode:
+                        if (isinstance(vt, fvt.BitField)
+                                and (self.bit_oriented or self.custo.collapse_padding_mode)):
                             if byte_aligned:
                                 byte_aligned = (vt.padding_size == 0 and consumed_bits == 0)
                             else:
@@ -5801,7 +5816,8 @@ class NodeInternals_NonTerm(NodeInternals):
                                         f'\n blob: {blob}',
                                         level=1)
 
-                        if (self.custo.collapse_padding_mode and isinstance(vt, fvt.BitField)
+                        if ((self.bit_oriented or self.custo.collapse_padding_mode)
+                                and isinstance(vt, fvt.BitField)
                                 and (not byte_aligned or consumed_bits != 0)):
                             # We enter this case if the BitField is not byte aligned, thus we have
                             # to perform bits processing, and we maintain the current data consumption
@@ -5962,7 +5978,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                 new_consumed_bits = 0 if consumed_bits == 8 else consumed_bits % 8
                                 byte_aligned = new_consumed_bits == 0
 
-                                if (self.custo.not_always_byte_aligned
+                                if (self.last_nt_node #self.custo.not_always_byte_aligned
                                         and is_last_child_node
                                         and new_consumed_bits > 0):
 
@@ -6070,7 +6086,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
                             last_absorption_with_collapse = False
 
-                            if self.custo.collapse_padding_mode:
+                            if self.bit_oriented or self.custo.collapse_padding_mode:
                                 bnode_to_be_cleaned = False
                                 aligned = consumed_bits % 8 == 0
                                 if blob_update_pending and aligned:
@@ -6112,9 +6128,12 @@ class NodeInternals_NonTerm(NodeInternals):
                                                 f'blob_update_pending: {blob_update_pending}',
                                                 level=2)
 
+                            if self.root and is_last_child_node:
+                                base_node.cc.last_nt_node = True
+
                             # pending_upper_postpone = pending_postpone_desc
                             (abort,
-                             blob, # blob is updated if it absorption succeed
+                             blob, # blob is updated if its absorption succeed
                              consumed_size,
                              consumed_nb,
                              postponed_sent_back
@@ -6146,7 +6165,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                 consumed_bits = 0
                                 byte_aligned = True
 
-                            if self.custo.collapse_padding_mode and bnode_to_be_cleaned:
+                            if (self.bit_oriented or self.custo.collapse_padding_mode) and bnode_to_be_cleaned:
                                 # DEBUG_PRINT(f'[{id(self)}] ABS_7 [{base_node.name}]: '
                                 #             f'blob_update_pending: {blob_update_pending}, '
                                 #             f'consumed_bits: {consumed_bits}, ')
@@ -6165,8 +6184,9 @@ class NodeInternals_NonTerm(NodeInternals):
                         if abort is None:
                             continue
 
-                        if isinstance(vt, fvt.BitField) and self.custo.collapse_padding_mode:
-                            if byte_aligned or (self.custo.not_always_byte_aligned and is_last_child_node):
+                        if (isinstance(vt, fvt.BitField)
+                                and (self.bit_oriented or self.custo.collapse_padding_mode)):
+                            if byte_aligned or is_last_child_node:
                                 consumed_size += blob_shift
                                 if last_absorption_with_collapse:
                                     blob_update_pending = False
@@ -7245,7 +7265,7 @@ class Node(object):
     def __init__(self, name, base_node=None,
                  ignore_frozen_state=False, accept_external_entanglement=False, acceptance_set=None,
                  subnodes=None, values=None, value_type=None, vt=None, new_env=False,
-                 description=None, copy_dico=None):
+                 description=None, copy_dico=None, root=False, bit_oriented=False):
         """
         Args:
           name (str): Name of the node. Every children node of a node shall have a unique name.
@@ -7277,10 +7297,12 @@ class Node(object):
 
         assert "/" not in name  # '/' is a reserved character
 
+        self._root = root
         self.internals = {}
         self.name = name
         self.description = description
         self.env = None
+        self.bit_oriented = None
 
         self._paths_htable = None
 
@@ -7337,6 +7359,7 @@ class Node(object):
 
         else:
             self._delayed_jobs_called = False
+            self.bit_oriented = bit_oriented
 
             self.add_conf("MAIN")
             self.set_current_conf("MAIN")
@@ -7389,13 +7412,25 @@ class Node(object):
         # It does not handle self.internals nor self.entangled_nodes which are copied
         # in a different way.
 
-        new_node = type(self)(self.name)
+        # we need to pass @bit_oriented, because it is transfered to other object
+        # during __init__()
+        new_node = type(self)(self.name, bit_oriented=self.bit_oriented)
         new_node.__dict__.update(self.__dict__)
         if self.semantics is not None:
             new_node.semantics = copy.copy(self.semantics)
             new_node.semantics.make_private()
 
         return new_node
+
+    @property
+    def root(self):
+        return self._root
+
+    @root.setter
+    def root(self, value: bool):
+        self._root = value
+        for conf in self.internals:
+            self.internals[conf].root = self._root
 
     def set_contents(self, base_node, copy_dico=None, ignore_frozen_state=False,
                      accept_external_entanglement=False, acceptance_set=None,
@@ -7430,6 +7465,8 @@ class Node(object):
         """
 
         self.description = base_node.description
+        self.bit_oriented = base_node.bit_oriented
+        self._root = base_node._root
         self._post_freeze_handler = base_node._post_freeze_handler
 
         sync_with = None
@@ -7487,6 +7524,7 @@ class Node(object):
             self.internals[conf] = new_internals
             self.internals[conf].env = self.env
             self.internals[conf].name = self.name
+            self.internals[conf].root = self._root
 
             if base_node.is_nonterm(conf):
                 self.internals[conf].import_subnodes_full_format(
@@ -7920,6 +7958,8 @@ class Node(object):
         conf = self._check_conf(conf)
 
         new_internals = NodeInternals_NonTerm(name=self.name)
+        if self.bit_oriented:
+            new_internals.make_bit_oriented()
         if preserve_node:
             new_internals.set_contents_from(self.internals[conf])
         self.internals[conf] = new_internals
@@ -7948,6 +7988,8 @@ class Node(object):
         conf = self._check_conf(conf)
 
         new_internals = NodeInternals_NonTerm(name=self.name)
+        if self.bit_oriented:
+            new_internals.make_bit_oriented()
         if preserve_node:
             new_internals.set_contents_from(self.internals[conf])
         self.internals[conf] = new_internals
@@ -7976,6 +8018,8 @@ class Node(object):
         conf = self._check_conf(conf)
 
         new_internals = NodeInternals_NonTerm(name=self.name)
+        if self.bit_oriented:
+            new_internals.make_bit_oriented()
         if preserve_node:
             new_internals.set_contents_from(self.internals[conf])
         self.internals[conf] = new_internals
@@ -9548,10 +9592,8 @@ class Node(object):
                                         nl=False,
                                         log_func=log_func,
                                         pretty_print=pretty_print)
-                        if (
-                            node.is_nonterm(conf_tmp)
-                            and node.custo.collapse_padding_mode
-                        ):
+                        if (node.is_nonterm(conf_tmp)
+                                and (node.cc.bit_oriented or node.custo.collapse_padding_mode)):
                             self._print(
                                 " >Collapse Bitfields<",
                                 rgb=Color.ND_CUSTO,
@@ -9762,7 +9804,6 @@ class Env(object):
         self._color_enabled = False
         self.csp: CSP|None = None
         self.csp_save: CSP|None = None
-
         self._decoded_blob = None
 
     @property

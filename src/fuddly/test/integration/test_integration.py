@@ -2878,7 +2878,7 @@ class TestNodeFeatures(unittest.TestCase):
         padding_desc = \
             {'name': 'padding',
              'shape_type': MH.Ordered,
-             'custo_set': MH.Custo.NTerm.CollapsePadding,
+             # 'custo_set': MH.Custo.NTerm.CollapsePadding,
              'contents': [
                  {'name': 'sublevel',
                   'contents': [
@@ -2907,7 +2907,7 @@ class TestNodeFeatures(unittest.TestCase):
 
              ]}
 
-        mb = NodeBuilder()
+        mb = NodeBuilder(bit_oriented=True)
         node = mb.create_graph_from_desc(padding_desc)
 
         print('***')
@@ -2926,7 +2926,7 @@ class TestNodeFeatures(unittest.TestCase):
                  {'name': 'prefix',
                   'contents': String(values=['prefix'])},
                  {'name': 'TP-DCS',  # Data Coding Scheme (refer to GSM 03.38)
-                  'custo_set': MH.Custo.NTerm.CollapsePadding,
+                  # 'custo_set': MH.Custo.NTerm.CollapsePadding,
                   'contents': [
                       {'name': '8-bit',
                        'determinist': True,
@@ -2987,7 +2987,7 @@ class TestNodeFeatures(unittest.TestCase):
                   'contents': String(values=['suffix'])}
              ]}
 
-        mb = NodeBuilder()
+        mb = NodeBuilder(bit_oriented=True)
         node = mb.create_graph_from_desc(abs_test_desc)
         node_abs = node.get_clone()
 
@@ -3040,20 +3040,17 @@ class TestNodeFeatures(unittest.TestCase):
 
 
     @ddt.data(
-        {'byte-aligned': True, 'wrong_custo': False},
-        {'byte-aligned': False, 'wrong_custo': False},
-        {'byte-aligned': False, 'wrong_custo': True},
+        {'byte-aligned': True, 'padding_root': False},
+        {'byte-aligned': False, 'padding_root': False},
+        {'byte-aligned': True, 'padding_root': True},
     )
     def test_collapse_padding_02(self, params):
 
         test_desc = {
             'name': 'test',
-            'custo_set': MH.Custo.NTerm.CollapsePadding,
             'contents': [
                 {'name': 'timestamp',
                  'qty': (0, 1),
-                 'custo_set': [MH.Custo.NTerm.CollapsePadding, MH.Custo.NTerm.DelayCollapsing,
-                               MH.Custo.NTerm.NotAlwaysByteAligned],
                  'description': 'Timestamp [OPTIONAL]',
                  'contents': [
                      {'name': 'hours',
@@ -3072,8 +3069,6 @@ class TestNodeFeatures(unittest.TestCase):
 
                 {'name': 'hdr',
                  'description': 'ATCmessageheader',
-                 'custo_set': [MH.Custo.NTerm.CollapsePadding, MH.Custo.NTerm.DelayCollapsing,
-                               MH.Custo.NTerm.NotAlwaysByteAligned],
                  'contents': [
                      {'name': 'msg_id',
                       'contents': BitString(min_intvalue=0, max_intvalue=63, variable_size=False),
@@ -3096,14 +3091,14 @@ class TestNodeFeatures(unittest.TestCase):
                 'name': 'padding',
                 'contents': BitString(fixed_nb_bits=6, min_intvalue=0, max_intvalue=31)
             }
-            # add a new node to test/hdr to make it byte-aligned
-            test_desc['contents'][1]['contents'].append(padding)
+            if params['padding_root']:
+                # add a new node to test to make it byte-aligned
+                test_desc['contents'].append(padding)
+            else:
+                # add a new node to test/hdr to make it byte-aligned
+                test_desc['contents'][1]['contents'].append(padding)
 
-        if params['wrong_custo']:
-            # make the custo of test/hdr wrong
-            test_desc['contents'][1]['custo_set'].remove(MH.Custo.NTerm.NotAlwaysByteAligned)
-
-        mb = NodeBuilder()
+        mb = NodeBuilder(bit_oriented=True)
         node = mb.create_graph_from_desc(test_desc)
         node_abs = node.get_clone()
 
@@ -3119,16 +3114,14 @@ class TestNodeFeatures(unittest.TestCase):
 
         abs_result = node_abs.absorb(result)
         print(f'\n--> Absorption status: {abs_result!r}\n')
-        if params['wrong_custo']:
-            self.assertEqual(abs_result[0], AbsorbStatus.Absorbed)
-        else:
-            self.assertEqual(abs_result[0], AbsorbStatus.FullyAbsorbed)
-            raw = node_abs.to_bytes()
-            node_abs.show()
 
-            print_byte_string(raw, hexa=True, binary=True, raw=True)
+        raw = node_abs.to_bytes()
+        node_abs.show()
 
-            self.assertEqual(result, raw)
+        print_byte_string(raw, hexa=True, binary=True, raw=True)
+        self.assertEqual(abs_result[0], AbsorbStatus.FullyAbsorbed)
+
+        self.assertEqual(result, raw)
 
 
     def test_collapse_padding_03(self):
@@ -3174,15 +3167,15 @@ class TestNodeFeatures(unittest.TestCase):
 
         test2_desc = {
             'name': 'test2',
-            'custo_set': MH.Custo.NTerm.CollapsePadding,
+            # 'custo_set': MH.Custo.NTerm.CollapsePadding,
             'contents': [
 
                 {'name': 'shape_selector',
                  'contents': BitString(fixed_nb_bits=2, min_intvalue=0, max_intvalue=1)},
 
                 {'name': 'shape_shop',
-                 'custo_set': [MH.Custo.NTerm.CollapsePadding, MH.Custo.NTerm.NotAlwaysByteAligned,
-                               MH.Custo.NTerm.DelayCollapsing],
+                 # 'custo_set': [MH.Custo.NTerm.CollapsePadding, MH.Custo.NTerm.NotAlwaysByteAligned,
+                 #               MH.Custo.NTerm.DelayCollapsing],
                  'sync_shape_with': 'shape_selector' if params['sync_opt'] else None,
                  'contents': [
                      # shape 0
@@ -3222,7 +3215,7 @@ class TestNodeFeatures(unittest.TestCase):
             ]}
 
 
-        mb = NodeBuilder()
+        mb = NodeBuilder(bit_oriented=True)
         node = mb.create_graph_from_desc(test2_desc)
         node_abs_ok = node.get_clone()
         node_abs_ok2 = node.get_clone()

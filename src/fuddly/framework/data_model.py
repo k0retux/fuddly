@@ -171,7 +171,7 @@ class DataModel(object):
                 return Node(nm, values=[data], new_env=True)
 
     def register_atom_for_decoding(self, atom, absorb_constraints=AbsFullCsts(),
-                                   decoding_scope=None):
+                                   decoding_scope=None, bit_oriented=False):
         """
         Register an atom that will be used by the DataModel when an operation requiring data absorption
         is performed, like self.decode().
@@ -189,7 +189,7 @@ class DataModel(object):
 
         if self._atoms_for_abs is None:
             self._atoms_for_abs = {}
-        atom_name, prepared_atom = self._backend(atom).prepare_atom(atom)
+        atom_name, prepared_atom = self._backend(atom).prepare_atom(atom, bit_oriented=bit_oriented)
         if decoding_scope is None:
             decoding_scope = [atom_name]
             self._default_atom_for_abs = (prepared_atom, absorb_constraints)
@@ -329,10 +329,10 @@ class DataModel(object):
         self.node_backend.default_gen_custo = default_gen_custo
         self.node_backend.default_nonterm_custo = default_nonterm_custo
 
-    def register(self, *atom_list):
+    def register(self, *atom_list, bit_oriented=False):
         for a in atom_list:
             if a is None: continue
-            key, prepared_atom = self._backend(a).prepare_atom(a)
+            key, prepared_atom = self._backend(a).prepare_atom(a, bit_oriented=bit_oriented)
             self._dm_hashtable[key] = prepared_atom
 
     def get_atom(self, hash_key, name=None):
@@ -606,7 +606,7 @@ class NodeBackend(object):
     def merge_with(self, node_backend):
         self._confs = self._confs.union(node_backend._confs)
 
-    def prepare_atom(self, atom):
+    def prepare_atom(self, atom, bit_oriented=False):
         if not atom:
             msg = "\n*** WARNING: nothing to register for " \
                   "the data model '{nm:s}'!"\
@@ -616,7 +616,8 @@ class NodeBackend(object):
 
         if isinstance(atom, dict):
             mb = NodeBuilder(dm=self._dm, default_gen_custo=self.default_gen_custo,
-                             default_nonterm_custo=self.default_nonterm_custo)
+                             default_nonterm_custo=self.default_nonterm_custo,
+                             bit_oriented=bit_oriented)
             desc_name = 'Unreadable Name'
             try:
                 desc_name = atom['name']

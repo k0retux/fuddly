@@ -1351,11 +1351,10 @@ class MyDF_DataModel(DataModel):
 
         bitstring_desc = {
             'name': 'bitstring',
-            'custo_set': MH.Custo.NTerm.CollapsePadding,
             'contents': [
                 {'name': 'timestamp',
                  'qty': (0, 1),
-                 'custo_set': [MH.Custo.NTerm.CollapsePadding, MH.Custo.NTerm.DelayCollapsing],
+                 # 'custo_set': MH.Custo.NTerm.DelayCollapsing,
                  'description': 'Timestamp [OPTIONAL]',
                  'contents': [
                      {'name': 'hours',  # 2 bits
@@ -1376,8 +1375,8 @@ class MyDF_DataModel(DataModel):
 
                 {'name': 'hdr',
                  'description': 'ATCmessageheader',
-                 'custo_set': [MH.Custo.NTerm.CollapsePadding, MH.Custo.NTerm.DelayCollapsing,
-                               MH.Custo.NTerm.NotAlwaysByteAligned],
+                 # 'custo_set': [MH.Custo.NTerm.DelayCollapsing,
+                 #               MH.Custo.NTerm.NotAlwaysByteAligned],
                  'contents': [
                      {'name': 'msg_id',  # 6 bits
                       'description': 'Msgidentificationnumber',
@@ -1404,7 +1403,7 @@ class MyDF_DataModel(DataModel):
 
         bf_nested_desc = {
             'name': 'bf_nested',
-            'custo_set': MH.Custo.NTerm.CollapsePadding,
+            # 'custo_set': MH.Custo.NTerm.CollapsePadding,
             'contents': [
                 {'name': 'header',
                  'contents': BitField(subfield_sizes=[3,1], endian=VT.BigEndian,
@@ -1448,6 +1447,8 @@ class MyDF_DataModel(DataModel):
                  'contents': UINT8(min=0, max=255, default=123)}
             ]}
 
+        self.register(bitstring_desc, bf_nested_desc, bit_oriented=True)
+
         self.register(test_node_desc, abstest_desc, abstest2_desc,
                       separator_desc, separator_2_desc, separator_3_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
@@ -1460,7 +1461,7 @@ class MyDF_DataModel(DataModel):
                       shape_type_1_desc, shape_type_2_desc, ns_desc, nested_nt_desc, def_qty_desc,
                       tlv_rec0_desc, tlv_rec0b_desc, tlv_rec1_desc, tlv_rec2_desc, tlv_rec3_desc,
                       tlv_rec4_desc, recbig_desc,
-                      optional_desc, fragment_desc, bitstring_desc, bf_nested_desc)
+                      optional_desc, fragment_desc)
 
 
     def validation_tests(self):

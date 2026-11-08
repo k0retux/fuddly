@@ -141,7 +141,7 @@ class SMS_DataModel(DataModel):
                                                        [0b01]],    # kind of opcode
                                    ) },
              {'name': 'TP-DCS',  # Data Coding Scheme (refer to GSM 03.38)
-              'custo_set': MH.Custo.NTerm.CollapsePadding,
+              # 'custo_set': MH.Custo.NTerm.CollapsePadding,
               'contents': [
                   {'name': 'msb',
                    'determinist': True,
@@ -270,6 +270,6 @@ class SMS_DataModel(DataModel):
          ]}
 
 
-        self.register(smstxt_desc, smscmd_desc)
+        self.register(smstxt_desc, smscmd_desc, bit_oriented=True)
 
 data_model = SMS_DataModel()

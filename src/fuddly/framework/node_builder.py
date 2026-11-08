@@ -85,7 +85,8 @@ class NodeBuilder(object):
     ]
 
     def __init__(self, dm=None, delayed_jobs=True, add_env=True,
-                 default_gen_custo=None, default_nonterm_custo=None):
+                 default_gen_custo=None, default_nonterm_custo=None,
+                 bit_oriented=False):
         """
         Help the process of data description. This class is able to construct a
         :class:`framework.data_model.Node` object from a JSON-like description.
@@ -112,6 +113,8 @@ class NodeBuilder(object):
         self.default_gen_custo_orig = NodeInternals_GenFunc.default_custo
         self.default_nonterm_custo_orig = NodeInternals_NonTerm.default_custo
 
+        self.bit_oriented = bit_oriented
+
         self._constraint_backend_necessary = False
         self._constraint_highlight = False
         self._constraints_storage = []
@@ -137,6 +140,7 @@ class NodeBuilder(object):
             NodeInternals_NonTerm.default_custo = self.default_nonterm_custo
 
         n = self._create_graph_from_desc(desc, None)
+        n.root = True
 
         if self._add_env_to_the_node:
             self._register_todo(n, self._set_env, prio=self.VERYLOW_PRIO, last_position=False)
@@ -160,10 +164,15 @@ class NodeBuilder(object):
         if self._constraint_backend_necessary:
             self._enable_constraints(n)
 
+        # TODO: During 'n' lifecycle when NodeInternals_NonTerm or NodeInternals_GenFunc are instantiated
+        #   dynamically, the custo provided as input will be lost
         if self.default_gen_custo:
             NodeInternals_GenFunc.default_custo = self.default_gen_custo_orig
         if self.default_nonterm_custo:
             NodeInternals_NonTerm.default_custo = self.default_nonterm_custo_orig
+
+        if self.bit_oriented:
+            n.bit_oriented = True
 
         return n
 
@@ -254,7 +263,7 @@ class NodeBuilder(object):
             self._handle_common_attr(nd, desc, conf=None, current_ns=namespace)
             return nd
 
-        nd = Node(name)
+        nd = Node(name, bit_oriented=self.bit_oriented)
         clone_ref = desc.get('clone', None)
         from_ns = desc.get('from_namespace', None)
         current_ns = namespace if from_ns is None else from_ns
@@ -290,7 +299,9 @@ class NodeBuilder(object):
             ref = self._handle_name(desc['name'], namespace=namespace)
             if ref in self.node_dico:
                 raise ValueError("name {!r} is already used!".format(ref))
-            n = Node(ref[0])
+            n = Node(ref[0], bit_oriented=self.bit_oriented)
+
+        n.bit_oriented = self.bit_oriented
 
         return n, conf
 

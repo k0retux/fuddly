@@ -207,16 +207,10 @@ custo_set, custo_clear
     generate new forms only if different shapes have been defined (refer to keyword ``shape_type``
     and ``section_type``).
 
-  - ``MH.Custo.NTerm.CollapsePadding``: By default, this mode is *disabled*.
+  - ``MH.Custo.NTerm.CollapsePadding`` **[OBSOLETE]**: By default, this mode is *disabled*.
     When enabled, every time two adjacent ``BitField`` 's (within its scope) are found, they
     will be merged in order to remove any padding in-between. This is done
     "recursively" until any inner padding is removed.
-
-  - ``MH.Custo.NTerm.NotAlwaysByteAligned``: By default, this mode is *disabled*.
-    This mode is only relevant when ``MH.Custo.NTerm.CollapsePadding``is enabled. In such context, if enabled, it
-    allows the non-terminal node, customized this way, to contain ``BitField`` or derivative objects
-    whose the cumulative size in bits is not a multiple of 8. It allows to describe bit-oriented data model like
-    ASN.1 UPER. This customization is only relevant for absorption/decoding operations.
 
     .. note::
       To be compatible with an *absorption* operation, the non-terminal set with this
@@ -227,7 +221,21 @@ custo_set, custo_clear
       - the ``qty`` keyword should not be used on the children except if it is equal to ``1``,
         or ``(1,1)``.
 
-  - ``MH.Custo.NTerm.DelayCollapsing``: By default, this mode is *disabled*.
+    .. note::
+
+        If you want to ignore padding in BitField, meaning you describe a data format which is bit-oriented,
+        then you just have to specify it at the  time of registration, like the following:
+
+            ``DataModel.register(node_desc, bit_oriented=True)``
+
+        With this bit-oriented attribute, you do not need to care about specific customization within your
+        data model.
+
+        If you need to instanciate a :class:`fuddly.framework.node.node_builder.NodeBuilder` for node creation
+        before registration, you also have to pass ``bit_oriented=True`` to the constructor.
+
+
+  - ``MH.Custo.NTerm.DelayCollapsing`` **[OBSOLETE]**: By default, this mode is *disabled*.
     To be used in
     conjunction with ``MH.Custo.NTerm.CollapsePadding`` when the collapse operation should not
     be performed in the current non-terminal node but in the parent node.
@@ -1227,6 +1235,10 @@ criteria by avoiding to put additional constraints and keeping as much freedom a
   When provided, it has to be the size in bits used to represent a letter in the ``BitString``. Especially relevant
   in conjunction with ``binvalues`` or ``bindefault``. For instance, to represent an ASN.1 ``IA5String`` in UPER
   the ``letter_bit_sz`` has to be set to 7.
+
+``translator`` [optional, default value: **None**]
+  Relevant when ``letter_bit_sz`` is also provided. It shall be a function that provide
+  the byte representation for each letter value. Used for pretty printing.
 
 ``bindefault`` [optional, default value: **None**]
   If not None, it should be the default byte string that will be returned by default
