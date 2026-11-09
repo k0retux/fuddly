@@ -3789,7 +3789,8 @@ class BitString(BitField):
     def __init__(
             self, min_intvalue=None, max_intvalue=None, intvalues=None,
             variable_size: bool | None = None, delta_minmax_mode: bool = False,
-            binvalues: list[bytes] | None = None, letter_bit_sz: int | None = None, translator = None,
+            binvalues: list[bytes] | None = None, letter_bit_sz: int | None = None,
+            translator_int2letter = None, translator_letter2int = None,
             bindefault = None, intdefault = None,
             fixed_nb_bits: int | None = None, min_nb_bits: int | None = None, max_nb_bits: int | None = None,
             padding= 0, lsb_padding= True, show_padding= False,
@@ -3797,24 +3798,11 @@ class BitString(BitField):
             value_descs: dict|None = None,
     ):
 
-        def convert_to_intval(bval):
-            int_val = 0
-            shift = 0
-            max_val = (1 << letter_bit_sz) - 1
-            if endian == VT.LittleEndian:
-                bval = bval[::-1]
-            for b in bval:
-                b = b % max_val
-                int_val += b << shift
-                shift += letter_bit_sz
-
-            return int_val
-
-        def convert_to_intval_list(bval_list):
+        def convert_bytes_to_intval_list(bval_list: list):
             intval_list = []
             default_found = False
             for bval in bval_list:
-                int_val = convert_to_intval(bval)
+                int_val = self.convert_bytes_to_intval(bval)
                 intval_list.append(int_val)
 
                 if self.intdefault is not None and int_val == self.intdefault:
@@ -3843,7 +3831,9 @@ class BitString(BitField):
         if (fixed_nb_bits is not None and (min_nb_bits is not None or max_nb_bits is not None)):
             raise DataModelDefinitionError
 
-        self.translator = self.convert_intval_to_bytes if translator is None else translator
+        self.endian = endian
+        self.translator_int2letter = self.convert_int2letter if translator_int2letter is None else translator_int2letter
+        self.translator_letter2int = self.convert_letter2int if translator_letter2int is None else translator_letter2int
         self.sorted_intvalues = None
 
         if fixed_nb_bits is not None:
@@ -3856,10 +3846,14 @@ class BitString(BitField):
             self.variable_size = variable_size
 
         self.letter_bit_sz = letter_bit_sz
+        if self.letter_bit_sz is None:
+            self.max_nb_of_letters = None
+        else:
+            self.max_nb_of_letters = (1 << self.letter_bit_sz)
 
         self.delta_minmax_mode = delta_minmax_mode
         if bindefault is not None:
-            self.intdefault = convert_to_intval(bindefault)
+            self.intdefault = self.convert_bytes_to_intval(bindefault)
         else:
             self.intdefault = intdefault
 
@@ -3874,7 +3868,7 @@ class BitString(BitField):
                 raise DataModelDefinitionError
 
             self.binvalues = copy.copy(binvalues)
-            self.intvalues = convert_to_intval_list(self.binvalues)
+            self.intvalues = convert_bytes_to_intval_list(self.binvalues)
 
         else:
             self.binvalues = None
@@ -4006,7 +4000,7 @@ class BitString(BitField):
             padding=padding,
             lsb_padding=lsb_padding,
             show_padding=show_padding,
-            endian=endian,
+            endian=self.endian,
             determinist=determinist,
             subfield_descs=None,
             subfield_value_descs=None if value_descs is None else {0: value_descs},
@@ -4247,6 +4241,24 @@ class BitString(BitField):
         return blob, off, self.nb_bytes
 
 
+    def convert_letter2int(self, intval):
+        return intval % self.max_nb_of_letters
+
+    def convert_int2letter(self, intval):
+        return intval
+
+    def convert_bytes_to_intval(self, bval):
+        int_val = 0
+        shift = 0
+        if self.endian == VT.LittleEndian:
+            bval = bval[::-1]
+        for b in bval:
+            b = self.translator_letter2int(b)
+            int_val += b << shift
+            shift += self.letter_bit_sz
+
+        return int_val
+
     def convert_intval_to_bytes(self, intval):
         if self.letter_bit_sz > 8:
             return None
@@ -4255,8 +4267,9 @@ class BitString(BitField):
 
         bytes_l = []
         b_len = intval.bit_length()
-        for i in range(b_len // self.letter_bit_sz):
+        for i in range(math.ceil(b_len/self.letter_bit_sz)):
             letter_val = (intval >> (i*self.letter_bit_sz)) & letter_mask
+            letter_val = self.translator_int2letter(letter_val)
             bytes_l.append(letter_val)
 
         if self.endian == VT.LittleEndian:
@@ -4267,7 +4280,7 @@ class BitString(BitField):
 
     def _pretty_format_raw_val(self, raw_val):
         if self.letter_bit_sz is not None:
-            pretty_raw_val = self.translator(raw_val)
+            pretty_raw_val = self.convert_intval_to_bytes(raw_val)
             if pretty_raw_val is None:
                 pretty_raw_val = raw_val
             else:
@@ -4358,6 +4371,109 @@ class BitString(BitField):
         self.exhausted = False
 
         return True
+
+
+class ASN1UPER_NumericString(BitString):
+
+    _trans_l2i = {
+        ord(' '): 0,
+        ord('0'): 1,
+        ord('1'): 2,
+        ord('2'): 3,
+        ord('3'): 4,
+        ord('4'): 5,
+        ord('5'): 6,
+        ord('6'): 7,
+        ord('7'): 8,
+        ord('8'): 9,
+        ord('9'): 10,
+    }
+
+    _trans_i2l = {i: l for l, i in _trans_l2i.items()}
+
+    def convert_letter2int(self, intval):
+        val = self._trans_l2i[intval]
+        if not self._with_space:
+            val -= 1
+        return val
+
+    def convert_int2letter(self, intval):
+        val = self._trans_i2l[intval]
+        if not self._with_space:
+            val += 1
+
+        return val
+
+    def __init__(self, size=None, min_sz=None, max_sz=None,
+                 bindefault=None, with_space=True):
+
+        assert (size is None and min_sz is not None) or (size is not None and min_sz is None)
+        if min_sz is not None or max_sz is not None:
+            assert min_sz is not None and max_sz is not None
+
+        self._with_space= with_space
+        delta_minmax_mode = True
+        letter_bit_sz=4
+        if size is not None:
+            variable_size = False
+            fixed_nb_bits = letter_bit_sz*size
+            min_nb_bits = max_nb_bits = None
+        else:
+            assert min_sz < max_sz
+            variable_size = True
+            fixed_nb_bits = None
+            min_nb_bits = letter_bit_sz*min_sz
+            max_nb_bits = letter_bit_sz*max_sz
+
+        BitString.__init__(self,
+                           letter_bit_sz=letter_bit_sz,
+                           variable_size=variable_size, fixed_nb_bits=fixed_nb_bits,
+                           min_nb_bits=min_nb_bits, max_nb_bits=max_nb_bits,
+                           delta_minmax_mode=delta_minmax_mode,
+                           endian=VT.LittleEndian,
+                           bindefault=bindefault)
+
+
+
+class ASN1UPER_IA5String(BitString):
+
+    def convert_letter2int(self, intval):
+        assert intval < self.max_nb_of_letters
+        return intval
+
+    def convert_int2letter(self, intval):
+        return intval
+
+    def __init__(self, size=None, min_sz=None, max_sz=None,
+                 binvalues=None,
+                 bindefault=None):
+
+        assert (size is None and min_sz is not None) or (size is not None and min_sz is None)
+        if min_sz is not None or max_sz is not None:
+            assert min_sz is not None and max_sz is not None
+
+        delta_minmax_mode = True
+        letter_bit_sz=7
+        if size is not None:
+            variable_size = False
+            fixed_nb_bits = letter_bit_sz*size
+            min_nb_bits = max_nb_bits = None
+        else:
+            assert min_sz < max_sz
+            variable_size = True
+            fixed_nb_bits = None
+            min_nb_bits = letter_bit_sz*min_sz
+            max_nb_bits = letter_bit_sz*max_sz
+
+        BitString.__init__(self,
+                           letter_bit_sz=letter_bit_sz,
+                           variable_size=variable_size, fixed_nb_bits=fixed_nb_bits,
+                           min_nb_bits=min_nb_bits, max_nb_bits=max_nb_bits,
+                           delta_minmax_mode=delta_minmax_mode,
+                           endian=VT.LittleEndian,
+                           binvalues=binvalues,
+                           bindefault=bindefault)
+
 
 
 class INT8(INT):

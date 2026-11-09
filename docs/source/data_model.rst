@@ -1236,9 +1236,13 @@ criteria by avoiding to put additional constraints and keeping as much freedom a
   in conjunction with ``binvalues`` or ``bindefault``. For instance, to represent an ASN.1 ``IA5String`` in UPER
   the ``letter_bit_sz`` has to be set to 7.
 
-``translator`` [optional, default value: **None**]
-  Relevant when ``letter_bit_sz`` is also provided. It shall be a function that provide
-  the byte representation for each letter value. Used for pretty printing.
+``translator_int2letter`` [optional, default value: **None**]
+  Relevant when ``letter_bit_sz`` is also provided. It shall be a function that provides
+  the letter representation (in ascii value) for each encoded integer value. Used for pretty printing.
+
+``translator_letter2int`` [optional, default value: **None**]
+  Relevant when ``letter_bit_sz`` is also provided. It shall be a function that provides
+  the encoded integer value for each letter representation (in ascii value).
 
 ``bindefault`` [optional, default value: **None**]
   If not None, it should be the default byte string that will be returned by default
@@ -1261,6 +1265,15 @@ criteria by avoiding to put additional constraints and keeping as much freedom a
 .. note::
 
   ``BitString`` nodes are compatible with the ``sync_size_with`` keyword. Refer to :ref:`dm:node_prop_keywords`.
+
+
+Below the different currently defined bitstring types:
+
+- :class:`fuddly.framework.value_types.BitString`: General purpose bitstring.
+- :class:`fuddly.framework.value_types.ASN1UPER_NumericString`: Specialized ``BitString`` to match
+  ASN.1 ``NumericString`` type in UPER encoding.
+- :class:`fuddly.framework.value_types.ASN1UPER_IA5String`: Specialized ``BitString`` to match
+  ASN.1 ``IA5String`` type in UPER encoding.
 
 
 Helpers
