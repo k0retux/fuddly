@@ -8933,8 +8933,17 @@ class Node(object):
                 )
 
     def to_bytes(self, conf=None, recursive=True):
+        if not self.root:
+            fake_root = True
+            self.root = True
+        else:
+            fake_root = False
         node_internals_list = self.freeze(conf=conf, recursive=recursive)
-        return convert_nodeinternals_list_to_bstring(node_internals_list, conf=conf, recursive=recursive)
+        ret = convert_nodeinternals_list_to_bstring(node_internals_list, conf=conf, recursive=recursive)
+        if fake_root:
+            self.root = False
+
+        return ret
 
     def to_str(self, conf=None, recursive=True):
         val = self.to_bytes(conf=conf, recursive=recursive)
@@ -8963,6 +8972,12 @@ class Node(object):
                     conf=conf, recursive=recursive, return_node_internals=False
                 )[0]
 
+        if not self.root:
+            fake_root = True
+            self.root = True
+        else:
+            fake_root = False
+
         node_internals_list = self._get_value(conf=conf, recursive=recursive)
         if isinstance(node_internals_list, list):
             node_internals_list = list(flatten(node_internals_list))
@@ -8975,6 +8990,9 @@ class Node(object):
                 val = b""
         else:
             val = node_internals_list
+
+        if fake_root:
+            self.root = False
 
         return val
 
