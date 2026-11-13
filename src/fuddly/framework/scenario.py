@@ -893,10 +893,16 @@ class ScenarioEnv(object):
     def __init__(self):
         self._dm = None
         self._target = None
-        self._scenario = None
+        self._logger_func = None
+        self._scenario: Scenario = None
         self._context = None
         self._seed_from_fmkplumbing = None
         # self._knowledge_source = None
+
+    def log_info(self, info, add_step=True):
+        if add_step:
+            info = f'from Step({self._scenario.current_step}) --> {info}'
+        return self._logger_func(info)
 
     @property
     def seed_from_fmkplumbing(self):
@@ -921,6 +927,14 @@ class ScenarioEnv(object):
     @target.setter
     def target(self, val):
         self._target = val
+
+    @property
+    def logger_func(self):
+        return self._logger_func
+
+    @logger_func.setter
+    def logger_func(self, func):
+        self._logger_func = func
 
     @property
     def scenario(self):
@@ -1052,6 +1066,9 @@ class Scenario(object):
     def set_data_model(self, dm):
         self._dm = dm
         self._env.dm = dm
+
+    def set_logger_func(self, func):
+        self._env.logger_func = func
 
     def set_target(self, target):
         self._env.target = target

@@ -1483,17 +1483,18 @@ class FmkPlumbing(object):
                     self._tactics.register_scenarios(sc)
                     dmaker_type = self._tactics.scenario_ref_from(sc)
                     dmaker_cls_name = self._tactics.scenario_cls_name_from(sc)
-                    desc = self._dmaker_desc_str(
-                        self._tactics.get_generator_obj(dmaker_type, dmaker_cls_name),
-                        color=False)
                     if sc.backend == Scenario.Generator:
+                        dm_obj = self._tactics.get_generator_obj(dmaker_type, dmaker_cls_name)
                         self.__dynamic_generator_ids[self.dm].append(dmaker_type)
                         is_gen = True
                     elif sc.backend == Scenario.StatefulOperator:
+                        dm_obj = self._tactics.get_operator_obj(dmaker_type, dmaker_cls_name)
                         self.__dynamic_operator_ids[self.dm].append(dmaker_type)
                         is_gen = False
                     else:
                         raise NotImplementedError
+
+                    desc = self._dmaker_desc_str(dm_obj, color=False)
                     self.fmkDB.insert_dmaker(self.dm.name, dmaker_type, dmaker_cls_name,
                                              is_gen, True, True,
                                              description=desc, other_info=None)
@@ -1892,6 +1893,24 @@ class FmkPlumbing(object):
 
     def _init_fmk_internals_step2(self, prj, dm):
         self._recompute_current_generators()
+
+        for tactics in [self._tactics, self._generic_tactics]:
+            operator_types = tactics.operator_types
+            if operator_types:
+                for dis_type in sorted(operator_types):
+                    operator_names = tactics.get_operators_list(dis_type)
+                    for dis_name in operator_names:
+                        dis_obj = tactics.get_operator_obj(dis_type, dis_name)
+                        dis_obj.logger_func = self.lg.log_user_info if self.lg is not None else None
+
+            generator_types = tactics.generator_types
+            if generator_types:
+                for gen_type in sorted(generator_types):
+                    generator_names = tactics.get_generators_list(gen_type)
+                    for gen_name in generator_names:
+                        gen_obj = tactics.get_generator_obj(gen_type, gen_name)
+                        gen_obj.logger_func = self.lg.log_user_info if self.lg is not None else None
+
         # need the logger active
         self._reset_fmk_internals()
 

@@ -561,9 +561,21 @@ class DataMaker(object):
     related_dm_name = None
 
     def __init__(self):
+        self._logger_func = None
         self._fmkops = None
         if self._modelwalker_user:
             self.idx = None
+
+    @property
+    def logger_func(self):
+        return self._logger_func
+
+    @logger_func.setter
+    def logger_func(self, func):
+        self._logger_func = func
+
+    def log_info(self, info):
+        self._logger_func(info)
 
     def set_exportable_fmk_ops(self, fmkops):
         self._fmkops = fmkops
@@ -1167,6 +1179,7 @@ class DynOperatorFromScenario(StatefulOperator, CommonMethodsForScenarioDM):
     def setup(self, dm, user_input):
         self.__class__.scenario.set_data_model(dm)
         self.scenario = copy.copy(self.__class__.scenario)
+        self.scenario.set_logger_func(self.logger_func)
 
         assert (self.data_fuzz and not (self.cond_fuzz or self.ignore_timing)) or not self.data_fuzz
         assert not self.stutter or (self.stutter and not (self.cond_fuzz or self.ignore_timing or self.data_fuzz))
@@ -1347,6 +1360,7 @@ class DynGeneratorFromScenario(Generator, CommonMethodsForScenarioDM):
     def setup(self, dm, user_input):
         self.__class__.scenario.set_data_model(dm)
         self.scenario = copy.copy(self.__class__.scenario)
+        self.scenario.set_logger_func(self.logger_func)
         self.first_data_sent = True
 
         assert (self.data_fuzz and not (self.cond_fuzz or self.ignore_timing)) or not self.data_fuzz

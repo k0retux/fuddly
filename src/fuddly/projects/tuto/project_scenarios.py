@@ -21,7 +21,8 @@ class BurstSBrick(ScenarioBrick):
 
     def build(self, user_context: UI, shape_id, **kwargs):
 
-        def check_fbk(env, current_step, next_step, fbk):
+        def check_fbk(env: ScenarioEnv, current_step, next_step, fbk):
+            env.log_info(f'Callback After Feedback Retrieval [from: {str(current_step)}]')
             print(f'\n*** Callback After Feedback Retrieval [from: {str(current_step)}] ***')
             return True
 

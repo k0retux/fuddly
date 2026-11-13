@@ -9,6 +9,7 @@ tactics = Tactics()
 
 def check_answer(env, current_step, next_step, feedback):
     if not feedback:
+        env.log_info("No feedback retrieved. Let's wait for another turn")
         print("\n\nNo feedback retrieved. Let's wait for another turn")
         current_step.make_blocked()
         return False
@@ -116,7 +117,7 @@ def cbk_after_fbk_return_true(env, current_step, next_step, fbk):
         env.cbk_true_cpt = 1
     else:
         env.cbk_true_cpt += 1
-    # print('\n++ cbk_after_fbk_return_true from step {!s}'.format(current_step))
+    env.log_info('cbk_after_fbk_return_true')
     return True
 
 def cbk_after_sending_return_true(env, current_step, next_step):
@@ -124,7 +125,7 @@ def cbk_after_sending_return_true(env, current_step, next_step):
         env.cbk_true_cpt = 1
     else:
         env.cbk_true_cpt += 1
-    # print('\n++ cbk_after_sending_return_true from step {!s}'.format(current_step))
+    env.log_info('cbk_after_sending_return_true')
     return True
 
 init_step = NoDataStep(step_desc='init')
@@ -239,16 +240,16 @@ sc_tuto_ex4 = Scenario('ex4', anchor=init, reinit_anchor=reinit)
 # Operator Scenario
 
 def print_seed(env: ScenarioEnv, step):
-    print(f'\n+++ seed retrieved: {env.seed_from_fmkplumbing.to_bytes()}'
+    env.log_info(f'seed retrieved: {env.seed_from_fmkplumbing.to_bytes()}'
           f' (@{hex(id(env.seed_from_fmkplumbing))})')
 
 def apply_ttype_operator(env: ScenarioEnv, step):
-    print(f'\n+++ apply tTYPE operator on the provided seed:'
+    env.log_info(f'apply tTYPE operator on the provided seed:'
           f' @{hex(id(env.seed_from_fmkplumbing))}')
     step.data_desc = DataProcess(['tTYPE'], seed=env.seed_from_fmkplumbing)
 
 def apply_tstruct_operator(env: ScenarioEnv, step):
-    print(f'\n+++ apply tSTRUCT operator on the provided seed:'
+    env.log_info(f'apply tSTRUCT operator on the provided seed:'
           f' @{hex(id(env.seed_from_fmkplumbing))}')
     step.data_desc = DataProcess([('tSTRUCT', UI(deep=True))], seed=env.seed_from_fmkplumbing)
 

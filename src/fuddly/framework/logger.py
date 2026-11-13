@@ -983,6 +983,9 @@ class Logger(object):
             self._post_processed_info = []
         self._post_processed_info.append(info)
 
+    def log_user_info(self, info):
+        self.log_fmk_info(info, deco='+++')
+
     def log_info(self, info):
         msg = "### Info: {:s}".format(info)
         self.log_fn(msg, rgb=Color.INFO)
