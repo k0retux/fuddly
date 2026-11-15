@@ -1429,11 +1429,22 @@ class Database(object):
             timing_info = None
             record_ongoing = False
             current_scenario = None
+            previous_data_id = None
+            previous_sent_date = None
             for rec in sc_records:
                 data_id, origin, attrs, sent_date, ack_date, target, prj = rec
                 sc_start = self.first_data_in_scenario_re.match(attrs)
                 sc_end = self.last_data_in_scenario_re.match(attrs)
+
                 if sc_start:
+                    if record_ongoing:
+                        current_scenario['last_data_id'] = previous_data_id
+                        current_scenario['end_date'] = previous_sent_date
+                        if timing_info:
+                            current_scenario['timing_stats'] = compute_timing_stats(timing_info)
+                        scenario_list.append(current_scenario)
+                        current_scenario = None
+
                     # valid only for the first data ID in a data makers sequence as the size
                     # decrease by one after the generator provide data to the stateful operator
                     record_ongoing = True
@@ -1460,6 +1471,7 @@ class Database(object):
                         'name': origin,
                         'sc_input': sc_input,
                         'op_seq': op_seq,
+                        'complete': False,
                         'first_data_id': data_id,
                         'last_data_id': None,
                         'prj': prj,
@@ -1480,10 +1492,21 @@ class Database(object):
                     record_ongoing = False
                     current_scenario['last_data_id'] = data_id
                     current_scenario['end_date'] = sent_date
+                    current_scenario['complete'] = True
                     if timing_info:
                         current_scenario['timing_stats'] = compute_timing_stats(timing_info)
                     scenario_list.append(current_scenario)
                     current_scenario = None
+
+                previous_data_id = data_id
+                previous_sent_date = sent_date
+
+            if record_ongoing:
+                current_scenario['last_data_id'] = previous_data_id
+                current_scenario['end_date'] = previous_sent_date
+                if timing_info:
+                    current_scenario['timing_stats'] = compute_timing_stats(timing_info)
+                scenario_list.append(current_scenario)
 
         op_records = self.get_batch_processing_records(prj_name)
         if op_records:
@@ -1657,6 +1680,8 @@ class Database(object):
                 hdr3 = colorize(" ]===\n", rgb=Color.FMKINFOGROUP)
                 # print(hdr1 + hdr2 + hdr3)
                 text += hdr1 + hdr2 + hdr3
+                if not obj['complete']:
+                    text += colorize(' [ Scenario ended prematurely ]\n', rgb=Color.ERROR)
                 prj = colorize(f" |_ Project: ", rgb=Color.FMKINFO)
                 prj += colorize(f"{obj['prj']}\n", rgb=Color.FMKSUBINFO)
                 # print(prj)
