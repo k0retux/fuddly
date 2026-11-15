@@ -3003,6 +3003,7 @@ class FmkPlumbing(object):
         # as this delay can be changed while data is handled by this method.
         go_on = self._delay_sending()
         if not go_on:
+            self._restore_previous_state(reason='operation has been cancelled by the user')
             return False, None
 
         if not data_list:
