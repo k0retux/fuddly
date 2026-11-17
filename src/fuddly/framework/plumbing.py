@@ -458,6 +458,7 @@ class FmkPlumbing(object):
 
         self._fbk_timeout_max = 0
         self._fbk_timeout_default = 0.005
+        self._unsolicited_fbk_timeout_default = 0.01
         self._last_sending_date = None
 
         self._delay = None
@@ -529,8 +530,6 @@ class FmkPlumbing(object):
 
     def _continuous_feedback_collecting(self, param):
         user_interrupt, go_on = self._collect_residual_feedback(force_mode=True,
-                                                                skip_if_fbk_received=True,
-                                                                skip_tg_readiness_waiting=True,
                                                                 reason='Continuous Monitoring',
                                                                 prefix_enabled=False)
 
@@ -2467,22 +2466,15 @@ class FmkPlumbing(object):
         data_list = list(filter(lambda x: not x.is_blocked(), data_list))
 
         if self._burst_countdown <= 1:
-            if self._currently_used_targets:
-                fbkt_list = [tg.feedback_timeout for tg in self._currently_used_targets
-                             if tg.feedback_timeout is not None]
-                max_fbk_timeout = max(fbkt_list) if fbkt_list else self._fbk_timeout_default
-            else:
-                max_fbk_timeout = self._fbk_timeout_default
+            user_interrupt, go_on = self._collect_residual_feedback(blocking_data=bool(blocked_data))
 
-            user_interrupt, go_on = self._collect_residual_feedback(timeout=max_fbk_timeout,
-                                                                    skip_if_fbk_received=True)
+            if blocked_data:
+                self._handle_data_callbacks(blocked_data, hook=HOOK.after_fbk)
+                self._handle_data_callbacks(blocked_data, hook=HOOK.final)
+                self.fmkDB.flush_current_feedback()
+
         else:
             user_interrupt, go_on = False, True
-
-        if blocked_data:
-            self._handle_data_callbacks(blocked_data, hook=HOOK.after_fbk)
-            self._handle_data_callbacks(blocked_data, hook=HOOK.final)
-            self.fmkDB.flush_current_feedback()
 
         if user_interrupt:
             raise UserInterruption
@@ -2491,24 +2483,15 @@ class FmkPlumbing(object):
         else:
             raise TargetFeedbackError
 
-    def collect_residual_feedback(self, timeout=0):
+    def collect_residual_feedback(self):
         if self.continuous_monitoring_enabled:
             return
 
-        if self._collect_residual_feedback(force_mode=True, timeout=timeout)[0]:
+        if self._collect_residual_feedback(force_mode=True)[0]:
             raise UserInterruption
 
-    def _collect_residual_feedback(self, force_mode=False, timeout: int | float= 0,
-                                   skip_if_fbk_received=False, skip_tg_readiness_waiting=False,
+    def _collect_residual_feedback(self, force_mode=False, blocking_data=False,
                                    reason=None, prefix_enabled=True):
-        """
-        :param force_mode:
-        :param timeout:
-        :param skip_if_fbk_received: if True, we avoid waiting too long while waiting for target readiness,
-                meaning that we return as soon as we received feedback from the target (even if the target feedback
-                mode is )
-        :return:
-        """
 
         # If feedback_timeout = 0 then we don't consider residual feedback.
         # We try to avoid unnecessary latency in this case, as well as
@@ -2530,18 +2513,35 @@ class FmkPlumbing(object):
             # log residual just before sending new data to avoid
             # polluting feedback logs of the next emission
 
-            collected = False
+            collected = []
             for tg in targets_to_retrieve_fbk.values():
-                if tg.collect_unsolicited_feedback(timeout=timeout):
-                    self._recovered_tgs = None
-                    collected = True
+                if tg.collect_unsolicited_feedback(timeout=self._unsolicited_fbk_timeout_default):
+                    # this function can return while unsolicited feedback has not been
+                    # retrieved yet (ex: NetworkTarget)
+                    collected.append(tg)
 
-            if collected and not skip_tg_readiness_waiting:
-                # We have to make sure the targets are ready for sending data after
-                # collecting feedback.
-                ftimeout = None if timeout == 0 else timeout
-                ret = self.wait_for_target_readiness(forced_feedback_timeout=ftimeout,
-                                                     skip_if_fbk_received=skip_if_fbk_received)
+            if collected:
+                t0 = datetime.datetime.now()
+                for tg in collected:
+                    while not tg.is_unsolicited_feedback_collected():
+                        time.sleep(0.005)
+                        now = datetime.datetime.now()
+                        if (now - t0).total_seconds() > self._unsolicited_fbk_timeout_default:
+                            self.lg.log_target_feedback_from(
+                                source=FeedbackSource(self),
+                                content=f"Timeout! Collecting unsolicited feedback from the target "
+                                        f"{self.available_targets_desc[tg]} did not succeed in "
+                                        f"{self._unsolicited_fbk_timeout_default}s",
+                                status_code=-2,
+                                timestamp=now
+                            )
+                            break
+
+            if blocking_data:
+                # It means a NoDataStep from a scenario may expect some feedback.
+                # We thus wait for maximum target current feedback timeout to receive some
+                # feedback
+                ret = self.wait_for_feedback()
                 user_interrupt = ret == -2
                 tg_ready = ret >= 0
 
@@ -3054,7 +3054,7 @@ class FmkPlumbing(object):
                 target_list = self.targets.values()
 
             fbkt_list = [tg.feedback_timeout for tg in target_list if tg.feedback_timeout is not None]
-            max_fbk_timeout = max(fbkt_list) if fbkt_list else self._fbk_timeout_default
+            max_fbk_timeout = max(fbkt_list) if fbkt_list else self._unsolicited_fbk_timeout_default
 
             for tg in self.targets.values():
                 if tg not in self._currently_used_targets:
@@ -3477,44 +3477,41 @@ class FmkPlumbing(object):
 
         return err_detected
 
+
+    def _compute_fbk_timeout(self):
+        if self._burst_countdown > 1:
+            fbk_timeout = 0
+        elif self._currently_used_targets:
+            fbkt_list = [tg.feedback_timeout for tg in self._currently_used_targets
+                         if tg.feedback_timeout is not None]
+            fbk_timeout = max(fbkt_list) if fbkt_list else self._fbk_timeout_default
+        elif self._last_sending_date is None:
+            # This case happens when we are waiting for feedback but no data has been sent,
+            # It is typical when a NoDataStep() is reached in a Scenario
+            fbkt_list = [tg.feedback_timeout for tg in self.targets.values()
+                         if tg.feedback_timeout is not None]
+            fbk_timeout = max(fbkt_list) if fbkt_list else self._fbk_timeout_default
+        else:
+            fbk_timeout = self._fbk_timeout_max
+
+        return fbk_timeout
+
+
     @EnforceOrder(accepted_states=["S2"])
-    def wait_for_target_readiness(self, forced_feedback_timeout=None, skip_if_fbk_received=False,
-                                  sigint_update=True):
-        """
-
-        Args:
-            forced_feedback_timeout: should be an integer >= 0 if only feedback need to be checked
-
-        Returns:
-
-        """
+    def wait_for_target_readiness(self, skip_if_fbk_received=False, sigint_update=True):
 
         if self.__tg_enabled:
             t0 = datetime.datetime.now() if self._last_sending_date is None else self._last_sending_date
-            if sigint_update:
-                signal.signal(signal.SIGINT, sig_int_handler)
             ret = 0
-            if self._burst_countdown > 1:
-                fbk_timeout = 0
-            elif forced_feedback_timeout is not None:
-                fbk_timeout = forced_feedback_timeout
-            elif self._currently_used_targets:
-                fbkt_list = [tg.feedback_timeout for tg in self._currently_used_targets
-                             if tg.feedback_timeout is not None]
-                fbk_timeout = max(fbkt_list) if fbkt_list else self._fbk_timeout_default
-            elif self._last_sending_date is None:
-                # This case happens when we are waiting for feedback but no data has been sent,
-                # It is typical when a NoDataStep() is reached in a Scenario
-                fbkt_list = [tg.feedback_timeout for tg in self.targets.values()
-                             if tg.feedback_timeout is not None]
-                fbk_timeout = max(fbkt_list) if fbkt_list else self._fbk_timeout_default
-            else:
-                fbk_timeout = self._fbk_timeout_max
+            fbk_timeout = self._compute_fbk_timeout()
 
             # self.print('\n*** DBG: wait for target - fbk timeout: {!r} - forced fbk timeout: {!r}'.format(fbk_timeout, forced_feedback_timeout))
 
             tg = None
             try:
+                if sigint_update:
+                    signal.signal(signal.SIGINT, sig_int_handler)
+
                 # Wait for potential feedback from enabled targets
                 for tg in self.targets.values():
                     while True:
@@ -3549,7 +3546,7 @@ class FmkPlumbing(object):
                         if (now - t0).total_seconds() > hc_timeout:
                             self.lg.log_target_feedback_from(
                                 source=FeedbackSource(self),
-                                content="*** Timeout! The target {!s} does not seem to be ready.".format(self.available_targets_desc[tg]),
+                                content="Timeout! The target {!s} does not seem to be ready.".format(self.available_targets_desc[tg]),
                                 status_code=-2,
                                 timestamp=now
                             )
@@ -3559,7 +3556,7 @@ class FmkPlumbing(object):
                             break
 
             except KeyboardInterrupt:
-                self.lg.log_comment("*** Waiting for target readiness has been cancelled by the user!\n")
+                self.lg.log_comment("Waiting for target readiness has been cancelled by the user!\n")
                 self.set_error("Waiting for target readiness has been cancelled by the user!",
                                code=Error.OperationCancelled)
                 ret = -2
@@ -3579,6 +3576,55 @@ class FmkPlumbing(object):
 
         else:
             return 0
+
+
+    @EnforceOrder(accepted_states=["S2"])
+    def wait_for_feedback(self, sigint_update=True):
+
+        if self.__tg_enabled:
+            t0 = datetime.datetime.now() if self._last_sending_date is None else self._last_sending_date
+            ret = 0
+            fbk_timeout = self._compute_fbk_timeout()
+
+            tg = None
+            try:
+                if sigint_update:
+                    signal.signal(signal.SIGINT, sig_int_handler)
+
+                # Wait for potential feedback from enabled targets
+                for tg in self.targets.values():
+                    while True:
+                        if fbk_timeout == 0:
+                            break
+                        if tg.is_feedback_received():
+                            break
+                        now = datetime.datetime.now()
+                        if (now - t0).total_seconds() > fbk_timeout:
+                            break
+                        time.sleep(0.005)
+
+            except KeyboardInterrupt:
+                self.lg.log_comment("Waiting for target feedback has been cancelled by the user!\n")
+                self.set_error("Waiting for target feedback has been cancelled by the user!",
+                               code=Error.OperationCancelled)
+                ret = -2
+                if tg:
+                    tg.cleanup()
+            except:
+                self._handle_user_code_exception()
+                ret = -3
+                if tg:
+                    tg.cleanup()
+            finally:
+                self._last_sending_date = None
+                if sigint_update:
+                    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+            return ret
+
+        else:
+            return 0
+
 
     @EnforceOrder(accepted_states=["S2"])
     def show_data(self, data: Data | str, verbose=Verbose.Normal, debug=False):
@@ -6296,22 +6342,7 @@ class FmkShell(cmd.Cmd):
         """
         Collect the residual feedback (received by the target and the probes)
         """
-        self.fz.collect_residual_feedback(timeout=3)
-        return False
-
-    def do_collect_feedback(self, line):
-        """
-        Collect the residual feedback (received by the target and the probes) indefinitely.
-        Only stop with Ctrl+C
-        """
-        # t0 = datetime.datetime.now()
-        # while (datetime.datetime.now() - t0).total_seconds() < 100:
-        try:
-            while True:
-                self.fz.collect_residual_feedback(timeout=0.01)
-        except UserInterruption:
-            pass
-
+        self.fz.collect_residual_feedback()
         return False
 
     def do_send(self, line, verbose=False):

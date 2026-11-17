@@ -391,13 +391,28 @@ class Target(object):
         without solicitation (i.e. without any data sent through it) and make it available through
         the method .get_feedback()
 
+        This function can return before the collection occurs. The framework will call
+        the method .is_unsolicited_feedback_collected() to check when it is finished.
+
         Args:
             timeout: Maximum delay before returning from feedback collecting
 
         Returns:
-            bool: False if it is not possible, otherwise it should be True
+            bool: False if it is not possible or if unsolicited feedback cannot be collected,
+            otherwise it should be True
         """
-        return True
+        return False
+
+
+    def is_unsolicited_feedback_collected(self):
+        """
+        If overloaded, should return True if the unsolicited feedback has been collected.
+
+        :return:
+        """
+
+        return self.is_feedback_received()
+
 
     def set_feedback_timeout(self, fbk_timeout):
         """
