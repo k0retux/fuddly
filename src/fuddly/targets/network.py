@@ -982,9 +982,8 @@ class NetworkTarget(Target):
             now = datetime.datetime.now()
             duration = (now - t0).total_seconds()
 
-            if flush_received_fbk:
-                if not ready_to_read or duration > fbk_timeout:
-                    break
+            if flush_received_fbk and not ready_to_read:
+                break
 
             if ready_to_read:
                 if first_pass:
@@ -1033,7 +1032,7 @@ class NetworkTarget(Target):
                 has_read = True
 
             if flush_received_fbk:
-                dont_stop = True
+                dont_stop = duration < fbk_timeout
 
             elif fbk_sockets:
                 for s in fbk_sockets:
