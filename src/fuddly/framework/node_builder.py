@@ -315,6 +315,9 @@ class NodeBuilder(object):
 
     def _update_provided_node(self, desc, node=None, namespace=None):
         n, conf = self.__pre_handling(desc, node, namespace=namespace)
+        # in this case the node has already been built and is integrated within a new graph,
+        # thus it is no more a root node
+        n.root = False
         self._handle_custo(n, desc, conf)
         self._handle_common_attr(n, desc, conf, current_ns=namespace)
         return n
