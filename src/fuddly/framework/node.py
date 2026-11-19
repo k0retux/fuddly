@@ -141,6 +141,13 @@ def print_node_list(node_list):
     s += f'\n]'
     print(s)
 
+def print_nodeint_list(node_list):
+    s = f'['
+    for i, nodeint in enumerate(node_list):
+        s += f'\n {i} {nodeint.name} {id(nodeint):08x},'
+    s += f'\n]'
+    print(s)
+
 ### Materials for Node Synchronization ###
 
 # WARNING: If new SyncObj are created or evolve, don't forget to update
@@ -4641,7 +4648,9 @@ class NodeInternals_NonTerm(NodeInternals):
                 if list_to_enc and isinstance(list_to_enc[0], bytes):
                     return list_to_enc
 
+                # print(f'\n***DBG: node name: {self.name}, delay: {self.custo.delay_collapsing}, root: {self.root}')
                 while True:
+                    # print_nodeint_list(list_to_enc)
                     list_sz = len(list_to_enc)
                     for i in range(list_sz):
                         if i < list_sz - 1:
@@ -4658,10 +4667,17 @@ class NodeInternals_NonTerm(NodeInternals):
                             )
                             if c1 and c2:
                                 new_item = NodeInternals_TypedValue()
+                                # if item1.name == 'fixname' or  item2.name == 'fixname':
+                                #     print(f'\n***DBG - it1:{item1.name}, it2:{item2.name}'
+                                #           f'\n it1vt:{item1.get_value_type().get_current_raw_val():08b},'
+                                #           f'\n it2vt:{item2.get_value_type().get_current_raw_val():08b},')
                                 new_item1vt = copy.copy(item1.get_value_type())
                                 new_item1vt.make_private(forget_current_state=False)
                                 new_item2vt = copy.copy(item2.get_value_type())
                                 new_item2vt.make_private(forget_current_state=False)
+                                if new_item1vt.endian != fvt.VT.BigEndian or new_item2vt.endian != fvt.VT.BigEndian:
+                                    raise DataModelDefinitionError(f'Collapsing BitString/BitField is only supported'
+                                                                   f' in big-endian (guilty: {item1.name} or {item2.name})')
                                 new_item1vt.extend_left(new_item2vt, full_merge=False)
                                 new_item.import_value_type(new_item1vt)
                                 new_item._set_frozen_value(new_item1vt.get_current_value())
@@ -4674,6 +4690,25 @@ class NodeInternals_NonTerm(NodeInternals):
                                     new_list = list_to_enc[2:]
                                     new_list.insert(0, new_item)
                                 list_to_enc = new_list
+                                # if item1.name == 'fixname' or  item2.name == 'fixname':
+                                #     # new_item.name = 'fixname'
+                                #     bval = new_item.get_value_type().get_current_value()
+                                #     bval_bin = ''
+                                #     for i in bval:
+                                #         bval_bin += f'{i:08b}'
+                                #     print(f'\n***DBG - newitem:{item1.name}, it2:{item2.name}'
+                                #           f'\n new_item({new_item.name}): {new_item.get_value_type().get_current_raw_val():08b}'
+                                #           f'\n new_item({new_item.name}) Bval: {bval}'
+                                #           f'\n new_item({new_item.name}) bval: {bval_bin}'
+                                #           f'\n new_it1vt:{new_item1vt.get_current_raw_val():08b},'
+                                #           f'\n new_it1vt drawn: {new_item1vt.drawn_val:08b},'
+                                #           f' lsb_pad:{new_item1vt.lsb_padding}, padsz:{new_item1vt.padding_size},'
+                                #           f' padding_val:{new_item1vt.padding}, nb_bytes:{new_item1vt.nb_bytes},'
+                                #           f' big_endian: {new_item1vt.endian == fvt.VT.BigEndian}'
+                                #           f'\n new_it1vt byte:{new_item1vt.get_current_value()},'
+                                #           f'\n new_it2vt:{new_item2vt.get_current_raw_val():08b},'
+                                #           f'\n i:{i}, new_list len:{len(new_list)}')
+
                                 break
                     else:
                         # print(f'END collapsing with current list (sz:{list_sz})')

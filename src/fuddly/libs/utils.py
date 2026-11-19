@@ -443,7 +443,7 @@ def format_byte_string(byte_string: bytes,
     for idx, b in enumerate(byte_string):
         tag_s = tag_s1 if idx % 2 == 0 else tag_s2
         if display_cpt:
-            cpt += f'{tag_s}[{idx}]{tag_e}{" ":5}{delim}'
+            cpt += f'{tag_s}[{idx:02}]{tag_e}{" ":4}{delim}'
         if hexa:
             hs += f'{tag_s}{" ":6}{b:02x}{tag_e}{delim}'
         if binary:

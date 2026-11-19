@@ -3703,8 +3703,7 @@ class BitField(VT_Alt):
         # bigendian-encoded
         l = []
         for i in range(self.nb_bytes - 1, -1, -1):
-            result = val // (1 << i * 8)
-            val = val % (1 << i * 8)  # remainder
+            result = (val >> i*8) & 0xff
             l.append(result)
 
         # littleendian-encoded
@@ -3794,7 +3793,7 @@ class BitString(BitField):
             bindefault = None, intdefault = None,
             fixed_nb_bits: int | None = None, min_nb_bits: int | None = None, max_nb_bits: int | None = None,
             padding= 0, lsb_padding= True, show_padding= False,
-            endian=VT.BigEndian, determinist=True,
+            determinist=True,
             value_descs: dict|None = None,
     ):
 
@@ -3831,7 +3830,7 @@ class BitString(BitField):
         if (fixed_nb_bits is not None and (min_nb_bits is not None or max_nb_bits is not None)):
             raise DataModelDefinitionError
 
-        self.endian = endian
+        self.endian = VT.BigEndian
         self.translator_int2letter = self.convert_int2letter if translator_int2letter is None else translator_int2letter
         self.translator_letter2int = self.convert_letter2int if translator_letter2int is None else translator_letter2int
         self.sorted_intvalues = None
@@ -3853,7 +3852,7 @@ class BitString(BitField):
 
         self.delta_minmax_mode = delta_minmax_mode
         if bindefault is not None:
-            self.intdefault = self.convert_bytes_to_intval(bindefault)
+            self.intdefault = self.convert_bytes_to_intval(bindefault[::-1])
         else:
             self.intdefault = intdefault
 
@@ -3867,7 +3866,10 @@ class BitString(BitField):
             if letter_bit_sz is None:
                 raise DataModelDefinitionError
 
-            self.binvalues = copy.copy(binvalues)
+            self.binvalues = []
+            for bv in binvalues:
+                self.binvalues.append(bv[::-1])
+
             self.intvalues = convert_bytes_to_intval_list(self.binvalues)
 
         else:
@@ -4272,8 +4274,7 @@ class BitString(BitField):
             letter_val = self.translator_int2letter(letter_val)
             bytes_l.append(letter_val)
 
-        if self.endian == VT.LittleEndian:
-            bytes_l = bytes_l[::-1]
+        bytes_l = bytes_l[::-1]
 
         return f'{bytes(bytes_l)}'
 
@@ -4411,7 +4412,7 @@ class ASN1UPER_NumericString(BitString):
         if min_sz is not None or max_sz is not None:
             assert min_sz is not None and max_sz is not None
 
-        self._with_space= with_space
+        self._with_space = with_space
         delta_minmax_mode = True
         letter_bit_sz=4
         if size is not None:
@@ -4430,7 +4431,6 @@ class ASN1UPER_NumericString(BitString):
                            variable_size=variable_size, fixed_nb_bits=fixed_nb_bits,
                            min_nb_bits=min_nb_bits, max_nb_bits=max_nb_bits,
                            delta_minmax_mode=delta_minmax_mode,
-                           endian=VT.LittleEndian,
                            bindefault=bindefault)
 
 
@@ -4470,7 +4470,6 @@ class ASN1UPER_IA5String(BitString):
                            variable_size=variable_size, fixed_nb_bits=fixed_nb_bits,
                            min_nb_bits=min_nb_bits, max_nb_bits=max_nb_bits,
                            delta_minmax_mode=delta_minmax_mode,
-                           endian=VT.LittleEndian,
                            binvalues=binvalues,
                            bindefault=bindefault)
 
