@@ -303,6 +303,10 @@ class CSP(object):
         return self._var_node_mapping
 
     @property
+    def reverse_var_mapping(self):
+        return {i: l for l, i in self._var_node_mapping.items()}
+
+    @property
     def var_types(self):
         return self._var_types
 
@@ -359,11 +363,12 @@ class CSP(object):
 
                 if not c.is_relation_translated:
                     tmp_vars = []
-                    for v in c.vars:
-                        tmp_vars.append('!?'+v)
-                    for v, tmp_v in zip(c.vars, tmp_vars):
+                    c_vars = sorted(c.vars, key=lambda x: -len(x))
+                    for idx, v in enumerate(c_vars):
+                        tmp_vars.append(f'!{idx}!')
+                    for v, tmp_v in zip(c_vars, tmp_vars):
                         relation = relation.replace(v, tmp_v)
-                    for v, tmp_v in zip(c.vars, tmp_vars):
+                    for v, tmp_v in zip(c_vars, tmp_vars):
                         relation = relation.replace(tmp_v, 'self._z3vars["'+ v +'"]')
 
                 if not c.is_relation_translated:
@@ -371,6 +376,14 @@ class CSP(object):
 
                 try:
                     z3formula = eval(c.relation)
+                except NameError:
+                    # this case may happen if the relation has been wrongly translated
+                    raise CSPDefinitionError(f'\nVariable types in the constraint formula are not consistent'
+                                             f' (root cause: the relation has been wrongly translated)'
+                                             f'\n --> Z3 formula: {c.relation}'
+                                             f'\n --> variables: {self._vars}'
+                                             f'\n --> variable types: {self._var_types}')
+
                 except (z3types.Z3Exception, AttributeError):
                     # this case can happen if some variable types have been changed by a operator
                     # to generate specific test cases. (For instance tTYPE will change a vt.INT into

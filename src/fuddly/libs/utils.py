@@ -344,7 +344,7 @@ class Task(object):
         self.setup()
 
     def _cleanup(self):
-        if self._tui_obj:
+        if self._tui_obj and self._fifo is not None:
             self._tui_obj.remove_log_panel(self._fifo)
             self._fifo = None
         else:

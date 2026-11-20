@@ -4648,6 +4648,14 @@ class NodeInternals_NonTerm(NodeInternals):
                 if list_to_enc and isinstance(list_to_enc[0], bytes):
                     return list_to_enc
 
+                for item in list_to_enc:
+                    if isinstance(item, NodeInternals_TypedValue):
+                        ivt = item.get_value_type()
+                        if isinstance(ivt, fvt.BitField) and ivt.endian != fvt.VT.BigEndian:
+                            raise DataModelDefinitionError(
+                                f'Collapsing BitString/BitField is only supported'
+                                f' in big-endian (guilty: {item.name})')
+
                 # print(f'\n***DBG: node name: {self.name}, delay: {self.custo.delay_collapsing}, root: {self.root}')
                 while True:
                     # print_nodeint_list(list_to_enc)
@@ -4675,9 +4683,6 @@ class NodeInternals_NonTerm(NodeInternals):
                                 new_item1vt.make_private(forget_current_state=False)
                                 new_item2vt = copy.copy(item2.get_value_type())
                                 new_item2vt.make_private(forget_current_state=False)
-                                if new_item1vt.endian != fvt.VT.BigEndian or new_item2vt.endian != fvt.VT.BigEndian:
-                                    raise DataModelDefinitionError(f'Collapsing BitString/BitField is only supported'
-                                                                   f' in big-endian (guilty: {item1.name} or {item2.name})')
                                 new_item1vt.extend_left(new_item2vt, full_merge=False)
                                 new_item.import_value_type(new_item1vt)
                                 new_item._set_frozen_value(new_item1vt.get_current_value())
@@ -8834,7 +8839,7 @@ class Node(object):
             else:
                 if solution is not None:  # Does a solution exist?
                     for var, value in solution.items():
-                        nd = self.env.csp.var_mapping[var]
+                        nd: Node = self.env.csp.var_mapping[var]
                         if self.env.csp.highlight_variables:
                             nd.set_attr(NodeInternals.Highlight, conf=conf)
                         if nd == self:

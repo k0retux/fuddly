@@ -176,7 +176,7 @@ class FeedbackHandler(object):
 
     def _stop(self, before_reload=False):
         self._s = None
-        if self._tui_obj:
+        if self._tui_obj and self._fifo is not None:
             self._tui_obj.remove_log_panel(self._fifo)
             self._fifo = None
         else:
