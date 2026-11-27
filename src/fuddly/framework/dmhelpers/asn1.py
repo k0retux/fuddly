@@ -24,6 +24,45 @@
 from fuddly.framework.dmhelpers.generic import *
 from fuddly.framework import value_types as fvt
 
+
+def ASN1UPER_Choice_Builder(node: Node | dict, choice_preamble_name='choice',
+                            choice_translator: int | dict | None = None,
+                            forced_nb_of_choices = None):
+
+    if isinstance(node, Node):
+
+        nb_of_choices = node.number_of_shapes if forced_nb_of_choices is None else forced_nb_of_choices
+        # print(f'\n***DBG1 nb choice for {node.name}: {nb_of_choices}')
+
+        template = [
+            {'name': choice_preamble_name,
+             'contents': fvt.BitString(min_intvalue=0, max_intvalue=nb_of_choices-1,
+                                       variable_size=False)},
+
+            {'contents': node,
+             'sync_shape_with': choice_preamble_name},
+        ]
+
+    else:
+
+        if choice_translator is not None:
+            node['sync_shape_with'] = (choice_preamble_name, choice_translator)
+        else:
+            node['sync_shape_with'] = choice_preamble_name
+
+        nb_of_choices = len(node['contents']) if forced_nb_of_choices is None else forced_nb_of_choices
+        print(f'\n***DBG2 nb choice for {node['name']}: {nb_of_choices}, real:{len(node['contents'])}')
+
+        template = [
+            {'name': choice_preamble_name,
+             'contents': fvt.BitString(min_intvalue=0, max_intvalue=nb_of_choices - 1,
+                                       variable_size=False)},
+            node
+        ]
+
+    return template
+
+
 def ASN1UPER_IA5String_Builder(name: str, size=None, min_sz=None, max_sz=None,
                                values=None, default=None, desc=None):
 
@@ -93,4 +132,5 @@ def ASN1UPER_NumericString_Builder(name: str, size=None, min_sz=None, max_sz=Non
         ]
 
     return template
+
 
