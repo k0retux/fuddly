@@ -268,7 +268,7 @@ class SyncShapeObj(SyncObj):
             else:
                 raise ValueError
 
-            self._node.update_raw_value(chosen_id)
+            self._node.update_value(chosen_id)
 
             # print(f'\nDBG SyncObj: {self._node.name}, chosen_id:{chosen_id}')
         else:
@@ -330,7 +330,7 @@ class SyncValueObj(SyncObj):
     def _sync_nodes_specific(self, src_node):
         value = self._get_processed_ref_value()
 
-        ok = src_node.update_raw_value(value)
+        ok = src_node.update_value(value)
         if not ok:
             print(
                 f"\n*** WARNING: The node '{src_node.name}' failed to update with the value: {value}."
@@ -364,8 +364,7 @@ class SyncSizeObj(SyncObj):
 
     def set_size_on_linked_node(self, size: int):
         # the source node is the one that keep the size value
-        # ok = self._node.value_type.update_raw_value(size)
-        ok = self._node.update_raw_value(size)
+        ok = self._node.update_value(size)
         if not ok:
             print(
                 "\n*** WARNING: The node '{:s}' is not compatible with the integer"
@@ -975,7 +974,7 @@ class NodeInternals(object):
     def get_current_raw_val(self, **kwargs):
         return self.get_raw_value(**kwargs)
 
-    def update_raw_value(self, val):
+    def update_value(self, value):
         raise NotImplementedError
 
     def customize(self, custo):
@@ -2593,10 +2592,14 @@ class NodeInternals_Term(NodeInternals):
         self.frozen_node = None
 
     def update_value(self, value):
-        self.frozen_node = self._update_value_specific(value)
+        ok, new_val = self._update_value_specific(value)
+        if ok:
+            self.frozen_node = new_val
+
+        return ok
 
     def _update_value_specific(self, value):
-        pass
+        raise NotImplementedError
 
     def reset_fuzz_weight(self, recursive):
         pass
@@ -2711,14 +2714,26 @@ class NodeInternals_TypedValue(NodeInternals_Term):
 
     def _update_value_specific(self, value):
         if isinstance(value, int) and isinstance(self.value_type, (fvt.INT, fvt.BitField)):
-            if not self.value_type.update_raw_value(value):
+            ok = self.value_type.update_raw_value(value)
+            if not ok:
                 print(f"\n[Warning] {type(self.value_type)} is not compatible with the integer {value}")
         else:
-            val, off, size = self.value_type.do_absorb(
-                convert_to_internal_repr(value), constraints=AbsNoCsts()
-            )
+            try:
+                _, _, _ = self.value_type.do_absorb(
+                    convert_to_internal_repr(value), constraints=AbsNoCsts()
+                )
+            except (ValueError, AssertionError) as e:
+                DEBUG_PRINT(f'[!] do_absorb() from "{self.name}" {type(self.value_type)}'
+                            f'\n    has raised the exception:'
+                            f'\n  [ {e} ]'
+                            f'\n  --> reject absorption!')
+                ok = False
+            else:
+                ok = True
 
-        return self.value_type.get_current_value()
+        curr_val = self.value_type.get_current_value() if ok else None
+
+        return ok, curr_val
 
     def _unfreeze_without_state_change(self, current_val):
         self.value_type.rewind()
