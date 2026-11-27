@@ -323,6 +323,7 @@ class AbsCsts(object):
             AbsCsts.SimilarContent: similar_content,  # for String-type nodes it means "case insensitive"
             AbsCsts.IgnorePadding: ignore_padding
         }
+        self._private = None
 
     def __bool__(self):
         return True in self.constraints.values()
@@ -341,6 +342,21 @@ class AbsCsts(object):
             self.constraints[cst] = False
         else:
             raise ValueError
+
+    def set_private(self, key, obj):
+        if self._private is None:
+            self._private = {}
+        self._private[key] = obj
+
+    def clear_private(self, key):
+        if self._private is not None and key in self._private:
+            del self._private[key]
+
+    def get_private(self, key):
+        if self._private is None:
+            return None
+        else:
+            self._private.get(key, None)
 
     def __copy__(self):
         new_csts = type(self)()

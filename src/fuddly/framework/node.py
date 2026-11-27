@@ -160,6 +160,7 @@ class SyncScope(Enum):
     Existence = 10
     Inexistence = 11
     Size = 20
+    Value = 21
     Shape = 25
 
 
@@ -281,6 +282,59 @@ class SyncShapeObj(SyncObj):
             return delta
         else:
             return self._shape_id_reverse.get(self._node.get_raw_value(), None)
+
+
+class SyncValueObj(SyncObj):
+    def __init__(self, ref_node, base_value: int = 0, from_ref_func = None):
+        """
+        Args:
+            ref_node (Node): Node that will exhibit the value to be synchronized with
+            base_value (int): optional value to added to the value of the referenced node
+            from_ref_func: if not None, function that will be applied to the value of
+             the referenced node instead of the addition of the base_value
+        """
+
+        assert ref_node.is_typed_value()
+        self._node = ref_node
+        self.base_value = base_value
+        self.from_ref_func = from_ref_func
+        if ref_node.is_typed_value(subkind=fvt.INT) or ref_node.is_typed_value(subkind=fvt.BitField):
+            self._compatible_with_base_value = True
+        else:
+            self._compatible_with_base_value = False
+
+    def get_node_containers(self):
+        return self._node
+
+    def put_node_containers(self, new_containers):
+        self._node = new_containers
+
+    @property
+    def value_for_absorption(self):
+        value = self._get_processed_ref_value()
+        return value
+
+    def _get_processed_ref_value(self):
+        ref_val = self._node.get_raw_value()
+        if self._compatible_with_base_value:
+            if self.from_ref_func is None:
+                value = ref_val + self.base_value
+            else:
+                value = self.from_ref_func(ref_val)
+
+        else:
+            value = ref_val if self.from_ref_func is None else self.from_ref_func(ref_val)
+
+        return value
+
+    def _sync_nodes_specific(self, src_node):
+        value = self._get_processed_ref_value()
+
+        ok = src_node.update_raw_value(value)
+        if not ok:
+            print(
+                f"\n*** WARNING: The node '{src_node.name}' failed to update with the value: {value}."
+            )
 
 
 class SyncSizeObj(SyncObj):
@@ -841,6 +895,7 @@ class NodeInternals(object):
         self.absorb_constraints = None
         self.custo = None
         self._env = None
+        # self.constrained = False  # Used to specifiy the node is a variable in a CSP
         self.name = name
         self.root = False
 
@@ -2370,6 +2425,10 @@ class NodeInternals_Term(NodeInternals):
 
     def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement,
                                delayed_node_internals, **kwargs):
+
+        # if self.constrained:
+        #     ignore_frozen_state = False
+
         if ignore_frozen_state:
             self.frozen_node = None
         else:
@@ -3722,6 +3781,10 @@ class NodeInternals_NonTerm(NodeInternals):
                         accept_external_entanglement=accept_external_entanglement,
                         delayed_node_internals=delayed_node_internals,
                     )
+                    obj = n.synchronized_with(SyncScope.Value)
+                    if obj is not None:
+                        obj.synchronize_nodes(n)
+
 
     def get_subnodes_csts_copy(self, node_dico=None):
         node_dico = {} if node_dico is None else node_dico  # node_dico[old_node] --> new_node
@@ -4054,10 +4117,18 @@ class NodeInternals_NonTerm(NodeInternals):
     def _construct_subnodes(self, node_desc, subnode_list, mode, ignore_sep_fstate,
                             ignore_separator=False,
                             lazy_mode=True):
-        def _sync_size_handling(node):
+
+        def _sync_with_handling(node):
+            # synchronize size first if such constraint exists
+            # as it could change the size of 'node'
             obj = node.synchronized_with(SyncScope.Size)
             if obj is not None:
                 obj.synchronize_nodes(node)
+            # then, if the following constraint exists, update the value of 'node'
+            obj = node.synchronized_with(SyncScope.Value)
+            if obj is not None:
+                obj.synchronize_nodes(node)
+
 
         node, mini, maxi = self._get_node_and_minmax_from(node_desc)
         # if self.debug:
@@ -4191,7 +4262,7 @@ class NodeInternals_NonTerm(NodeInternals):
                         transformed_node = new_node
 
                 new_node._set_clone_info((base_node.tmp_ref_count - 1, nb), base_node)
-                _sync_size_handling(new_node)
+                _sync_with_handling(new_node)
 
             # 'same' mode
             elif mode == "s":
@@ -4216,7 +4287,7 @@ class NodeInternals_NonTerm(NodeInternals):
         # only once as there is no node copy.
         if new_node is not None and mode == "s":
             new_node._set_clone_info((0, nb), base_node)
-            _sync_size_handling(new_node)
+            _sync_with_handling(new_node)
 
         if len(to_entangle) > 1:
             make_entangled_nodes(to_entangle)
@@ -5249,6 +5320,19 @@ class NodeInternals_NonTerm(NodeInternals):
         return None
 
     @staticmethod
+    def _value_from_node(node):
+        obj = node.synchronized_with(SyncScope.Value)
+        if obj is not None:
+            val = obj.value_for_absorption
+            if val is None:
+                print(f"\n*** WARNING: synchronization is not possible "
+                      f"for node '{node.name}' (id: {id(node):08x})!")
+
+            return val
+
+        return None
+
+    @staticmethod
     def _qty_from_node(node):
         obj = node.synchronized_with(SyncScope.Qty)
         if obj is not None:
@@ -5527,6 +5611,13 @@ class NodeInternals_NonTerm(NodeInternals):
                     if not shall_exist:
                         max_node = min_node = 0
 
+            private_content_set = False
+            if constraints[AbsCsts.Contents]:
+                val = self._value_from_node(base_node)
+                if val is not None:
+                    private_content_set = True
+                    constraints.set_private(AbsCsts.Contents, val)
+
             if max_node == 0:
                 if DEBUG:
                     print(f'\n # _try_absorption_with (fail) >> consumed_size not changed!\n')
@@ -5737,6 +5828,9 @@ class NodeInternals_NonTerm(NodeInternals):
             if DEBUG:
                 print(f'\n # _try_absorption_with >> returned consumed_size: {consumed_size}\n')
 
+            if private_content_set:
+                constraints.clear_private()
+
             return (
                 abort,
                 blob,
@@ -5758,7 +5852,7 @@ class NodeInternals_NonTerm(NodeInternals):
             consumed_size = 0
             blob = copy.copy(orig_blob)
 
-            obj = self.get_node_sync(SyncScope.Shape)
+            obj: SyncShapeObj = self.get_node_sync(SyncScope.Shape)
             if obj is not None:
                 selected_shape_id = obj.shape_id_for_absorption
                 if selected_shape_id >= self.number_of_shapes:

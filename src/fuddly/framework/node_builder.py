@@ -36,7 +36,7 @@ from fuddly.framework.node import Node, \
     NodeInternals_Empty, NodeInternals_NonTerm, NodeInternals_GenFunc, NodeInternals_Func, \
     GenFuncCusto, NonTermCusto, FuncCusto, \
     NodeSemantics, SyncScope, SyncQtyFromObj, SyncSizeObj, NodeCondition, SyncExistenceObj, Env, \
-    NodeInternalsCriteria, NodeInternals, SyncShapeObj
+    NodeInternalsCriteria, NodeInternals, SyncShapeObj, SyncValueObj
 from fuddly.framework.constraint_helpers import CSP
 
 from fuddly.framework import value_types as fvt
@@ -78,6 +78,7 @@ class NodeBuilder(object):
         'exists_if', 'exists_if_not',
         'exists_if/and', 'exists_if/or',
         'sync_size_with', 'sync_enc_size_with',
+        'sync_value_with',
         'sync_shape_with',
         'post_freeze', 'charset',
         # Used for debugging purpose
@@ -740,6 +741,11 @@ class NodeBuilder(object):
             self._register_todo(node, self._set_sync_node,
                                 args=(sync_shape_with, SyncScope.Shape, conf, None, ns),
                                 unpack_args=True)
+        sync_value_with = desc.get('sync_value_with', None)
+        if sync_value_with is not None:
+            self._register_todo(node, self._set_sync_node,
+                                args=(sync_value_with, SyncScope.Value, conf, False, ns),
+                                unpack_args=True)
         sync_size_with = desc.get('sync_size_with', None)
         sync_enc_size_with = desc.get('sync_enc_size_with', None)
         assert sync_size_with is None or sync_enc_size_with is None
@@ -843,6 +849,20 @@ class NodeBuilder(object):
                 node_ref, base_qty = comp, 0
             sync_with = self.__get_node_from_db(node_ref, namespace=from_ns)
             sync_obj = SyncQtyFromObj(sync_with, base_qty=base_qty)
+
+        elif scope == SyncScope.Value:
+            processing_func = None
+            if isinstance(comp, (tuple,list)):
+                node_ref, base_choice = comp
+                if not isinstance(base_choice, int):
+                    processing_func = base_choice
+            else:
+                node_ref, base_choice = comp, 0
+            sync_with = self.__get_node_from_db(node_ref, namespace=from_ns)
+            if processing_func is None:
+                sync_obj = SyncValueObj(sync_with, base_value=base_choice)
+            else:
+                sync_obj = SyncValueObj(sync_with, from_ref_func=base_choice)
 
         elif scope == SyncScope.Size:
             if isinstance(comp, (tuple,list)):
@@ -1002,6 +1022,7 @@ class NodeBuilder(object):
                                                            f'variables whose type is INT or String. '
                                                            f'[guilty node: {nd.name}]')
 
+                        # nd.cc.constrained = True
                         csp.map_var_to_node(v, nd)
                         default_val = nd.cc.value_type.default
                         if nd.cc.value_type.values is not None:

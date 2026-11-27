@@ -694,6 +694,19 @@ fuzz_weight
   Used by some stateful operators to order their test cases. The
   heavier the weight, the higher the priority of handling the node.
 
+sync_value_with
+  Allow to synchronize the value of a node to generate or to
+  absorb with the one specified by reference. You can also specify
+  an optional argument:
+
+  - either a *base value* that will be added to the value of the
+    referenced node.
+
+  - or a function that will be applied to the value of the referenced node.
+
+  This optional argument shall be provided as the second item of a ``tuple`` with first,
+  the node reference.
+
 sync_qty_with
   Allow to synchronize the number of node instances to generate or to
   absorb with the one specified by reference.

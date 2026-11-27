@@ -481,15 +481,23 @@ class String(VT_Alt):
     def absorb_auto_helper(self, blob, constraints):
         off = 0
         size = self.max_encoded_sz
-        # If 'Contents' constraint is set, we seek for string within
-        # values or conforming to the alphabet.
+        # If 'Contents' constraint is set, we seek first if a constrained value is
+        # set, then we look for string within values or conforming to the alphabet.
         # If 'Regexp' constraint is set, we seek for string matching
         # the regexp.
         # If no such constraints are provided, we assume off==0
         # and let do_absorb() decide if it's OK (via size constraints
         # for instance).
         blob_dec = self.decode(blob)
-        if (
+
+        constrained_val = constraints.get_private(AbsCsts.Contents)
+        if constraints[AbsCsts.Contents] and constrained_val is not None:
+            if not blob_dec.startswith(constrained_val):
+                off = blob.find(constrained_val)
+                if off > -1:
+                    size = len(constrained_val)
+
+        elif (
             constraints[AbsCsts.Contents]
             and (self.is_values_provided or self.is_samples_provided)
             and self.alphabet is None
@@ -1742,15 +1750,21 @@ class INT(VT):
         # values.
         # If INT() does not have values, we assume off==0
         # and let do_absorb() decide if it's OK.
-        if constraints[AbsCsts.Contents] and self.values is not None:
-            for v in self.values:
-                if blob.startswith(self._convert_value(v)):
-                    break
-            else:
+        if constraints[AbsCsts.Contents]:
+            constrained_val = constraints.get_private(AbsCsts.Contents)
+            if constrained_val is not None:
+                if not blob.startswith(self._convert_value(constrained_val)):
+                    off = blob.find(self._convert_value(constrained_val))
+
+            elif self.values is not None:
                 for v in self.values:
-                    off = blob.find(self._convert_value(v))
-                    if off > -1:
+                    if blob.startswith(self._convert_value(v)):
                         break
+                else:
+                    for v in self.values:
+                        off = blob.find(self._convert_value(v))
+                        if off > -1:
+                            break
 
         if off < 0:
             return AbsorbStatus.Reject, off, None
